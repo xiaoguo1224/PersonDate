@@ -62,19 +62,22 @@ function EmptyState({ title }: Readonly<{ title: string }>) {
 
 export default function TodayPage() {
   const { session } = useAuth();
+  const accessToken = session?.accessToken;
   const planDate = useMemo(() => getTodayString(), []);
   const [data, setData] = useState<TodayDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!accessToken) {
+      setLoading(false);
+      setError("请先登录后查看今日计划");
       return;
     }
     let alive = true;
     setLoading(true);
     setError(null);
-    loadTodayDashboard(session.accessToken, planDate)
+    loadTodayDashboard(accessToken, planDate)
       .then((result) => {
         if (alive) {
           setData(result);
@@ -93,7 +96,7 @@ export default function TodayPage() {
     return () => {
       alive = false;
     };
-  }, [planDate, session?.accessToken]);
+  }, [accessToken, planDate]);
 
   const summary = useMemo(() => (data ? buildDashboardSummary(data) : null), [data]);
 
