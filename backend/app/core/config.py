@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     default_timezone: str = Field(default="Asia/Shanghai", alias="DEFAULT_TIMEZONE")
     reminder_scan_interval_seconds: int = Field(default=10, alias="REMINDER_SCAN_INTERVAL_SECONDS")
     wechat_channel_token: str | None = Field(default=None, alias="WECHAT_CHANNEL_TOKEN")
+    cors_allow_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        alias="CORS_ALLOW_ORIGINS",
+    )
 
 
 @lru_cache
