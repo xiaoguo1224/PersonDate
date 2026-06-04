@@ -14,7 +14,10 @@ def debug_message(
 ) -> ApiResponse[DebugMessageResponse]:
     graph = SchedulePlanningGraph(db)
     state = graph.invoke(
-        current_user=current_user, message=payload.message, conversation_id="debug"
+        current_user=current_user,
+        message=payload.message,
+        conversation_id="debug",
+        channel="web",
     )
     db.commit()
     response = DebugMessageResponse(
@@ -24,7 +27,7 @@ def debug_message(
         tool_calls=state.tool_calls,
         tool_results=state.tool_results,
         pending_state=state.pending_state,
-        graph_trace=["load_context", "check_pending_state", "generate_response"],
+        graph_trace=state.graph_trace,
         error=state.error,
     )
     return ApiResponse(data=response, message=state.final_response)

@@ -41,6 +41,12 @@ def test_create_event_and_reminder(db_session, graph) -> None:
     assert state.success is True
     assert state.intent == "create_event"
     assert "已为你创建日程" in (state.final_response or "")
+    assert state.graph_trace[:4] == [
+        "load_context",
+        "check_pending_state",
+        "classify_intent",
+        "extract_info",
+    ]
     assert event is not None
     assert event.title == "会议"
     assert reminder is not None

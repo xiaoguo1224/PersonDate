@@ -105,7 +105,12 @@ class SchedulePlanningGraph:
         )
 
     def invoke(
-        self, *, current_user: User, message: str, conversation_id: str = "debug"
+        self,
+        *,
+        current_user: User,
+        message: str,
+        conversation_id: str = "debug",
+        channel: str = "wechat",
     ) -> AgentState:
         tz_name = (
             current_user.settings.default_timezone
@@ -116,7 +121,7 @@ class SchedulePlanningGraph:
         state = AgentState(
             user_id=current_user.id,
             conversation_id=conversation_id,
-            channel="wechat",
+            channel=channel,
             input_text=message,
             current_time=now_local,
             timezone=tz_name,
@@ -157,6 +162,7 @@ class SchedulePlanningGraph:
             if not state.final_response:
                 state.final_response = "处理失败，请稍后再试。"
         finally:
+            state.graph_trace = graph_trace
             self._save_log(state, graph_trace)
         return state
 

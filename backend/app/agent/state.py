@@ -26,6 +26,7 @@ class AgentState(BaseModel):
     draft_plan: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
+    graph_trace: list[str] = Field(default_factory=list)
     final_response: str | None = None
     success: bool = False
     error: str | None = None
