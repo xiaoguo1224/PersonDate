@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models import User, UserRole, UserStatus
 from app.schemas.setup import OwnerInitRequest
 from app.services.user_service import UserService
@@ -23,9 +24,10 @@ class SetupService:
     def create_owner(self, payload: OwnerInitRequest) -> User:
         if self.is_initialized():
             raise ValueError("系统已经初始化")
+        settings = get_settings()
         owner = self.users.create_user(
-            username=payload.username,
-            password=payload.password,
+            username="admin",
+            password=settings.admin_password,
             role=UserRole.OWNER.value,
             display_name=payload.display_name,
             email=str(payload.email) if payload.email else None,

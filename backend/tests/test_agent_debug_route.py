@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db
+from app.core.config import get_settings
 from app.db.base import Base
 from app.main import create_app
 from app.models import User
@@ -25,7 +26,7 @@ class FakeGraph:
         assert channel == "web"
         assert conversation_id == "debug"
         assert message == "明天下午 3 点开会"
-        assert current_user.username == "owner"
+        assert current_user.username == "admin"
         return SimpleNamespace(
             success=True,
             final_response="已为你创建日程：开会。",
@@ -66,11 +67,10 @@ def test_debug_message_route_uses_web_channel(monkeypatch) -> None:
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr("app.api.routes.agent.SchedulePlanningGraph", FakeGraph)
 
+    settings = get_settings()
     setup = SetupService(session)
     owner = setup.create_owner(
         OwnerInitRequest(
-            username="owner",
-            password="password123",
             display_name="主用户",
             email="owner@example.com",
         )
@@ -79,7 +79,7 @@ def test_debug_message_route_uses_web_channel(monkeypatch) -> None:
     session.refresh(owner)
 
     auth = AuthService(session)
-    _, token = auth.login(LoginRequest(username="owner", password="password123"))
+    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
     session.commit()
 
     client = TestClient(app)

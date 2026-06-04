@@ -18,8 +18,6 @@ def _create_owner(db_session):
     setup = SetupService(db_session)
     owner = setup.create_owner(
         OwnerInitRequest(
-            username="owner",
-            password="password123",
             display_name="主用户",
             email="owner@example.com",
         )

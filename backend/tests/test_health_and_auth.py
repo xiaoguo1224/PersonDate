@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.core.security import verify_password
 from app.main import create_app
 from app.models import UserRole
@@ -20,22 +21,22 @@ def test_health_endpoint() -> None:
 
 
 def test_owner_init_and_login(db_session) -> None:
+    settings = get_settings()
     setup = SetupService(db_session)
     owner = setup.create_owner(
         OwnerInitRequest(
-            username="owner",
-            password="password123",
             display_name="主用户",
             email="owner@example.com",
         )
     )
     db_session.commit()
 
+    assert owner.username == "admin"
     assert owner.role == UserRole.OWNER.value
-    assert verify_password("password123", owner.password_hash)
+    assert verify_password(settings.admin_password, owner.password_hash)
 
     auth = AuthService(db_session)
-    user, token = auth.login(LoginRequest(username="owner", password="password123"))
+    user, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
     db_session.commit()
 
     assert user.id == owner.id
@@ -46,8 +47,6 @@ def test_register_with_invite(db_session) -> None:
     setup = SetupService(db_session)
     owner = setup.create_owner(
         OwnerInitRequest(
-            username="owner",
-            password="password123",
             display_name="主用户",
             email="owner@example.com",
         )
@@ -77,12 +76,45 @@ def test_register_with_invite(db_session) -> None:
     assert token
 
 
+def test_register_with_invite_allows_blank_optional_fields(db_session) -> None:
+    setup = SetupService(db_session)
+    owner = setup.create_owner(
+        OwnerInitRequest(
+            display_name="主用户",
+            email="owner@example.com",
+        )
+    )
+    db_session.commit()
+
+    invite_service = InviteCodeService(db_session)
+    invite_code = invite_service.create(
+        owner,
+        payload=InviteCodeCreateRequest(max_uses=1, expires_at=None, remark="test"),
+    )
+    db_session.commit()
+
+    auth = AuthService(db_session)
+    user, token = auth.register_with_invite(
+        RegisterWithInviteRequest(
+            invite_code=invite_code.code,
+            username="user2",
+            password="password123",
+            display_name="",
+            email="",
+        )
+    )
+    db_session.commit()
+
+    assert user.username == "user2"
+    assert user.display_name is None
+    assert user.email is None
+    assert token
+
+
 def test_agent_create_event(db_session, graph) -> None:
     setup = SetupService(db_session)
     owner = setup.create_owner(
         OwnerInitRequest(
-            username="owner",
-            password="password123",
             display_name="主用户",
             email="owner@example.com",
         )

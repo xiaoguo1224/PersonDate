@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 *.tsbuildinfo
 backend/.env
+web/.env
 logs/
 develop-docs/
 node_modules/
