@@ -1,0 +1,71 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import ReminderJob, ReminderStatus
+from app.services.channel_identity_service import ChannelIdentityService
+
+
+class ReminderService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.channel_identities = ChannelIdentityService(db)
+
+    def create_for_target(
+        self,
+        *,
+        user_id: str,
+        target_type: str,
+        target_id: str,
+        title: str,
+        trigger_time: datetime,
+        conversation_id: str | None = None,
+    ) -> ReminderJob:
+        job = ReminderJob(
+            user_id=user_id,
+            target_type=target_type,
+            target_id=target_id,
+            title=title,
+            conversation_id=conversation_id or self.channel_identities.get_conversation_id(user_id),
+            trigger_time=trigger_time,
+            status=ReminderStatus.PENDING.value,
+        )
+        self.db.add(job)
+        self.db.flush()
+        return job
+
+    def cancel_by_target(self, *, user_id: str, target_id: str) -> None:
+        stmt = select(ReminderJob).where(
+            ReminderJob.user_id == user_id,
+            ReminderJob.target_id == target_id,
+            ReminderJob.status == ReminderStatus.PENDING.value,
+        )
+        for job in self.db.scalars(stmt):
+            job.status = ReminderStatus.CANCELED.value
+
+    def list_jobs(self, user_id: str, status: str | None = None) -> list[ReminderJob]:
+        stmt = select(ReminderJob).where(ReminderJob.user_id == user_id)
+        if status:
+            stmt = stmt.where(ReminderJob.status == status)
+        return list(self.db.scalars(stmt.order_by(ReminderJob.created_at.desc())))
+
+    def get_job(self, user_id: str, job_id: str) -> ReminderJob | None:
+        stmt = select(ReminderJob).where(ReminderJob.user_id == user_id, ReminderJob.id == job_id)
+        return self.db.scalar(stmt)
+
+    def cancel_job(self, job: ReminderJob) -> ReminderJob:
+        job.status = ReminderStatus.CANCELED.value
+        return job
+
+    def fire_due_jobs(self, now: datetime | None = None) -> list[ReminderJob]:
+        now = now or datetime.now(UTC)
+        stmt = select(ReminderJob).where(
+            ReminderJob.status == ReminderStatus.PENDING.value,
+            ReminderJob.trigger_time <= now,
+        )
+        jobs = list(self.db.scalars(stmt))
+        for job in jobs:
+            job.status = ReminderStatus.FIRED.value
+            job.fired_at = now
+        return jobs

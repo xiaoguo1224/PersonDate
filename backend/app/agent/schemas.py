@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class IntentDecision(BaseModel):
+    intent: Literal[
+        "create_event",
+        "query_events",
+        "create_task",
+        "plan_day",
+        "update_event",
+        "delete_event",
+        "confirm_plan",
+        "ask_user_clarification",
+        "unknown",
+    ]
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str = Field(default="")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_payload(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if "intent" not in payload and "type" in payload:
+            payload["intent"] = payload["type"]
+        if isinstance(payload.get("intent"), str):
+            intent = payload["intent"].strip().lower()
+            payload["intent"] = {
+                "schedule": "create_event",
+                "meeting": "create_event",
+                "event": "create_event",
+                "query": "query_events",
+                "task": "create_task",
+                "plan": "plan_day",
+                "update": "update_event",
+                "delete": "delete_event",
+                "confirm": "confirm_plan",
+                "clarify": "ask_user_clarification",
+            }.get(intent, payload["intent"])
+        return payload
+
+    @field_validator("intent", mode="before")
+    @classmethod
+    def normalize_intent(cls, value: object) -> str:
+        if not isinstance(value, str):
+            return "unknown"
+        normalized = value.strip().lower()
+        aliases = {
+            "schedule_meeting": "create_event",
+            "schedule event": "create_event",
+            "create schedule": "create_event",
+            "query_schedule": "query_events",
+            "query calendar": "query_events",
+            "create_reminder": "ask_user_clarification",
+            "ask_clarification": "ask_user_clarification",
+            "clarify": "ask_user_clarification",
+            "create_task": "create_task",
+            "create todo": "create_task",
+            "plan_schedule": "plan_day",
+            "reschedule": "update_event",
+            "edit_event": "update_event",
+            "modify_event": "update_event",
+            "delete_schedule": "delete_event",
+            "remove_event": "delete_event",
+            "confirm": "confirm_plan",
+        }
+        return aliases.get(normalized, normalized)
+
+
+class MessageExtraction(BaseModel):
+    clarification_prompt: str | None = None
+    event_title: str | None = None
+    event_start_time: datetime | None = None
+    event_end_time: datetime | None = None
+    remind_before_minutes: int | None = None
+    query_start_date: date | None = None
+    query_end_date: date | None = None
+    task_title: str | None = None
+    estimated_minutes: int | None = None
+    task_deadline: datetime | None = None
+    plan_date: date | None = None
+    target_event_keyword: str | None = None
+    target_event_date: date | None = None
+    new_start_time: datetime | None = None
+    new_end_time: datetime | None = None
+    priority: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_payload(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+
+        if "clarification_prompt" not in payload and payload.get("prompt"):
+            payload["clarification_prompt"] = payload["prompt"]
+
+        if "event_title" not in payload and payload.get("title") is not None:
+            payload["event_title"] = payload["title"]
+        if "task_title" not in payload and payload.get("summary") is not None:
+            payload["task_title"] = payload["summary"]
+        if "task_title" not in payload and payload.get("title") is not None:
+            payload["task_title"] = payload["title"]
+
+        if "event_start_time" not in payload and payload.get("start_time") is not None:
+            payload["event_start_time"] = payload["start_time"]
+        if "event_end_time" not in payload and payload.get("end_time") is not None:
+            payload["event_end_time"] = payload["end_time"]
+        if "new_start_time" not in payload and payload.get("new_time") is not None:
+            payload["new_start_time"] = payload["new_time"]
+
+        if "query_start_date" not in payload and payload.get("date") is not None:
+            payload["query_start_date"] = payload["date"]
+        if "query_end_date" not in payload and payload.get("date") is not None:
+            payload["query_end_date"] = payload["date"]
+        if "target_event_date" not in payload and payload.get("date") is not None:
+            payload["target_event_date"] = payload["date"]
+
+        if payload.get("original_time") is not None:
+            payload.setdefault("event_start_time", payload["original_time"])
+            original_time = payload["original_time"]
+            if isinstance(original_time, datetime):
+                payload.setdefault("target_event_date", original_time.date())
+            elif isinstance(original_time, str):
+                payload.setdefault("target_event_date", original_time[:10])
+        if payload.get("new_time") is not None:
+            payload.setdefault("new_start_time", payload["new_time"])
+
+        event = payload.get("event")
+        if isinstance(event, dict):
+            if payload.get("event_title") is None and event.get("title") is not None:
+                payload["event_title"] = event["title"]
+            start = event.get("start_time") or event.get("start")
+            end = event.get("end_time") or event.get("end")
+            if payload.get("event_start_time") is None and start is not None:
+                if isinstance(start, dict):
+                    payload["event_start_time"] = start.get("dateTime") or start.get("time")
+                else:
+                    payload["event_start_time"] = start
+            if payload.get("event_end_time") is None and end is not None:
+                if isinstance(end, dict):
+                    payload["event_end_time"] = end.get("dateTime") or end.get("time")
+                else:
+                    payload["event_end_time"] = end
+
+        events = payload.get("events")
+        if isinstance(events, list) and events:
+            first_event = events[0]
+            if isinstance(first_event, dict):
+                if payload.get("task_title") is None and first_event.get("title") is not None:
+                    payload["task_title"] = first_event["title"]
+                if payload.get("estimated_minutes") is None:
+                    duration_minutes = first_event.get("duration_minutes")
+                    if isinstance(duration_minutes, int):
+                        payload["estimated_minutes"] = duration_minutes
+                start = first_event.get("start") or first_event.get("start_time")
+                if payload.get("plan_date") is None and start is not None:
+                    if isinstance(start, str):
+                        payload["plan_date"] = start[:10]
+                    elif isinstance(start, datetime):
+                        payload["plan_date"] = start.date()
+
+        if payload.get("summary") is not None:
+            if payload.get("event_title") is None:
+                payload["event_title"] = payload["summary"]
+            if payload.get("task_title") is None:
+                payload["task_title"] = payload["summary"]
+
+        return payload
