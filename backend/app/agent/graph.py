@@ -382,7 +382,8 @@ class SchedulePlanningGraph:
         if not result.success:
             state.final_response = result.error or "创建日程失败。"
             return
-        event_id = result.data["id"]
+        result_data: dict[str, object] = result.data or {}
+        event_id = str(result_data["id"])
         open_conflicts = [
             conflict
             for conflict in self.conflicts.list_conflicts(state.user_id, ConflictStatus.OPEN.value)
@@ -399,6 +400,11 @@ class SchedulePlanningGraph:
                 state_type=PendingStateType.WAITING_CONFLICT_RESOLUTION.value,
                 state_payload={
                     "event_id": event_id,
+                    "event_title": title,
+                    "event_start_time": start_time.isoformat(),
+                    "event_end_time": end_time.isoformat() if end_time else None,
+                    "event_timezone": state.timezone,
+                    "remind_before_minutes": remind_before,
                     "conflict_ids": [item.id for item in open_conflicts],
                 },
             )
@@ -501,12 +507,13 @@ class SchedulePlanningGraph:
                 {"tool_name": "plan_tasks_into_day", "result": plan_result.model_dump(mode="json")}
             )
             if plan_result.success:
+                plan_result_data: dict[str, object] = plan_result.data or {}
                 pending = self.pending_states.save(
                     user_id=state.user_id,
                     conversation_id=state.conversation_id,
                     state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
                     state_payload={
-                        "draft_plan_id": plan_result.data["day_plan_id"],
+                        "draft_plan_id": str(plan_result_data["day_plan_id"]),
                         "date": target_date.isoformat(),
                     },
                 )
@@ -568,12 +575,13 @@ class SchedulePlanningGraph:
         if not result.success:
             state.final_response = result.error or "生成计划失败。"
             return
+        result_data: dict[str, object] = result.data or {}
         pending = self.pending_states.save(
             user_id=state.user_id,
             conversation_id=state.conversation_id,
             state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
             state_payload={
-                "draft_plan_id": result.data["day_plan_id"],
+                "draft_plan_id": str(result_data["day_plan_id"]),
                 "date": target_date.isoformat(),
             },
         )
@@ -745,21 +753,78 @@ class SchedulePlanningGraph:
 
     def _handle_conflict_choice(self, state: AgentState, choice: int) -> None:
         payload = state.pending_state or {}
-        event_id = (
-            payload.get("state_payload", {}).get("event_id")
-            if "state_payload" in payload
-            else payload.get("event_id")
+        state_payload = payload.get("state_payload", {}) if "state_payload" in payload else payload
+        event_id = state_payload.get("event_id")
+        event_title = state_payload.get("event_title") or "日程"
+        start_raw = state_payload.get("event_start_time")
+        end_raw = state_payload.get("event_end_time")
+        timezone = state_payload.get("event_timezone") or state.timezone
+        remind_before_minutes = state_payload.get("remind_before_minutes")
+        original_start = (
+            datetime.fromisoformat(start_raw)
+            if isinstance(start_raw, str)
+            else start_raw
+            if isinstance(start_raw, datetime)
+            else None
+        )
+        original_end = (
+            datetime.fromisoformat(end_raw)
+            if isinstance(end_raw, str)
+            else end_raw
+            if isinstance(end_raw, datetime)
+            else None
         )
         if choice == 1:
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
             state.pending_state = None
             state.final_response = "已保留当前日程，并忽略冲突。"
             return
+        if choice == 2 and event_id and original_start is not None:
+            new_start = original_start + timedelta(hours=1)
+            new_end = (
+                original_end + timedelta(hours=1)
+                if original_end is not None
+                else new_start + timedelta(hours=1)
+            )
+            result = self.tools.execute(
+                "update_event",
+                {
+                    "event_id": event_id,
+                    "title": event_title,
+                    "start_time": new_start,
+                    "end_time": new_end,
+                    "timezone": timezone,
+                    "remind_before_minutes": remind_before_minutes,
+                },
+                user_id=state.user_id,
+                conversation_id=state.conversation_id,
+            )
+            state.tool_calls.append(
+                {
+                    "tool_name": "update_event",
+                    "args": {
+                        "event_id": event_id,
+                        "start_time": new_start,
+                        "end_time": new_end,
+                    },
+                }
+            )
+            state.tool_results.append(
+                {"tool_name": "update_event", "result": result.model_dump(mode="json")}
+            )
+            if result.success:
+                self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
+                state.pending_state = None
+                state.final_response = (
+                    f"已将当前冲突日程顺延到 {new_start:%Y-%m-%d} {_format_clock_time(new_start)}。"
+                )
+                return
+            state.final_response = result.error or "顺延日程失败。"
+            return
         if choice == 2 and event_id:
-            # 顺延实现先用提示，后续可精细化处理
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
             state.pending_state = None
-            state.final_response = "已收到顺延请求，后续可继续手动调整该日程。"
+            state.final_response = "已收到顺延请求，但缺少原始时间，暂时无法自动顺延。"
             return
         if choice == 3 and event_id:
             self.tools.execute(

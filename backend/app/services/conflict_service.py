@@ -19,17 +19,21 @@ class ConflictService:
         self.db = db
 
     def detect_event_conflicts(self, user_id: str, event: CalendarEvent) -> list[ScheduleConflict]:
-        if event.end_time is None:
+        event_end_time = event.end_time
+        if event_end_time is None:
             return []
         stmt = select(CalendarEvent).where(
             CalendarEvent.user_id == user_id,
             CalendarEvent.status == "active",
             CalendarEvent.id != event.id,
-            CalendarEvent.start_time < event.end_time,
+            CalendarEvent.start_time < event_end_time,
             CalendarEvent.end_time > event.start_time,
         )
         conflicts: list[ScheduleConflict] = []
         for other in self.db.scalars(stmt):
+            other_end_time = other.end_time
+            if other_end_time is None:
+                continue
             conflict = ScheduleConflict(
                 user_id=user_id,
                 conflict_type=ConflictType.TIME_OVERLAP.value,
@@ -37,8 +41,8 @@ class ConflictService:
                 title=f"日程冲突：{event.title} 与 {other.title}",
                 description=(
                     f"{event.title} 与 {other.title} 的时间重叠，"
-                    f"分别是 {event.start_time.isoformat()} - {event.end_time.isoformat()} 和 "
-                    f"{other.start_time.isoformat()} - {other.end_time.isoformat()}"
+                    f"分别是 {event.start_time.isoformat()} - {event_end_time.isoformat()} 和 "
+                    f"{other.start_time.isoformat()} - {other_end_time.isoformat()}"
                 ),
                 related_item_ids={"current": event.id, "other": other.id},
                 suggestion="请调整其中一个日程时间，或选择忽略冲突。",
@@ -62,8 +66,14 @@ class ConflictService:
         events = list(self.db.scalars(stmt))
         conflicts: list[ScheduleConflict] = []
         for index, event in enumerate(events):
+            event_end_time = event.end_time
+            if event_end_time is None:
+                continue
             for other in events[index + 1 :]:
-                if other.start_time >= event.end_time:
+                other_end_time = other.end_time
+                if other_end_time is None:
+                    continue
+                if other.start_time >= event_end_time:
                     break
                 conflict = ScheduleConflict(
                     user_id=user_id,

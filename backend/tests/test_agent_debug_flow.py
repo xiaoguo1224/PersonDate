@@ -160,6 +160,31 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
     assert conflict_state.pending_state is not None
     assert "冲突" in (conflict_state.final_response or "")
 
+    shift_state = graph.invoke(current_user=owner, message="2", conversation_id="debug")
+    db_session.commit()
+
+    shifted_event = db_session.scalar(
+        select(CalendarEvent)
+        .where(CalendarEvent.user_id == owner.id, CalendarEvent.status == "active")
+        .order_by(CalendarEvent.start_time.desc())
+    )
+    shifted_reminder = db_session.scalar(
+        select(ReminderJob)
+        .where(
+            ReminderJob.user_id == owner.id,
+            ReminderJob.target_type == "event",
+            ReminderJob.status == "pending",
+        )
+        .order_by(ReminderJob.created_at.desc())
+    )
+
+    assert shift_state.pending_state is None
+    assert "顺延" in (shift_state.final_response or "")
+    assert shifted_event is not None
+    assert shifted_event.start_time.hour == 16
+    assert shifted_reminder is not None
+    assert shifted_reminder.trigger_time.hour == 16
+
     clarification_state = graph.invoke(
         current_user=owner,
         message="提醒我写论文",
