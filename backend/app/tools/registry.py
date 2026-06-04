@@ -247,7 +247,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     def find_free_slots(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
-        free_slots = []
+        free_slots: list[dict[str, Any]] = []
         return ToolResult(data=free_slots, message="空闲时间已计算")
 
     def plan_tasks_into_day(

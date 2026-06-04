@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import DbSession, OwnerUser
+from app.api.deps import get_db, require_owner
+from app.models import User
 from app.schemas.common import ApiResponse
 from app.schemas.invite_code import InviteCodeCreateRequest, InviteCodeItem, InviteCodeListResponse
 from app.services.invite_code_service import InviteCodeService
@@ -10,7 +12,9 @@ router = APIRouter(prefix="/admin", tags=["invite-codes"])
 
 @router.post("/invite-codes")
 def create_invite_code(
-    db: DbSession, current_user: OwnerUser, payload: InviteCodeCreateRequest
+    payload: InviteCodeCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
 ) -> ApiResponse[InviteCodeItem]:
     service = InviteCodeService(db)
     invite_code = service.create(current_user, payload)
@@ -30,7 +34,8 @@ def create_invite_code(
 
 @router.get("/invite-codes")
 def list_invite_codes(
-    db: DbSession, current_user: OwnerUser
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
 ) -> ApiResponse[InviteCodeListResponse]:
     service = InviteCodeService(db)
     items = [
@@ -50,7 +55,9 @@ def list_invite_codes(
 
 @router.patch("/invite-codes/{invite_code_id}/disable")
 def disable_invite_code(
-    db: DbSession, current_user: OwnerUser, invite_code_id: str
+    invite_code_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
 ) -> ApiResponse[dict[str, str]]:
     from app.models import InviteCode
 

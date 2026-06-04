@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import User
 from app.schemas.auth import LoginRequest, MeResponse, RegisterWithInviteRequest
 from app.schemas.common import ApiResponse
 from app.services.auth_service import AuthService
@@ -9,7 +11,10 @@ router = APIRouter(tags=["auth"])
 
 
 @router.post("/auth/login")
-def login(db: DbSession, payload: LoginRequest) -> ApiResponse[dict[str, str]]:
+def login(
+    payload: LoginRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, str]]:
     service = AuthService(db)
     try:
         user, token = service.login(payload)
@@ -22,7 +27,8 @@ def login(db: DbSession, payload: LoginRequest) -> ApiResponse[dict[str, str]]:
 
 @router.post("/auth/register-with-invite")
 def register_with_invite(
-    db: DbSession, payload: RegisterWithInviteRequest
+    payload: RegisterWithInviteRequest,
+    db: Session = Depends(get_db),
 ) -> ApiResponse[dict[str, str]]:
     service = AuthService(db)
     try:
@@ -35,7 +41,10 @@ def register_with_invite(
 
 
 @router.get("/auth/me")
-def me(current_user: CurrentUser, db: DbSession) -> ApiResponse[MeResponse]:
+def me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[MeResponse]:
     settings = current_user.settings
     data = MeResponse(
         id=current_user.id,
@@ -50,5 +59,5 @@ def me(current_user: CurrentUser, db: DbSession) -> ApiResponse[MeResponse]:
 
 
 @router.post("/auth/logout")
-def logout(current_user: CurrentUser) -> ApiResponse[dict[str, str]]:
+def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[dict[str, str]]:
     return ApiResponse(data={"user_id": current_user.id}, message="已登出")

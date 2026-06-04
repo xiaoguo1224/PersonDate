@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import ReminderJob, User
 from app.schemas.common import ApiResponse
 from app.schemas.reminder import ReminderDTO, ReminderListResponse
 from app.services.reminder_service import ReminderService
@@ -8,7 +10,7 @@ from app.services.reminder_service import ReminderService
 router = APIRouter(prefix="/reminders", tags=["reminders"])
 
 
-def _to_item(job) -> ReminderDTO:
+def _to_item(job: ReminderJob) -> ReminderDTO:
     return ReminderDTO(
         id=job.id,
         target_type=job.target_type,
@@ -24,7 +26,9 @@ def _to_item(job) -> ReminderDTO:
 
 @router.get("")
 def list_reminders(
-    db: DbSession, current_user: CurrentUser, status: str | None = None
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    status: str | None = None,
 ) -> ApiResponse[ReminderListResponse]:
     items = [_to_item(job) for job in ReminderService(db).list_jobs(current_user.id, status)]
     return ApiResponse(data=ReminderListResponse(items=items))
@@ -32,7 +36,9 @@ def list_reminders(
 
 @router.patch("/{reminder_id}/cancel")
 def cancel_reminder(
-    db: DbSession, current_user: CurrentUser, reminder_id: str
+    reminder_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[ReminderDTO]:
     service = ReminderService(db)
     job = service.get_job(current_user.id, reminder_id)

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import ScheduleConflict, User
 from app.schemas.common import ApiResponse
 from app.schemas.conflict import ConflictDTO, ConflictListResponse
 from app.services.conflict_service import ConflictService
@@ -8,7 +10,7 @@ from app.services.conflict_service import ConflictService
 router = APIRouter(prefix="/conflicts", tags=["conflicts"])
 
 
-def _to_item(conflict) -> ConflictDTO:
+def _to_item(conflict: ScheduleConflict) -> ConflictDTO:
     return ConflictDTO(
         id=conflict.id,
         conflict_type=conflict.conflict_type,
@@ -24,7 +26,9 @@ def _to_item(conflict) -> ConflictDTO:
 
 @router.get("")
 def list_conflicts(
-    db: DbSession, current_user: CurrentUser, status: str | None = None
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    status: str | None = None,
 ) -> ApiResponse[ConflictListResponse]:
     items = [_to_item(item) for item in ConflictService(db).list_conflicts(current_user.id, status)]
     return ApiResponse(data=ConflictListResponse(items=items))
@@ -32,7 +36,9 @@ def list_conflicts(
 
 @router.post("/detect")
 def detect_conflicts(
-    db: DbSession, current_user: CurrentUser, date: str | None = None
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    date: str | None = None,
 ) -> ApiResponse[ConflictListResponse]:
     service = ConflictService(db)
     items = [_to_item(item) for item in service.detect_day_conflicts(current_user.id)]
@@ -42,7 +48,9 @@ def detect_conflicts(
 
 @router.patch("/{conflict_id}/ignore")
 def ignore_conflict(
-    db: DbSession, current_user: CurrentUser, conflict_id: str
+    conflict_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[ConflictDTO]:
     service = ConflictService(db)
     conflict = service.get_conflict(current_user.id, conflict_id)
@@ -55,7 +63,9 @@ def ignore_conflict(
 
 @router.patch("/{conflict_id}/resolve")
 def resolve_conflict(
-    db: DbSession, current_user: CurrentUser, conflict_id: str
+    conflict_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[ConflictDTO]:
     service = ConflictService(db)
     conflict = service.get_conflict(current_user.id, conflict_id)

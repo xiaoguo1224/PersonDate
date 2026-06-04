@@ -1,8 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import CalendarEvent, User
 from app.schemas.common import ApiResponse
 from app.schemas.schedule import (
     CalendarEventCreateRequest,
@@ -17,7 +19,7 @@ from app.services.calendar_event_service import CalendarEventService
 router = APIRouter(prefix="/calendar-events", tags=["calendar-events"])
 
 
-def _to_item(event) -> CalendarEventItem:
+def _to_item(event: CalendarEvent) -> CalendarEventItem:
     return CalendarEventItem(
         id=event.id,
         title=event.title,
@@ -33,7 +35,8 @@ def _to_item(event) -> CalendarEventItem:
 
 @router.get("")
 def list_calendar_events(
-    db: DbSession, current_user: CurrentUser
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[CalendarEventListResponse]:
     timezone_name = (
         current_user.settings.default_timezone if current_user.settings else "Asia/Shanghai"
@@ -50,7 +53,9 @@ def list_calendar_events(
 
 @router.post("")
 def create_calendar_event(
-    db: DbSession, current_user: CurrentUser, payload: CalendarEventCreateRequest
+    payload: CalendarEventCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[CalendarEventItem]:
     service = CalendarEventService(db)
     event = service.create_event(
@@ -70,7 +75,10 @@ def create_calendar_event(
 
 @router.patch("/{event_id}")
 def update_calendar_event(
-    db: DbSession, current_user: CurrentUser, event_id: str, payload: CalendarEventUpdateRequest
+    event_id: str,
+    payload: CalendarEventUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[CalendarEventItem]:
     service = CalendarEventService(db)
     event = service.get_event(current_user.id, event_id)
@@ -92,7 +100,9 @@ def update_calendar_event(
 
 @router.delete("/{event_id}")
 def delete_calendar_event(
-    db: DbSession, current_user: CurrentUser, event_id: str
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[dict[str, str]]:
     service = CalendarEventService(db)
     event = service.get_event(current_user.id, event_id)
@@ -105,9 +115,9 @@ def delete_calendar_event(
 
 @router.get("/search")
 def search_calendar_events(
-    db: DbSession,
-    current_user: CurrentUser,
     keyword: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     date: date | None = None,
 ) -> ApiResponse[SearchEventCandidatesResponse]:
     service = CalendarEventService(db)

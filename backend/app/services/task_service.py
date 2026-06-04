@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,7 +19,7 @@ class TaskService:
         title: str,
         description: str | None = None,
         estimated_minutes: int | None = None,
-        deadline=None,
+        deadline: datetime | None = None,
         priority: str = "medium",
         source: str = ScheduleSource.AGENT.value,
     ) -> TaskItem:

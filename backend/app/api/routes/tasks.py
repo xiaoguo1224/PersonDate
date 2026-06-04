@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import TaskItem, User
 from app.schemas.common import ApiResponse
 from app.schemas.task import TaskCreateRequest, TaskItemDTO, TaskListResponse, TaskUpdateRequest
 from app.services.task_service import TaskService
@@ -8,7 +10,7 @@ from app.services.task_service import TaskService
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-def _to_item(task) -> TaskItemDTO:
+def _to_item(task: TaskItem) -> TaskItemDTO:
     return TaskItemDTO(
         id=task.id,
         title=task.title,
@@ -20,15 +22,19 @@ def _to_item(task) -> TaskItemDTO:
     )
 
 
-@router.get("")
-def list_tasks(db: DbSession, current_user: CurrentUser) -> ApiResponse[TaskListResponse]:
+def list_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[TaskListResponse]:
     items = [_to_item(task) for task in TaskService(db).list_tasks(current_user.id)]
     return ApiResponse(data=TaskListResponse(items=items))
 
 
 @router.post("")
 def create_task(
-    db: DbSession, current_user: CurrentUser, payload: TaskCreateRequest
+    payload: TaskCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[TaskItemDTO]:
     task = TaskService(db).create_task(
         user_id=current_user.id,
@@ -44,7 +50,10 @@ def create_task(
 
 @router.patch("/{task_id}")
 def update_task(
-    db: DbSession, current_user: CurrentUser, task_id: str, payload: TaskUpdateRequest
+    task_id: str,
+    payload: TaskUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[TaskItemDTO]:
     service = TaskService(db)
     task = service.get_task(current_user.id, task_id)
@@ -64,7 +73,9 @@ def update_task(
 
 @router.delete("/{task_id}")
 def delete_task(
-    db: DbSession, current_user: CurrentUser, task_id: str
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[dict[str, str]]:
     service = TaskService(db)
     task = service.get_task(current_user.id, task_id)
@@ -77,7 +88,9 @@ def delete_task(
 
 @router.patch("/{task_id}/complete")
 def complete_task(
-    db: DbSession, current_user: CurrentUser, task_id: str
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[TaskItemDTO]:
     service = TaskService(db)
     task = service.get_task(current_user.id, task_id)

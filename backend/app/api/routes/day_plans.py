@@ -1,8 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import get_current_user, get_db
+from app.models import DayPlan, PlanItem, User
 from app.schemas.common import ApiResponse
 from app.schemas.plan import DayPlanConfirmResponse, DayPlanDTO, DayPlanGenerateRequest, PlanItemDTO
 from app.services.day_plan_service import DayPlanService
@@ -10,7 +12,7 @@ from app.services.day_plan_service import DayPlanService
 router = APIRouter(prefix="/day-plans", tags=["day-plans"])
 
 
-def _to_item(item) -> PlanItemDTO:
+def _to_item(item: PlanItem) -> PlanItemDTO:
     return PlanItemDTO(
         id=item.id,
         title=item.title,
@@ -21,7 +23,7 @@ def _to_item(item) -> PlanItemDTO:
     )
 
 
-def _to_day_plan(plan) -> DayPlanDTO:
+def _to_day_plan(plan: DayPlan) -> DayPlanDTO:
     return DayPlanDTO(
         id=plan.id,
         plan_date=plan.plan_date,
@@ -33,7 +35,9 @@ def _to_day_plan(plan) -> DayPlanDTO:
 
 @router.get("/{plan_date}")
 def get_day_plan(
-    db: DbSession, current_user: CurrentUser, plan_date: date
+    plan_date: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[DayPlanDTO | None]:
     plan = DayPlanService(db).list_day_plan(current_user.id, plan_date)
     return ApiResponse(data=_to_day_plan(plan) if plan else None)
@@ -41,7 +45,10 @@ def get_day_plan(
 
 @router.post("/{plan_date}/generate")
 def generate_day_plan(
-    db: DbSession, current_user: CurrentUser, plan_date: date, payload: DayPlanGenerateRequest
+    plan_date: date,
+    payload: DayPlanGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[DayPlanDTO]:
     service = DayPlanService(db)
     plan = service.generate_draft(current_user.id, plan_date)
@@ -51,7 +58,9 @@ def generate_day_plan(
 
 @router.post("/{plan_id}/confirm")
 def confirm_day_plan(
-    db: DbSession, current_user: CurrentUser, plan_id: str
+    plan_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[DayPlanConfirmResponse]:
     service = DayPlanService(db)
     plan = service.get_day_plan(current_user.id, plan_id)
