@@ -1,0 +1,15 @@
+.venv/
+backend/.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.egg-info/
+backend/.env
+logs/
+develop-docs/
+node_modules/
+.next/
+dist/
