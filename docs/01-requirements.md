@@ -277,7 +277,7 @@ member 注册流程：
 
 ### 7.2 微信身份绑定
 
-每个系统用户需要绑定自己的微信身份。绑定关系由 `channel_identities` 保存。
+每个系统用户需要通过二维码登录绑定自己的微信身份。通道账号凭证由 `wechat_accounts` 保存，用户与微信身份映射由 `channel_identities` 保存。
 
 绑定流程：
 
@@ -290,13 +290,13 @@ member 注册流程：
   ↓
 系统轮询登录状态并获取通道凭证
   ↓
-写入 channel_identities
+写入 `wechat_accounts` 和 `channel_identities`
 ```
 
 未绑定用户发送普通消息时，系统回复：
 
 ```text
-你还没有绑定账号，请先在 Web 中使用邀请码注册并绑定微信。
+你还没有绑定账号，请先在 Web 中创建二维码登录会话并完成微信确认。
 ```
 
 ### 7.3 创建固定日程

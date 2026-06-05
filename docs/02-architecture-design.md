@@ -595,7 +595,7 @@ agent_pending_states.user_id = 当前用户
   ↓
 WeChat Channel Adapter 轮询登录状态并获取通道凭证
   ↓
-写入 channel_identities
+写入 `wechat_accounts` 和 `channel_identities`
 ```
 
 绑定后，微信消息才能进入 Agent。
@@ -603,7 +603,7 @@ WeChat Channel Adapter 轮询登录状态并获取通道凭证
 未绑定用户发送消息时，系统回复：
 
 ```text
-你还没有绑定账号，请先在 Web 中使用邀请码注册并绑定微信。
+你还没有绑定账号，请先在 Web 中创建二维码登录会话并完成微信确认。
 ```
 
 被禁用用户发送消息时，系统回复：

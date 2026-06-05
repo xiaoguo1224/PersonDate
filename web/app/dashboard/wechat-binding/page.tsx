@@ -92,6 +92,36 @@ export default function WechatBindingPage() {
     }
   }, [loadAccounts, loadIdentities, session]);
 
+  useEffect(() => {
+    if (!accessToken || !loginSession?.login_session_id) {
+      return;
+    }
+    if (loginSessionDetail?.status === "confirmed" || loginSessionDetail?.status === "expired") {
+      return;
+    }
+
+    const refreshSession = async () => {
+      await loadLoginSession(loginSession.login_session_id);
+    };
+
+    void refreshSession();
+    const timer = window.setInterval(() => {
+      void refreshSession();
+    }, 3000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [accessToken, loadLoginSession, loginSession?.login_session_id, loginSessionDetail?.status]);
+
+  useEffect(() => {
+    if (loginSessionDetail?.status !== "confirmed") {
+      return;
+    }
+    void loadIdentities();
+    void loadAccounts();
+  }, [loadAccounts, loadIdentities, loginSessionDetail?.status]);
+
   const summary = useMemo(() => {
     return {
       total: identities.length,
