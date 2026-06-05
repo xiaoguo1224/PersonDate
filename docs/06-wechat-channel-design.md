@@ -1,4 +1,17 @@
-# 微信通道接入文档 v2.0
+# 微信通道接入文档 v2.1
+
+## 0. 口径说明
+
+本项目不使用 OpenClaw Runtime，也不依赖 OpenClaw Agent 编排。
+
+这里借鉴的是 Tencent 官方 `openclaw-weixin` 插件公开出来的消息交互形态和流程约定，最终实现必须由本项目自研。
+
+因此：
+
+1. `WECHAT_CHANNEL_BASE_URL` 表示我们自己部署的微信通道服务地址。
+2. `wechat-channel` 是本项目自研的通道进程，不是 OpenClaw gateway。
+3. `getupdates` / `sendmessage` 是我们需要实现并对接的 HTTP 协议接口。
+4. 二维码登录、账号状态、游标、去重和消息日志都由我们自己的服务维护。
 
 ## 1. 接入目标
 
@@ -646,6 +659,6 @@ FastAPI 只处理标准化后的消息和业务结果。
 
 一句话总结：**你不是要把 Agent 直接塞进微信协议里，而是要在 Agent 外面做一层独立的微信通道服务，负责扫码登录、拉消息、标准化、发消息和状态管理。**
 
-推荐通过 `WECHAT_CHANNEL_BASE_URL` 配置独立微信通道服务地址，由 `wechat-channel` 进程启动时初始化 `wechat_sender` 和 `wechat_updates_client`，并由 APScheduler 常驻轮询活跃账号。
+推荐通过 `WECHAT_CHANNEL_BASE_URL` 配置我们自研的微信通道服务地址，由 `wechat-channel` 进程启动时初始化 `wechat_sender` 和 `wechat_updates_client`，并由 APScheduler 常驻轮询活跃账号。
 
 在 Docker 编排中，建议把长轮询逻辑放到独立的 `wechat-channel` 进程里运行，backend 仅保留业务 API 和提醒调度，避免两处同时轮询同一批账号。

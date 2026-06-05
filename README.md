@@ -37,6 +37,6 @@ docker compose logs -f postgres
 
 ## 开发说明
 
-- `openclaw-weixin` 只作为微信消息通道，不使用 OpenClaw Runtime。
+- 微信通道协议参考 Tencent 官方 `openclaw-weixin` 插件，但由本项目自研实现，不使用 OpenClaw Runtime。
 - Agent 先行，消息通道后置。
 - 新功能完成后需要先验证，再做独立 git 提交。
