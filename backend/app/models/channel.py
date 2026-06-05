@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -93,7 +93,10 @@ class ChannelMessageLog(UUIDMixin, TimestampMixin, Base):
         String(32), nullable=False, default=ContentType.TEXT.value
     )
     content: Mapped[str | None] = mapped_column(Text)
+    context_token: Mapped[str | None] = mapped_column(Text)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(json_type, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="received")
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
     account_id: Mapped[str | None] = mapped_column(String(255), index=True)

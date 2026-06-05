@@ -59,8 +59,11 @@ class ChannelMessageLogItem(BaseModel):
     direction: str
     content_type: str
     content: str | None = None
+    context_token: str | None = None
     raw_payload: dict[str, Any] | None = None
     status: str
+    retry_count: int = 0
+    error_code: str | None = None
     error_message: str | None = None
     created_at: datetime
 
@@ -108,6 +111,7 @@ class WechatInboundRequest(BaseModel):
     channel_user_id: str
     display_name: str | None = None
     avatar_url: str | None = None
+    context_token: str | None = None
     content_type: str = "text"
     content: str
     raw_payload: dict[str, Any] | None = None

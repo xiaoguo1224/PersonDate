@@ -172,6 +172,7 @@ def test_wechat_message_logs_and_status() -> None:
         direction=MessageDirection.INBOUND.value,
         content_type=ContentType.TEXT.value,
         content="明天下午 3 点开会",
+        context_token="ctx-in-1",
         raw_payload={"source": "wechat"},
         status="received",
     )
@@ -184,8 +185,10 @@ def test_wechat_message_logs_and_status() -> None:
         direction=MessageDirection.OUTBOUND.value,
         content_type=ContentType.TEXT.value,
         content="提醒：15:00 项目会议即将开始。",
+        context_token="ctx-out-1",
         raw_payload={"source": "worker"},
         status="sent",
+        retry_count=0,
     )
     session.add_all([inbound_log, outbound_log])
     session.commit()
@@ -202,6 +205,7 @@ def test_wechat_message_logs_and_status() -> None:
     assert status_body["data"]["bound_users"] == 2
     assert len(status_body["data"]["recent_inbound_messages"]) == 1
     assert len(status_body["data"]["recent_outbound_messages"]) == 1
+    assert status_body["data"]["recent_inbound_messages"][0]["context_token"] == "ctx-in-1"
 
     owner_logs_response = TestClient(app).get(
         "/api/admin/message-logs?direction=outbound",
@@ -211,6 +215,8 @@ def test_wechat_message_logs_and_status() -> None:
     owner_logs_body = owner_logs_response.json()
     assert len(owner_logs_body["data"]["items"]) == 1
     assert owner_logs_body["data"]["items"][0]["message_id"] == "msg-out-1"
+    assert owner_logs_body["data"]["items"][0]["context_token"] == "ctx-out-1"
+    assert owner_logs_body["data"]["items"][0]["retry_count"] == 0
 
     member_logs_response = TestClient(app).get(
         "/api/my-message-logs",

@@ -47,6 +47,10 @@ class WechatChannelAdapter:
         service = WechatChannelService(self.db)
         identity_service = ChannelIdentityService(self.db)
         content = payload.content.strip()
+        context_token = payload.context_token
+        if context_token is None and payload.raw_payload is not None:
+            raw_context_token = payload.raw_payload.get("context_token")
+            context_token = raw_context_token if isinstance(raw_context_token, str) else None
 
         if payload.message_id and service.get_message_log_by_message_id(
             payload.message_id,
@@ -69,6 +73,7 @@ class WechatChannelAdapter:
             direction="inbound",
             content_type=payload.content_type,
             content=payload.content,
+            context_token=context_token,
             raw_payload=payload.raw_payload,
         )
 

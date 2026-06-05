@@ -115,8 +115,11 @@ export type ChannelMessageLogItem = {
   direction: string;
   content_type: string;
   content?: string | null;
+  context_token?: string | null;
   raw_payload?: Record<string, unknown> | null;
   status: string;
+  retry_count: number;
+  error_code?: string | null;
   error_message?: string | null;
   created_at: string;
 };

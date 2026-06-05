@@ -49,10 +49,10 @@ class FakeUpdatesClient:
 
 class FakeAdapter:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, bool]] = []
+        self.calls: list[tuple[str, bool, str | None]] = []
 
     def handle_inbound_message(self, payload, channel_token=None, *, require_auth=True):  # noqa: ANN001
-        self.calls.append((payload.content, require_auth))
+        self.calls.append((payload.content, require_auth, payload.context_token))
         return WechatInboundHandlingResult(
             response=WechatInboundResponse(handled=True, reply="已处理"),
             message="已处理",
@@ -96,7 +96,7 @@ def test_poll_account_once_updates_cursor_and_dispatches_messages() -> None:
     processed = poller.poll_account_once("wx_account_001")
 
     assert processed == 1
-    assert adapter.calls == [("明天下午 3 点开会", False)]
+    assert adapter.calls == [("明天下午 3 点开会", False, "ctx_001")]
 
     refreshed = session.get(WechatAccount, account.id)
     assert refreshed is not None

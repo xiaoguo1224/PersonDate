@@ -10,7 +10,7 @@ from app.api.deps import get_db
 from app.core.config import get_settings
 from app.db.base import Base
 from app.main import create_app
-from app.models import ChannelIdentity, User
+from app.models import ChannelIdentity, ChannelMessageLog, User
 from app.schemas.auth import LoginRequest
 from app.schemas.setup import OwnerInitRequest
 from app.schemas.wechat import WechatInboundRequest
@@ -122,6 +122,7 @@ def test_wechat_channel_adapter_handles_inbound_message() -> None:
             channel_user_id="wx_user_member",
             content_type="text",
             content="明天下午 3 点开会",
+            context_token="ctx_001",
             raw_payload={},
         ),
         channel_token=get_settings().wechat_channel_token,
@@ -130,3 +131,9 @@ def test_wechat_channel_adapter_handles_inbound_message() -> None:
     assert result.response.handled is True
     assert result.response.reply == "已为你创建日程：开会。"
     assert result.message == "已为你创建日程：开会。"
+
+    stored_log = session.scalar(
+        session.query(ChannelMessageLog).filter_by(message_id="wx_msg_001").statement
+    )
+    assert stored_log is not None
+    assert stored_log.context_token == "ctx_001"

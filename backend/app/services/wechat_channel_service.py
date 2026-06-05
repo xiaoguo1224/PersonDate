@@ -249,8 +249,11 @@ class WechatChannelService:
         direction: str,
         content_type: str,
         content: str | None,
+        context_token: str | None = None,
         raw_payload: dict[str, object] | None = None,
         status: str = "received",
+        retry_count: int = 0,
+        error_code: str | None = None,
         error_message: str | None = None,
     ) -> ChannelMessageLog:
         log = ChannelMessageLog(
@@ -263,8 +266,11 @@ class WechatChannelService:
             direction=direction,
             content_type=content_type,
             content=content,
+            context_token=context_token,
             raw_payload=raw_payload or {},
             status=status,
+            retry_count=retry_count,
+            error_code=error_code,
             error_message=error_message,
         )
         self.db.add(log)
@@ -276,9 +282,11 @@ class WechatChannelService:
         *,
         conversation_id: str,
         content: str,
+        context_token: str | None = None,
         user_id: str | None = None,
         channel_user_id: str | None = None,
         message_id: str | None = None,
+        retry_count: int = 0,
     ) -> ChannelMessageLog:
         identity = self.db.scalar(
             select(ChannelIdentity).where(
@@ -291,28 +299,41 @@ class WechatChannelService:
         resolved_channel_user_id = channel_user_id or (
             identity.channel_user_id if identity else None
         )
+        resolved_context_token = context_token or self._resolve_context_token(conversation_id)
 
         status = "sent"
         error_message: str | None = None
+        error_code: str | None = None
         outbound_message_id = message_id
+        outbound_retry_count = retry_count
         try:
             if self.sender is None:
                 raise RuntimeError("微信发送适配器未配置")
-            result = self.sender.send_text(conversation_id, content)
+            result = self._send_text_to_channel(
+                conversation_id=conversation_id,
+                content=content,
+                context_token=resolved_context_token,
+            )
             if isinstance(result, dict):
                 success = bool(result.get("success", True))
                 outbound_message_id = result.get("message_id") or outbound_message_id
                 error_message = result.get("error_message") or result.get("detail")
+                error_code = result.get("error_code")
             else:
                 success = bool(getattr(result, "success", True))
                 outbound_message_id = getattr(result, "message_id", None) or outbound_message_id
                 error_message = getattr(result, "error_message", None)
+                error_code = getattr(result, "error_code", None)
             if not success:
                 status = "failed"
                 error_message = error_message or "微信消息发送失败"
+                error_code = error_code or "SEND_FAILED"
+                outbound_retry_count = max(outbound_retry_count, 1)
         except Exception as exc:  # noqa: BLE001
             status = "failed"
             error_message = str(exc)
+            error_code = exc.__class__.__name__.upper()
+            outbound_retry_count = max(outbound_retry_count, 1)
 
         return self.create_message_log(
             user_id=resolved_user_id,
@@ -322,8 +343,15 @@ class WechatChannelService:
             direction=MessageDirection.OUTBOUND.value,
             content_type="text",
             content=content,
-            raw_payload={"conversation_id": conversation_id, "content": content},
+            context_token=resolved_context_token,
+            raw_payload={
+                "conversation_id": conversation_id,
+                "content": content,
+                "context_token": resolved_context_token,
+            },
             status=status,
+            retry_count=outbound_retry_count,
+            error_code=error_code,
             error_message=error_message,
         )
 
@@ -394,3 +422,42 @@ class WechatChannelService:
             "created_at": account.created_at,
             "updated_at": account.updated_at,
         }
+
+    def _send_text_to_channel(
+        self,
+        *,
+        conversation_id: str,
+        content: str,
+        context_token: str | None,
+    ) -> Any:
+        sender = self.sender
+        if sender is None:
+            raise RuntimeError("微信发送适配器未配置")
+
+        if context_token is None:
+            return sender.send_text(conversation_id, content)
+        try:
+            return sender.send_text(
+                conversation_id,
+                content,
+                context_token=context_token,
+            )
+        except TypeError as exc:
+            try:
+                return sender.send_text(conversation_id, content)
+            except TypeError:
+                raise exc from None
+
+    def _resolve_context_token(self, conversation_id: str) -> str | None:
+        stmt = (
+            select(ChannelMessageLog.context_token)
+            .where(
+                ChannelMessageLog.channel == "wechat",
+                ChannelMessageLog.conversation_id == conversation_id,
+                ChannelMessageLog.direction == MessageDirection.INBOUND.value,
+                ChannelMessageLog.context_token.isnot(None),
+            )
+            .order_by(ChannelMessageLog.created_at.desc())
+            .limit(1)
+        )
+        return self.db.scalar(stmt)

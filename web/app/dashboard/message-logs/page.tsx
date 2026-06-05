@@ -212,7 +212,11 @@ export default function MessageLogsPage() {
               </Descriptions.Item>
               <Descriptions.Item label="会话 ID">{selectedItem.conversation_id}</Descriptions.Item>
               <Descriptions.Item label="用户 ID">{selectedItem.user_id || "-"}</Descriptions.Item>
+              <Descriptions.Item label="通道账号">{selectedItem.account_id || "-"}</Descriptions.Item>
               <Descriptions.Item label="message_id">{selectedItem.message_id || "-"}</Descriptions.Item>
+              <Descriptions.Item label="context_token">{selectedItem.context_token || "-"}</Descriptions.Item>
+              <Descriptions.Item label="retry_count">{selectedItem.retry_count}</Descriptions.Item>
+              <Descriptions.Item label="error_code">{selectedItem.error_code || "-"}</Descriptions.Item>
               <Descriptions.Item label="状态">
                 <Tag color={getStatusColor(selectedItem.status)}>{selectedItem.status}</Tag>
               </Descriptions.Item>

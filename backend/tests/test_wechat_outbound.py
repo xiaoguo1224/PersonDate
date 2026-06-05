@@ -76,6 +76,23 @@ def test_wechat_channel_service_send_text_records_outbound_log() -> None:
     session = SessionLocal()
     sender = FakeWechatSender()
 
+    session.add(
+        ChannelMessageLog(
+            user_id="owner-001",
+            channel="wechat",
+            message_id="wx_in_001",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="明天下午 3 点开会",
+            context_token="ctx_001",
+            raw_payload={"context_token": "ctx_001"},
+            status="received",
+        )
+    )
+    session.commit()
+
     service = WechatChannelService(session, sender=sender)
     log = service.send_text(conversation_id="wx_user_001", content="提醒：15:00 开会")
     session.commit()
@@ -87,6 +104,52 @@ def test_wechat_channel_service_send_text_records_outbound_log() -> None:
     assert stored_log.direction == "outbound"
     assert stored_log.conversation_id == "wx_user_001"
     assert stored_log.content == "提醒：15:00 开会"
+    assert stored_log.context_token == "ctx_001"
+    assert stored_log.retry_count == 0
+    assert stored_log.error_code is None
+
+
+def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+
+    class FailingWechatSender:
+        def send_text(self, conversation_id: str, content: str, context_token: str | None = None):  # noqa: ANN001
+            return {"success": False, "error_code": "TIMEOUT", "error_message": "timeout"}
+
+    session.add(
+        ChannelMessageLog(
+            user_id="owner-001",
+            channel="wechat",
+            message_id="wx_in_002",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="明天下午 4 点开会",
+            context_token="ctx_002",
+            raw_payload={"context_token": "ctx_002"},
+            status="received",
+        )
+    )
+    session.commit()
+
+    service = WechatChannelService(session, sender=FailingWechatSender())
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：16:00 开会")
+    session.commit()
+
+    assert log.status == "failed"
+    assert log.retry_count == 1
+    assert log.error_code == "TIMEOUT"
+    assert log.error_message == "timeout"
+    assert log.context_token == "ctx_002"
 
 
 def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:

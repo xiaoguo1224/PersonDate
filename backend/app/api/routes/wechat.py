@@ -54,8 +54,11 @@ def _to_message_log_item(log: ChannelMessageLog) -> ChannelMessageLogItem:
         direction=log.direction,
         content_type=log.content_type,
         content=log.content,
+        context_token=log.context_token,
         raw_payload=log.raw_payload,
         status=log.status,
+        retry_count=log.retry_count,
+        error_code=log.error_code,
         error_message=log.error_message,
         created_at=log.created_at,
     )

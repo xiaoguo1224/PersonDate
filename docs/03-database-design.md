@@ -534,8 +534,11 @@ channel_user_id VARCHAR(255)
 direction VARCHAR(32) NOT NULL
 content_type VARCHAR(32) NOT NULL DEFAULT 'text'
 content TEXT
+context_token TEXT
 raw_payload JSONB
 status VARCHAR(32) NOT NULL DEFAULT 'received'
+retry_count INTEGER NOT NULL DEFAULT 0
+error_code VARCHAR(64)
 error_message TEXT
 created_at TIMESTAMPTZ NOT NULL
 ```

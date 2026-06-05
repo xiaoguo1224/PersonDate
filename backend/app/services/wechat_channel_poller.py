@@ -17,6 +17,7 @@ class WechatPollMessage:
     conversation_id: str
     channel_user_id: str
     display_name: str | None
+    context_token: str | None
     content_type: str
     content: str
     raw_payload: dict[str, Any]
@@ -62,6 +63,7 @@ class WechatChannelPoller:
                 conversation_id=message.conversation_id,
                 channel_user_id=message.channel_user_id,
                 display_name=message.display_name,
+                context_token=message.context_token,
                 content_type=message.content_type,
                 content=message.content,
                 raw_payload=message.raw_payload,
@@ -125,6 +127,7 @@ class WechatChannelPoller:
                 or conversation_id
             )
             display_name = item.get("display_name")
+            context_token = item.get("context_token")
             content_type = item.get("content_type") or item.get("message_type") or "text"
             content = item.get("content") or item.get("text") or ""
         else:
@@ -143,6 +146,7 @@ class WechatChannelPoller:
                 or conversation_id
             )
             display_name = getattr(item, "display_name", None)
+            context_token = getattr(item, "context_token", None)
             content_type = (
                 getattr(item, "content_type", None)
                 or getattr(item, "message_type", None)
@@ -155,6 +159,7 @@ class WechatChannelPoller:
             conversation_id=conversation_id,
             channel_user_id=channel_user_id,
             display_name=display_name,
+            context_token=context_token,
             content_type=content_type,
             content=content,
             raw_payload=raw_payload,

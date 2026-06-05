@@ -326,9 +326,9 @@ message_id
 to_user_id
 context_token
 reply_text
+retry_count
 error_code
 error_message
-retry_count
 ```
 
 ## 13. 去重机制
@@ -561,7 +561,7 @@ channel_identities
   - 系统用户与微信身份映射
 
 wechat_message_logs
-  - 入站、出站消息与处理状态
+  - 入站、出站消息、context_token、retry_count、error_code、处理状态
 
 wechat_send_logs
   - 发送结果与错误信息
