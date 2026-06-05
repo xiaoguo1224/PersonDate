@@ -2,7 +2,7 @@
 
 ## 1. 项目概述
 
-本项目是一个基于微信消息通道的轻量多用户智能日程规划 Agent 系统。系统以微信为主要交互入口，用户通过微信自然语言输入日程、任务、提醒、学习计划、会议安排等内容，系统由 Agent 进行理解、拆解、规划、冲突检测和提醒，并通过微信持续交互。
+本项目是一个基于独立微信通道的轻量多用户智能日程规划 Agent 系统。系统以微信为主要交互入口，用户通过微信自然语言输入日程、任务、提醒、学习计划、会议安排等内容，系统由 Agent 进行理解、拆解、规划、冲突检测和提醒，并通过微信持续交互。
 
 系统同时提供 Web Dashboard，作为日程驾驶舱，用于展示每日计划、日历视图、任务池、冲突事项、提醒任务、Agent 执行日志、微信绑定、邀请码和系统配置。
 
@@ -27,10 +27,10 @@ Web 日程驾驶舱
 一句话定位：
 
 ```text
-基于 openclaw-weixin 微信消息通道的轻量多用户智能日程规划 Agent 系统。
+基于独立微信通道的轻量多用户智能日程规划 Agent 系统。
 ```
 
-重要边界：本项目不使用 OpenClaw Runtime，不使用 OpenClaw Agent 编排。`openclaw-weixin` 只作为微信消息通道，真正的 Agent、业务、权限、数据库和 Web API 全部由自研 FastAPI 后端实现。
+重要边界：本项目不使用外部 Agent Runtime，不使用外部 Agent 编排。微信连接、授权、消息收发由自研微信通道服务承担，真正的 Agent、业务、权限、数据库和 Web API 全部由自研 FastAPI 后端实现。
 
 ## 2. 项目目标
 
@@ -79,7 +79,7 @@ owner 可以：
 12. 禁用或恢复 member 用户。
 13. 查看和修改系统设置。
 14. 配置 LLM 模型。
-15. 查看 openclaw-weixin 通道状态。
+15. 查看微信通道状态。
 16. 查看全局消息日志。
 17. 查看全局 Agent 执行日志。
 18. 查看全局提醒任务。
@@ -108,7 +108,7 @@ member 不能：
 1. 查看或修改系统设置。
 2. 查看 LLM API Key。
 3. 修改模型配置。
-4. 查看 openclaw-weixin 全局连接配置。
+4. 查看微信通道全局连接配置。
 5. 查看其他用户的日程、任务、提醒、计划和冲突。
 6. 查看全局消息日志。
 7. 查看全局 Agent 执行日志。
@@ -119,7 +119,7 @@ member 不能：
 
 ## 4. 微信接入方式
 
-系统使用 `openclaw-weixin` 作为微信消息接入通道。
+系统使用自研微信通道服务作为微信消息接入通道。
 
 微信通道职责：
 
@@ -130,7 +130,7 @@ member 不能：
 维护微信通道连接状态
 ```
 
-系统不自行实现 Wechaty、GeWeChat 或个人号 Bot Gateway。微信连接、授权、消息收发由 openclaw-weixin 相关通道能力承担。
+系统不自行实现 Wechaty、GeWeChat 或个人号 Bot Gateway。微信连接、授权、消息收发由自研微信通道服务承担。
 
 首版支持：
 
@@ -161,7 +161,7 @@ member 不能：
 ```text
 微信用户
   ↓
-openclaw-weixin
+自研微信通道服务
   ↓
 WeChat Channel Adapter
   ↓
@@ -179,7 +179,7 @@ APScheduler Reminder Worker
   ↓
 WeChat Channel Adapter
   ↓
-openclaw-weixin
+自研微信通道服务
   ↓
 微信用户
 ```
@@ -284,11 +284,11 @@ member 注册流程：
 ```text
 用户登录 Web
   ↓
-生成微信绑定码
+创建微信二维码登录会话
   ↓
-用户在微信中发送：绑定 123456
+用户使用微信扫码并确认
   ↓
-系统验证绑定码
+系统轮询登录状态并获取通道凭证
   ↓
 写入 channel_identities
 ```
@@ -309,7 +309,7 @@ member 注册流程：
 
 系统流程：
 
-1. openclaw-weixin 接收微信消息。
+1. 自研微信通道服务接收微信消息。
 2. WeChat Channel Adapter 标准化消息。
 3. 系统根据 `conversation_id` 或 `channel_user_id` 找到 `user_id`。
 4. SchedulePlanningGraph 判断用户意图为 `create_event`。
@@ -463,7 +463,7 @@ member 注册流程：
 
 1. Reminder Worker 扫描到期任务。
 2. 生成提醒消息。
-3. 通过 WeChat Channel Adapter 调用 openclaw-weixin 发送微信消息。
+3. 通过 WeChat Channel Adapter 调用微信通道服务发送微信消息。
 4. 更新 `reminder_job` 状态。
 5. 如果是周期任务，生成下一次 `reminder_job`。
 
@@ -626,7 +626,7 @@ Asia/Shanghai
 
 ## 13. 提醒系统需求
 
-提醒通过 openclaw-weixin 微信通道发送。
+提醒通过微信通道发送。
 
 提醒类型：
 
@@ -647,7 +647,7 @@ Reminder Worker 扫描 reminder_job
   ↓
 生成微信文本消息
   ↓
-通过 WeChat Channel Adapter 发送
+通过微信通道发送
   ↓
 更新 reminder_job 状态
 ```
@@ -686,7 +686,7 @@ ORM：SQLAlchemy 2.0
 Schema：Pydantic v2
 提醒：APScheduler
 前端：Next.js + React + TypeScript + Ant Design
-微信通道：openclaw-weixin + 自研 WeChat Channel Adapter
+微信通道：自研微信通道服务 + 自研 WeChat Channel Adapter
 鉴权：JWT + RBAC
 密码：argon2 / bcrypt
 部署：Docker Compose
@@ -704,7 +704,7 @@ Schema：Pydantic v2
 
 ### 阶段三：微信通道接入
 
-将 openclaw-weixin 接收到的微信消息接入同一个 SchedulePlanningGraph。
+将微信通道接收到的微信消息接入同一个 SchedulePlanningGraph。
 
 ## 17. MVP 验收标准
 
@@ -725,9 +725,9 @@ Schema：Pydantic v2
 ## 18. 关键约束
 
 1. 微信是主入口，不是附属通知渠道。
-2. openclaw-weixin 只作为微信消息通道。
-3. 不使用 OpenClaw Runtime。
-4. 不使用 OpenClaw Agent 编排能力。
+2. 微信通道只作为消息收发通道。
+3. 不使用外部 Agent Runtime。
+4. 不使用外部 Agent 编排能力。
 5. Web 是日程驾驶舱，不是主业务入口。
 6. Agent 是主脑，不是关键词判断器。
 7. Agent 不直接写数据库，必须通过工具调用。

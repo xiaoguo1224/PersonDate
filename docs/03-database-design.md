@@ -17,7 +17,7 @@ Alembic
 +
 LangGraph SchedulePlanningGraph
 +
-openclaw-weixin 微信消息通道
+自研微信通道服务
 ```
 
 数据库设计需要满足以下目标：
@@ -44,9 +44,10 @@ openclaw-weixin 微信消息通道
 - invite_code_usages
 
 微信通道域：
+- wechat_accounts
 - channel_identities
 - channel_message_logs
-- wechat_binding_codes
+- wechat_login_sessions
 
 日程业务域：
 - calendar_events
@@ -407,7 +408,44 @@ INDEX(used_at)
 
 ## 6. 微信通道域
 
-## 6.1 channel_identities
+## 6.1 wechat_accounts
+
+微信通道账号表，用于保存扫码登录后的通道凭证、游标和连接状态。
+
+### 字段设计
+
+```text
+id UUID PK
+owner_user_id UUID NOT NULL FK -> users.id
+account_id VARCHAR(255) NOT NULL UNIQUE
+wechat_user_id VARCHAR(255)
+bot_token TEXT NOT NULL
+base_url VARCHAR(512) NOT NULL
+cursor TEXT
+remark TEXT
+status VARCHAR(32) NOT NULL DEFAULT 'active'
+bind_time TIMESTAMPTZ
+last_active_time TIMESTAMPTZ
+created_at TIMESTAMPTZ NOT NULL
+updated_at TIMESTAMPTZ NOT NULL
+```
+
+### 索引
+
+```text
+UNIQUE(account_id)
+INDEX(owner_user_id)
+INDEX(status)
+INDEX(last_active_time)
+```
+
+### 约束
+
+```text
+status IN ('active', 'binding', 'expired', 'disabled', 'error')
+```
+
+## 6.2 channel_identities
 
 微信身份绑定表。
 
@@ -440,42 +478,46 @@ INDEX(status)
 
 微信消息进入后，通过 channel_user_id 或 conversation_id 查找 user_id。未绑定用户不能使用 Agent。
 
-## 6.2 wechat_binding_codes
+## 6.3 wechat_login_sessions
 
-微信绑定码表。
+微信二维码登录会话表，用于保存二维码、状态和过期时间。
 
 ### 字段设计
 
 ```text
 id UUID PK
-user_id UUID NOT NULL FK -> users.id
-code VARCHAR(16) NOT NULL UNIQUE
-expires_at TIMESTAMPTZ NOT NULL
-used_at TIMESTAMPTZ
+owner_user_id UUID NOT NULL FK -> users.id
+login_session_id VARCHAR(255) NOT NULL UNIQUE
+qr_payload TEXT NOT NULL
 status VARCHAR(32) NOT NULL DEFAULT 'active'
+expires_at TIMESTAMPTZ NOT NULL
+confirmed_at TIMESTAMPTZ
 created_at TIMESTAMPTZ NOT NULL
 updated_at TIMESTAMPTZ NOT NULL
 ```
 
-状态：
+### 状态
 
 ```text
 active
-used
+qr_created
+wait_scan
+scanned
+confirmed
 expired
-disabled
+failed
 ```
 
 ### 索引
 
 ```text
-UNIQUE(code)
-INDEX(user_id)
+UNIQUE(login_session_id)
+INDEX(owner_user_id)
 INDEX(status)
 INDEX(expires_at)
 ```
 
-## 6.3 channel_message_logs
+## 6.4 channel_message_logs
 
 微信消息日志表。
 
@@ -485,6 +527,7 @@ INDEX(expires_at)
 id UUID PK
 user_id UUID FK -> users.id
 channel VARCHAR(32) NOT NULL DEFAULT 'wechat'
+account_id VARCHAR(255)
 message_id VARCHAR(255)
 conversation_id VARCHAR(255) NOT NULL
 channel_user_id VARCHAR(255)
@@ -502,11 +545,12 @@ created_at TIMESTAMPTZ NOT NULL
 ```text
 INDEX(user_id)
 INDEX(channel)
+INDEX(account_id)
 INDEX(conversation_id)
 INDEX(channel_user_id)
 INDEX(direction)
 INDEX(created_at)
-UNIQUE(channel, message_id) WHERE message_id IS NOT NULL
+UNIQUE(channel, account_id, message_id) WHERE message_id IS NOT NULL
 ```
 
 ## 7. 日程业务域
@@ -806,7 +850,7 @@ LLM_BASE_URL
 LLM_MODEL
 LLM_API_KEY
 DEFAULT_TIMEZONE
-OPENCLAW_WEIXIN_CONFIG
+WECHAT_CHANNEL_CONFIG
 SYSTEM_DAILY_PUSH_ENABLED
 REMINDER_SCAN_INTERVAL_SECONDS
 ```
@@ -824,6 +868,8 @@ users
   ├── user_settings
   ├── invite_codes.created_by_user_id
   ├── invite_code_usages.used_by_user_id
+  ├── wechat_accounts
+  ├── wechat_login_sessions
   ├── channel_identities
   ├── channel_message_logs
   ├── calendar_events
@@ -851,6 +897,8 @@ schedule_conflicts
 reminder_jobs
 agent_run_logs
 agent_pending_states
+wechat_accounts
+wechat_login_sessions
 channel_message_logs
 ```
 
@@ -878,7 +926,7 @@ task_items.status = deleted
 users.status = deleted
 ```
 
-例外：短期验证码、过期绑定码可以定期物理清理。
+例外：短期验证码、过期登录会话可以定期物理清理。
 
 ## 13. 初始化要求
 

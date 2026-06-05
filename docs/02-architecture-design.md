@@ -13,18 +13,18 @@ PostgreSQL 数据库
 +
 APScheduler 提醒调度
 +
-openclaw-weixin 微信消息通道
+自研微信通道服务
 +
 Next.js Web Dashboard
 ```
 
-系统不使用 OpenClaw Runtime，不使用 OpenClaw Agent 编排能力。`openclaw-weixin` 只作为微信消息收发通道，用于接收微信消息、发送微信回复和发送提醒。
+系统不依赖外部 Agent Runtime，也不使用外部 Agent 编排能力。自研微信通道服务只作为微信消息收发通道，用于接收微信消息、发送微信回复和发送提醒。
 
 最终架构一句话：
 
 ```text
 基于 FastAPI + LangGraph 的微信智能日程规划 Agent 系统，
-使用 openclaw-weixin 作为微信消息通道，
+使用自研微信通道服务作为微信消息通道，
 由自研 Schedule Agent Service 负责用户、权限、Agent、日程、任务、计划、冲突检测、提醒和 Web API。
 ```
 
@@ -38,7 +38,7 @@ Next.js Web Dashboard
           │
           ▼
 ┌────────────────────┐
-│ openclaw-weixin    │
+│ 自研微信通道服务      │
 │ 微信消息通道         │
 └─────────┬──────────┘
           │
@@ -92,7 +92,7 @@ APScheduler Reminder Worker
   ↓
 WeChat Channel Adapter
   ↓
-openclaw-weixin
+自研微信通道服务
   ↓
 微信用户
 ```
@@ -109,9 +109,9 @@ PostgreSQL
 
 ## 3. 架构边界
 
-### 3.1 openclaw-weixin 的边界
+### 3.1 微信通道服务的边界
 
-openclaw-weixin 只负责微信消息通道。
+微信通道服务只负责微信消息通道。
 
 它负责：
 
@@ -138,7 +138,7 @@ FastAPI 后端是系统核心。
 
 它负责：
 
-1. 接收 openclaw-weixin 转发来的微信消息。
+1. 接收微信通道服务转发来的微信消息。
 2. 标准化微信消息。
 3. 根据微信身份映射系统用户。
 4. 运行 SchedulePlanningGraph。
@@ -146,7 +146,7 @@ FastAPI 后端是系统核心。
 6. 管理用户、邀请码、权限。
 7. 管理日程、任务、每日计划、冲突事项。
 8. 管理提醒任务。
-9. 向 openclaw-weixin 发送微信回复和提醒。
+9. 向微信通道服务发送微信回复和提醒。
 10. 提供 Web Dashboard API。
 
 ### 3.3 LangGraph 的边界
@@ -223,7 +223,7 @@ FullCalendar 或自定义时间轴组件
 ### 4.3 微信通道
 
 ```text
-openclaw-weixin
+自研微信通道服务
 自研 WeChat Channel Adapter
 ```
 
@@ -331,14 +331,14 @@ app/
 
 职责：
 
-1. 接收 openclaw-weixin 原始消息。
+1. 接收微信通道服务原始消息。
 2. 标准化为系统内部消息。
 3. 记录 `channel_message_log`。
 4. 根据 `channel_user_id` / `conversation_id` 查找 `channel_identity`。
 5. 如果用户未绑定，返回绑定提示。
 6. 如果用户已绑定，将消息交给 SchedulePlanningGraph。
 7. 接收 Agent `final_response`。
-8. 调用 openclaw-weixin 发送微信消息。
+8. 调用微信通道服务发送微信消息。
 
 标准入站消息：
 
@@ -454,7 +454,7 @@ WechatChannelService
 ```text
 ConflictService 负责精确冲突检测。
 ReminderService 负责 reminder_job 创建、更新和取消。
-WechatChannelService 负责调用 openclaw-weixin 的发送能力。
+WechatChannelService 负责调用微信通道服务的发送能力。
 ```
 
 ### 6.5 Reminder Worker
@@ -589,11 +589,11 @@ agent_pending_states.user_id = 当前用户
   ↓
 登录 Web Dashboard
   ↓
-生成微信绑定码
+创建微信二维码登录会话
   ↓
-用户在微信中发送：绑定 123456
+用户使用微信扫码并确认
   ↓
-WeChat Channel Adapter 验证绑定码
+WeChat Channel Adapter 轮询登录状态并获取通道凭证
   ↓
 写入 channel_identities
 ```
@@ -628,7 +628,7 @@ services:
     PostgreSQL
 
   wechat-channel:
-    openclaw-weixin 运行环境 / 消息通道
+    自研微信通道服务 / 消息通道
 ```
 
 后端内部包含：
@@ -694,8 +694,8 @@ owner 可查看全局业务日志，member 只能查看自己的日志。
 1. 后端使用 FastAPI。
 2. Agent 状态流使用 LangGraph。
 3. 不使用 LangChain Agent。
-4. 不使用 OpenClaw Runtime。
-5. openclaw-weixin 只作为微信消息通道。
+4. 不使用外部 Agent Runtime。
+5. 微信通道只作为消息通道。
 6. Agent、业务、权限、数据库、Web API 全部由自研 FastAPI 后端实现。
 7. LLM 调用使用 OpenAI-compatible SDK。
 8. 日程冲突检测使用确定性程序算法。

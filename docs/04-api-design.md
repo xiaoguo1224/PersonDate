@@ -285,10 +285,10 @@ PATCH /api/me/settings
 
 ## 8. 微信绑定接口
 
-### 8.1 生成微信绑定码
+### 8.1 创建微信二维码登录会话
 
 ```http
-POST /api/me/wechat-binding-code
+POST /api/me/wechat-login-sessions
 ```
 
 权限：owner/member。
@@ -299,14 +299,24 @@ POST /api/me/wechat-binding-code
 {
   "success": true,
   "data": {
-    "code": "123456",
-    "expires_at": "2026-06-04T21:00:00+08:00"
+    "login_session_id": "login_001",
+    "qr_payload": "wechat-qr-payload",
+    "expires_at": "2026-06-04T21:00:00+08:00",
+    "status": "qr_created"
   },
-  "message": "请在微信中发送：绑定 123456"
+  "message": "请使用微信扫码完成登录"
 }
 ```
 
-### 8.2 查看我的微信绑定
+### 8.2 查看二维码登录会话状态
+
+```http
+GET /api/me/wechat-login-sessions/{id}
+```
+
+权限：owner/member。
+
+### 8.3 查看我的微信绑定
 
 ```http
 GET /api/me/channel-identities
@@ -314,7 +324,7 @@ GET /api/me/channel-identities
 
 权限：owner/member。
 
-### 8.3 解绑微信
+### 8.4 解绑微信
 
 ```http
 DELETE /api/me/channel-identities/{id}
@@ -330,7 +340,7 @@ DELETE /api/me/channel-identities/{id}
 POST /api/wechat/inbound
 ```
 
-用途：openclaw-weixin 或 WeChat Channel Adapter 将微信消息转发给后端。
+用途：微信通道服务或 WeChat Channel Adapter 将微信消息转发给后端。
 
 请求：
 
@@ -360,10 +370,9 @@ POST /api/wechat/inbound
 
 说明：
 
-1. 如果消息是“绑定 123456”，进入绑定流程。
-2. 如果用户未绑定，返回绑定提示。
-3. 如果用户已绑定，进入 SchedulePlanningGraph。
-4. 该接口需要验证来自微信通道的签名或内部 token。
+1. 如果消息来自未绑定账号，返回绑定提示。
+2. 如果用户已绑定，进入 SchedulePlanningGraph。
+3. 该接口需要验证来自微信通道的签名或内部 token。
 
 ### 9.2 微信发送调试接口
 

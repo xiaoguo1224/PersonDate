@@ -306,15 +306,18 @@ intent
 功能：
 
 ```text
-查看当前微信绑定
-生成绑定码
+查看当前微信绑定账号
+创建二维码登录会话
+展示二维码
+刷新登录状态
 解绑微信
 ```
 
 调用 API：
 
 ```http
-POST /api/me/wechat-binding-code
+POST /api/me/wechat-login-sessions
+GET /api/me/wechat-login-sessions/{id}
 GET /api/me/channel-identities
 DELETE /api/me/channel-identities/{id}
 ```
@@ -424,6 +427,7 @@ LLM_API_KEY 不明文展示，只显示是否已配置。
 
 ```text
 查看通道连接状态
+查看绑定账号列表
 查看最近入站消息
 查看最近出站消息
 发送测试消息
