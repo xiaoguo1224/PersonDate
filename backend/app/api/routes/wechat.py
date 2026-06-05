@@ -16,6 +16,8 @@ from app.schemas.wechat import (
     WechatBindingCodeResponse,
     WechatInboundRequest,
     WechatInboundResponse,
+    WechatSendTextRequest,
+    WechatSendTextResponse,
     WechatStatusResponse,
 )
 from app.services.channel_identity_service import ChannelIdentityService
@@ -171,8 +173,33 @@ def list_admin_message_logs(
             direction=direction,
             limit=limit,
         )
-        ]
+    ]
     return ApiResponse(data=ChannelMessageLogListResponse(items=items))
+
+
+@router.post("/admin/wechat/send-test")
+def send_wechat_test_message(
+    payload: WechatSendTextRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
+) -> ApiResponse[WechatSendTextResponse]:
+    service = WechatChannelService(db)
+    log = service.send_text(
+        conversation_id=payload.conversation_id,
+        content=payload.content,
+        user_id=current_user.id,
+    )
+    db.commit()
+    return ApiResponse(
+        data=WechatSendTextResponse(
+            sent=log.status == "sent",
+            conversation_id=log.conversation_id,
+            content=log.content or payload.content,
+            message_id=log.message_id,
+            error_message=log.error_message,
+        ),
+        message="测试消息已发送" if log.status == "sent" else "测试消息发送失败",
+    )
 
 
 @router.post("/wechat/inbound")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,8 +39,9 @@ class WechatChannelService:
     BINDING_CODE_RETRY_LIMIT = 20
     LOG_LIST_LIMIT = 100
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, sender: Any | None = None) -> None:
         self.db = db
+        self.sender = sender
 
     def get_message_log_by_message_id(self, message_id: str) -> ChannelMessageLog | None:
         stmt = select(ChannelMessageLog).where(
@@ -150,6 +151,62 @@ class WechatChannelService:
         self.db.add(log)
         self.db.flush()
         return log
+
+    def send_text(
+        self,
+        *,
+        conversation_id: str,
+        content: str,
+        user_id: str | None = None,
+        channel_user_id: str | None = None,
+        message_id: str | None = None,
+    ) -> ChannelMessageLog:
+        identity = self.db.scalar(
+            select(ChannelIdentity).where(
+                ChannelIdentity.channel == "wechat",
+                ChannelIdentity.conversation_id == conversation_id,
+                ChannelIdentity.status == "active",
+            )
+        )
+        resolved_user_id = user_id or (identity.user_id if identity else None)
+        resolved_channel_user_id = channel_user_id or (
+            identity.channel_user_id if identity else None
+        )
+
+        status = "sent"
+        error_message: str | None = None
+        outbound_message_id = message_id
+        try:
+            if self.sender is None:
+                raise RuntimeError("微信发送适配器未配置")
+            result = self.sender.send_text(conversation_id, content)
+            if isinstance(result, dict):
+                success = bool(result.get("success", True))
+                outbound_message_id = result.get("message_id") or outbound_message_id
+                error_message = result.get("error_message") or result.get("detail")
+            else:
+                success = bool(getattr(result, "success", True))
+                outbound_message_id = getattr(result, "message_id", None) or outbound_message_id
+                error_message = getattr(result, "error_message", None)
+            if not success:
+                status = "failed"
+                error_message = error_message or "微信消息发送失败"
+        except Exception as exc:  # noqa: BLE001
+            status = "failed"
+            error_message = str(exc)
+
+        return self.create_message_log(
+            user_id=resolved_user_id,
+            message_id=outbound_message_id,
+            conversation_id=conversation_id,
+            channel_user_id=resolved_channel_user_id,
+            direction=MessageDirection.OUTBOUND.value,
+            content_type="text",
+            content=content,
+            raw_payload={"conversation_id": conversation_id, "content": content},
+            status=status,
+            error_message=error_message,
+        )
 
     def consume_binding_code(self, code: str) -> WechatBindingCode | None:
         now = datetime.now(UTC)

@@ -71,3 +71,16 @@ class WechatInboundRequest(BaseModel):
 class WechatInboundResponse(BaseModel):
     handled: bool
     reply: str
+
+
+class WechatSendTextRequest(BaseModel):
+    conversation_id: str
+    content: str
+
+
+class WechatSendTextResponse(BaseModel):
+    sent: bool
+    conversation_id: str
+    content: str
+    message_id: str | None = None
+    error_message: str | None = None
