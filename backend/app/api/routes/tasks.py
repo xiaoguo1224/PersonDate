@@ -22,6 +22,7 @@ def _to_item(task: TaskItem) -> TaskItemDTO:
     )
 
 
+@router.get("")
 def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
