@@ -81,7 +81,23 @@ class DayPlanService:
         return draft
 
     def confirm_plan(self, day_plan: DayPlan) -> DayPlan:
+        stmt = select(DayPlan).where(
+            DayPlan.user_id == day_plan.user_id,
+            DayPlan.plan_date == day_plan.plan_date,
+            DayPlan.id != day_plan.id,
+            DayPlan.status.in_(
+                [
+                    DayPlanStatus.DRAFT.value,
+                    DayPlanStatus.CONFIRMED.value,
+                    DayPlanStatus.ACTIVE.value,
+                ]
+            ),
+        )
+        for other_plan in self.db.scalars(stmt):
+            other_plan.status = DayPlanStatus.DELETED.value
+        self.db.flush()
         day_plan.status = DayPlanStatus.CONFIRMED.value
+        self.db.flush()
         for item in day_plan.items:
             item.status = PlanItemStatus.PLANNED.value
         return day_plan

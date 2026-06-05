@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     Date,
@@ -12,7 +13,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -86,7 +86,15 @@ class TaskItem(UUIDMixin, TimestampMixin, Base):
 class DayPlan(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "day_plans"
     __table_args__ = (
-        UniqueConstraint("user_id", "plan_date", "status", name="uq_day_plan_active"),
+        Index(
+            "uq_day_plan_active",
+            "user_id",
+            "plan_date",
+            "status",
+            unique=True,
+            postgresql_where=sa.text("status IN ('draft', 'confirmed', 'active')"),
+            sqlite_where=sa.text("status IN ('draft', 'confirmed', 'active')"),
+        ),
         Index("ix_day_plans_user_date", "user_id", "plan_date"),
         Index("ix_day_plans_user_status", "user_id", "status"),
     )

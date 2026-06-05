@@ -101,6 +101,48 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
     assert confirmed_plan is not None
 
 
+def test_confirm_plan_replaces_existing_confirmed_plan(db_session, graph) -> None:
+    owner = _create_owner(db_session)
+
+    first_state = graph.invoke(
+        current_user=owner,
+        message="明天写论文 2 小时，帮我安排一下",
+        conversation_id="debug",
+    )
+    db_session.commit()
+    assert first_state.pending_state is not None
+
+    first_confirm = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
+    db_session.commit()
+    assert first_confirm.success is True
+
+    second_state = graph.invoke(
+        current_user=owner,
+        message="明天写论文 2 小时，帮我安排一下",
+        conversation_id="debug",
+    )
+    db_session.commit()
+    assert second_state.pending_state is not None
+
+    second_confirm = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
+    db_session.commit()
+
+    plan_date = second_state.pending_state["date"]
+    plans = list(
+        db_session.scalars(
+            select(DayPlan).where(
+                DayPlan.user_id == owner.id,
+                DayPlan.plan_date == plan_date,
+            )
+        )
+    )
+    plan_statuses = sorted(plan.status for plan in plans)
+
+    assert second_confirm.success is True
+    assert "计划已确认" in (second_confirm.final_response or "")
+    assert plan_statuses == ["confirmed", "deleted"]
+
+
 def test_update_and_delete_event(db_session, graph) -> None:
     owner = _create_owner(db_session)
     graph.invoke(current_user=owner, message="明天下午 3 点开会", conversation_id="debug")
