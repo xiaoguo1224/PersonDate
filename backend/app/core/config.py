@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(default=None, alias="LLM_MODEL")
     default_timezone: str = Field(default="Asia/Shanghai", alias="DEFAULT_TIMEZONE")
     reminder_scan_interval_seconds: int = Field(default=10, alias="REMINDER_SCAN_INTERVAL_SECONDS")
+    wechat_poll_interval_seconds: int = Field(default=5, alias="WECHAT_POLL_INTERVAL_SECONDS")
     wechat_channel_token: str | None = Field(default=None, alias="WECHAT_CHANNEL_TOKEN")
     cors_allow_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000",
