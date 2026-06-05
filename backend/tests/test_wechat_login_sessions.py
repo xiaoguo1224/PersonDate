@@ -98,3 +98,46 @@ def test_create_and_fetch_wechat_login_session() -> None:
     assert fetch_body["data"]["login_session_id"] == session_id
     assert fetch_body["data"]["status"] == "qr_created"
     assert fetch_body["data"]["owner_user_id"] == member.id
+
+
+def test_confirm_wechat_login_session_creates_account() -> None:
+    app, session = _build_client()
+    _, member, _, member_token = _seed_users(session)
+
+    client = TestClient(app)
+    create_response = client.post(
+        "/api/me/wechat-login-sessions",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    session_id = create_response.json()["data"]["login_session_id"]
+
+    confirm_response = client.post(
+        f"/api/me/wechat-login-sessions/{session_id}/confirm",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={
+            "account_id": "wx_account_001",
+            "wechat_user_id": "wx_user_001",
+            "bot_token": "token_001",
+            "base_url": "https://wechat.example.com",
+            "remark": "测试账号",
+        },
+    )
+
+    assert confirm_response.status_code == 200
+    confirm_body = confirm_response.json()
+    assert confirm_body["success"] is True
+    assert confirm_body["data"]["status"] == "confirmed"
+    assert confirm_body["data"]["confirmed_at"] is not None
+
+    account_response = client.get(
+        "/api/me/wechat-accounts",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+
+    assert account_response.status_code == 200
+    account_body = account_response.json()
+    assert len(account_body["data"]["items"]) == 1
+    account = account_body["data"]["items"][0]
+    assert account["account_id"] == "wx_account_001"
+    assert account["wechat_user_id"] == "wx_user_001"
+    assert account["status"] == "active"

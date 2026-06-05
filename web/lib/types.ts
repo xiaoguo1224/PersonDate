@@ -68,6 +68,25 @@ export type WechatLoginSessionItem = {
   updated_at: string;
 };
 
+export type WechatAccountItem = {
+  id: string;
+  owner_user_id: string;
+  account_id: string;
+  wechat_user_id?: string | null;
+  base_url: string;
+  cursor?: string | null;
+  remark?: string | null;
+  status: string;
+  bind_time?: string | null;
+  last_active_time?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WechatAccountListResponse = {
+  items: WechatAccountItem[];
+};
+
 export type ChannelIdentityItem = {
   id: string;
   user_id: string;

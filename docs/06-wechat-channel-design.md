@@ -78,6 +78,8 @@ WeChat Channel Adapter 是本项目封装的通道适配层。
   ↓
 获取 bot_token、account_id、base_url
   ↓
+调用 `POST /api/me/wechat-login-sessions/{id}/confirm`
+  ↓
 保存账号凭证
   ↓
 启动该账号的消息监听器

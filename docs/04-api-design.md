@@ -316,7 +316,33 @@ GET /api/me/wechat-login-sessions/{id}
 
 权限：owner/member。
 
-### 8.3 查看我的微信绑定
+### 8.3 确认二维码登录会话
+
+```http
+POST /api/me/wechat-login-sessions/{id}/confirm
+```
+
+请求：
+
+```json
+{
+  "account_id": "wx_account_001",
+  "wechat_user_id": "wx_user_001",
+  "bot_token": "token_001",
+  "base_url": "https://wechat.example.com",
+  "remark": "测试账号"
+}
+```
+
+### 8.4 查看我的通道账号
+
+```http
+GET /api/me/wechat-accounts
+```
+
+权限：owner/member。
+
+### 8.5 查看我的微信绑定
 
 ```http
 GET /api/me/channel-identities
@@ -324,7 +350,7 @@ GET /api/me/channel-identities
 
 权限：owner/member。
 
-### 8.4 解绑微信
+### 8.6 解绑微信
 
 ```http
 DELETE /api/me/channel-identities/{id}

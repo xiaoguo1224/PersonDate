@@ -310,6 +310,7 @@ intent
 创建二维码登录会话
 展示二维码
 刷新登录状态
+查看通道账号
 解绑微信
 ```
 
@@ -318,6 +319,8 @@ intent
 ```http
 POST /api/me/wechat-login-sessions
 GET /api/me/wechat-login-sessions/{id}
+POST /api/me/wechat-login-sessions/{id}/confirm
+GET /api/me/wechat-accounts
 GET /api/me/channel-identities
 DELETE /api/me/channel-identities/{id}
 ```

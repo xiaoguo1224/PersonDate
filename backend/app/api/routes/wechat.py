@@ -6,16 +6,19 @@ from sqlalchemy.orm import Session
 from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
 from app.core.config import get_settings
-from app.models import ChannelIdentity, ChannelMessageLog, User, WechatLoginSession
+from app.models import ChannelIdentity, ChannelMessageLog, User, WechatAccount, WechatLoginSession
 from app.schemas.common import ApiResponse
 from app.schemas.wechat import (
     ChannelIdentityItem,
     ChannelIdentityListResponse,
     ChannelMessageLogItem,
     ChannelMessageLogListResponse,
+    WechatAccountItem,
+    WechatAccountListResponse,
     WechatBindingCodeResponse,
     WechatInboundRequest,
     WechatInboundResponse,
+    WechatLoginSessionConfirmRequest,
     WechatLoginSessionCreateResponse,
     WechatLoginSessionItem,
     WechatSendTextRequest,
@@ -90,6 +93,23 @@ def _to_login_session_item(session: WechatLoginSession) -> WechatLoginSessionIte
     )
 
 
+def _to_account_item(account: WechatAccount) -> WechatAccountItem:
+    return WechatAccountItem(
+        id=account.id,
+        owner_user_id=account.owner_user_id,
+        account_id=account.account_id,
+        wechat_user_id=account.wechat_user_id,
+        base_url=account.base_url,
+        cursor=account.cursor,
+        remark=account.remark,
+        status=account.status,
+        bind_time=account.bind_time,
+        last_active_time=account.last_active_time,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
+
+
 @router.post("/me/wechat-login-sessions")
 def create_wechat_login_session(
     db: Session = Depends(get_db),
@@ -125,6 +145,33 @@ def get_my_wechat_login_session(
     return ApiResponse(data=_to_login_session_item(session))
 
 
+@router.post("/me/wechat-login-sessions/{login_session_id}/confirm")
+def confirm_wechat_login_session(
+    login_session_id: str,
+    payload: WechatLoginSessionConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[WechatLoginSessionItem]:
+    service = WechatChannelService(db)
+    try:
+        session, account = service.confirm_login_session(
+            owner_user_id=current_user.id,
+            login_session_id=login_session_id,
+            account_id=payload.account_id,
+            wechat_user_id=payload.wechat_user_id,
+            bot_token=payload.bot_token,
+            base_url=payload.base_url,
+            remark=payload.remark,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    db.commit()
+    return ApiResponse(
+        data=_to_login_session_item(session),
+        message=f"微信账号 {account.account_id} 已确认绑定",
+    )
+
+
 @router.post("/me/wechat-binding-code")
 def create_wechat_binding_code(
     db: Session = Depends(get_db),
@@ -149,6 +196,16 @@ def list_my_channel_identities(
     return ApiResponse(data=ChannelIdentityListResponse(items=items))
 
 
+@router.get("/me/wechat-accounts")
+def list_my_wechat_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[WechatAccountListResponse]:
+    service = WechatChannelService(db)
+    items = [_to_account_item(account) for account in service.list_accounts(current_user.id)]
+    return ApiResponse(data=WechatAccountListResponse(items=items))
+
+
 @router.delete("/me/channel-identities/{identity_id}")
 def disable_my_channel_identity(
     identity_id: str,
@@ -167,6 +224,7 @@ def disable_my_channel_identity(
 def list_my_message_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    account_id: str | None = Query(default=None),
     conversation_id: str | None = Query(default=None),
     direction: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
@@ -176,6 +234,7 @@ def list_my_message_logs(
         _to_message_log_item(log)
         for log in service.list_message_logs(
             user_id=current_user.id,
+            account_id=account_id,
             conversation_id=conversation_id,
             direction=direction,
             limit=limit,
@@ -215,6 +274,7 @@ def get_wechat_status(
 def list_admin_message_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_owner),
+    account_id: str | None = Query(default=None),
     conversation_id: str | None = Query(default=None),
     direction: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
@@ -223,6 +283,7 @@ def list_admin_message_logs(
     items = [
         _to_message_log_item(log)
         for log in service.list_message_logs(
+            account_id=account_id,
             conversation_id=conversation_id,
             direction=direction,
             limit=limit,
@@ -268,7 +329,10 @@ def inbound_wechat_message(
     identity_service = ChannelIdentityService(db)
     content = payload.content.strip()
 
-    if payload.message_id and service.get_message_log_by_message_id(payload.message_id):
+    if payload.message_id and service.get_message_log_by_message_id(
+        payload.message_id,
+        account_id=payload.account_id,
+    ):
         return ApiResponse(
             data=WechatInboundResponse(
                 handled=True,
@@ -279,6 +343,7 @@ def inbound_wechat_message(
 
     inbound_log = service.create_message_log(
         user_id=None,
+        account_id=payload.account_id,
         message_id=payload.message_id,
         conversation_id=payload.conversation_id,
         channel_user_id=payload.channel_user_id,

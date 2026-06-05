@@ -23,6 +23,14 @@ class WechatLoginSessionCreateResponse(BaseModel):
     status: str
 
 
+class WechatLoginSessionConfirmRequest(BaseModel):
+    account_id: str
+    wechat_user_id: str | None = None
+    bot_token: str
+    base_url: str
+    remark: str | None = None
+
+
 class WechatBindingCodeResponse(BaseModel):
     code: str
     expires_at: datetime
@@ -66,6 +74,25 @@ class ChannelMessageLogListResponse(BaseModel):
     items: list[ChannelMessageLogItem]
 
 
+class WechatAccountItem(BaseModel):
+    id: str
+    owner_user_id: str
+    account_id: str
+    wechat_user_id: str | None = None
+    base_url: str
+    cursor: str | None = None
+    remark: str | None = None
+    status: str
+    bind_time: datetime | None = None
+    last_active_time: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WechatAccountListResponse(BaseModel):
+    items: list[WechatAccountItem]
+
+
 class WechatStatusResponse(BaseModel):
     connected: bool
     channel_token_configured: bool
@@ -81,6 +108,7 @@ class WechatStatusResponse(BaseModel):
 
 class WechatInboundRequest(BaseModel):
     message_id: str | None = None
+    account_id: str | None = None
     conversation_id: str
     channel_user_id: str
     display_name: str | None = None

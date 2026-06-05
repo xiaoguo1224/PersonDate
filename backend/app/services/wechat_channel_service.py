@@ -81,11 +81,70 @@ class WechatChannelService:
         )
         return list(self.db.scalars(stmt))
 
-    def get_message_log_by_message_id(self, message_id: str) -> ChannelMessageLog | None:
+    def confirm_login_session(
+        self,
+        *,
+        owner_user_id: str,
+        login_session_id: str,
+        account_id: str,
+        wechat_user_id: str | None,
+        bot_token: str,
+        base_url: str,
+        remark: str | None = None,
+    ) -> tuple[WechatLoginSession, WechatAccount]:
+        session = self.get_login_session(
+            owner_user_id=owner_user_id,
+            login_session_id=login_session_id,
+        )
+        if session is None:
+            raise ValueError("登录会话不存在")
+        if _as_utc(session.expires_at) <= datetime.now(UTC):
+            session.status = "expired"
+            raise ValueError("登录会话已过期")
+
+        account = self.db.scalar(
+            select(WechatAccount).where(WechatAccount.account_id == account_id)
+        )
+        if account is None:
+            account = WechatAccount(
+                owner_user_id=owner_user_id,
+                account_id=account_id,
+                wechat_user_id=wechat_user_id,
+                bot_token=bot_token,
+                base_url=base_url,
+                remark=remark,
+                status="active",
+                bind_time=datetime.now(UTC),
+                last_active_time=datetime.now(UTC),
+            )
+            self.db.add(account)
+        else:
+            if account.owner_user_id != owner_user_id:
+                raise ValueError("通道账号已绑定到其他用户")
+            account.wechat_user_id = wechat_user_id
+            account.bot_token = bot_token
+            account.base_url = base_url
+            account.remark = remark
+            account.status = "active"
+            account.bind_time = datetime.now(UTC)
+            account.last_active_time = datetime.now(UTC)
+
+        session.status = "confirmed"
+        session.confirmed_at = datetime.now(UTC)
+        self.db.flush()
+        return session, account
+
+    def get_message_log_by_message_id(
+        self,
+        message_id: str,
+        account_id: str | None = None,
+    ) -> ChannelMessageLog | None:
         stmt = select(ChannelMessageLog).where(
             ChannelMessageLog.channel == "wechat",
             ChannelMessageLog.message_id == message_id,
         )
+        if account_id is not None:
+            stmt = stmt.where(ChannelMessageLog.account_id == account_id)
         return self.db.scalar(stmt.order_by(ChannelMessageLog.created_at.desc()))
 
     def generate_binding_code(self, user_id: str) -> WechatBindingCode:
@@ -145,6 +204,7 @@ class WechatChannelService:
         self,
         *,
         user_id: str | None = None,
+        account_id: str | None = None,
         conversation_id: str | None = None,
         direction: str | None = None,
         limit: int = LOG_LIST_LIMIT,
@@ -152,6 +212,8 @@ class WechatChannelService:
         stmt = select(ChannelMessageLog)
         if user_id is not None:
             stmt = stmt.where(ChannelMessageLog.user_id == user_id)
+        if account_id is not None:
+            stmt = stmt.where(ChannelMessageLog.account_id == account_id)
         if conversation_id is not None:
             stmt = stmt.where(ChannelMessageLog.conversation_id == conversation_id)
         if direction is not None:
@@ -316,6 +378,22 @@ class WechatChannelService:
             "last_message_at": last_message_at,
             "recent_inbound_messages": recent_inbound_messages,
             "recent_outbound_messages": recent_outbound_messages,
+        }
+
+    def to_account_item(self, account: WechatAccount) -> dict[str, Any]:
+        return {
+            "id": account.id,
+            "owner_user_id": account.owner_user_id,
+            "account_id": account.account_id,
+            "wechat_user_id": account.wechat_user_id,
+            "base_url": account.base_url,
+            "cursor": account.cursor,
+            "remark": account.remark,
+            "status": account.status,
+            "bind_time": account.bind_time,
+            "last_active_time": account.last_active_time,
+            "created_at": account.created_at,
+            "updated_at": account.updated_at,
         }
 
     def _refresh_binding_code_statuses(self, *, user_id: str, now: datetime) -> None:

@@ -10,6 +10,8 @@ import { requestJson } from "@/lib/api";
 import type {
   ChannelIdentityItem,
   ChannelIdentityListResponse,
+  WechatAccountItem,
+  WechatAccountListResponse,
   WechatLoginSessionCreateResponse,
   WechatLoginSessionItem,
 } from "@/lib/types";
@@ -27,6 +29,7 @@ export default function WechatBindingPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const [identities, setIdentities] = useState<ChannelIdentityItem[]>([]);
+  const [accounts, setAccounts] = useState<WechatAccountItem[]>([]);
   const [loginSession, setLoginSession] = useState<WechatLoginSessionCreateResponse | null>(null);
   const [loginSessionDetail, setLoginSessionDetail] = useState<WechatLoginSessionItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,18 @@ export default function WechatBindingPage() {
       setError(caughtError instanceof Error ? caughtError.message : "加载失败");
     } finally {
       setLoading(false);
+    }
+  }, [accessToken]);
+
+  const loadAccounts = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+    try {
+      const result = await requestJson<WechatAccountListResponse>("/api/me/wechat-accounts", {}, accessToken);
+      setAccounts(result.items);
+    } catch (caughtError: unknown) {
+      message.error(caughtError instanceof Error ? caughtError.message : "加载账号失败");
     }
   }, [accessToken]);
 
@@ -71,18 +86,21 @@ export default function WechatBindingPage() {
   useEffect(() => {
     if (session) {
       void loadIdentities();
+      void loadAccounts();
     } else {
       setLoading(false);
     }
-  }, [loadIdentities, session]);
+  }, [loadAccounts, loadIdentities, session]);
 
   const summary = useMemo(() => {
     return {
       total: identities.length,
       active: identities.filter((item) => item.status === "active").length,
       disabled: identities.filter((item) => item.status === "disabled").length,
+      accountTotal: accounts.length,
+      accountActive: accounts.filter((item) => item.status === "active").length,
     };
-  }, [identities]);
+  }, [accounts, identities]);
 
   const handleCreateLoginSession = async () => {
     if (!accessToken) {
@@ -99,6 +117,7 @@ export default function WechatBindingPage() {
       await loadLoginSession(result.login_session_id);
       message.success("二维码登录会话已创建");
       await loadIdentities();
+      await loadAccounts();
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "生成失败");
     } finally {
@@ -162,6 +181,8 @@ export default function WechatBindingPage() {
             <Tag color="blue">{summary.total} 个绑定</Tag>
             <Tag color="green">{summary.active} 个激活</Tag>
             <Tag color="default">{summary.disabled} 个禁用</Tag>
+            <Tag color="cyan">{summary.accountTotal} 个账号</Tag>
+            <Tag color="geekblue">{summary.accountActive} 个活跃账号</Tag>
           </Space>
           <Space wrap>
             <Button type="primary" icon={generating ? <LoadingOutlined /> : <QrcodeOutlined />} onClick={() => void handleCreateLoginSession()} loading={generating}>
@@ -248,6 +269,30 @@ export default function WechatBindingPage() {
           <Empty description="当前没有微信绑定记录" />
         </Card>
       )}
+
+      <Card className="section-card" bordered={false} title="通道账号">
+        {accounts.length ? (
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            {accounts.map((account) => (
+              <Card key={account.id} size="small" bordered={false} style={{ background: "var(--surface-secondary)" }}>
+                <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                  <Space wrap>
+                    <Text strong>{account.account_id}</Text>
+                    <Tag color={getStatusColor(account.status)}>{account.status}</Tag>
+                  </Space>
+                  <Text className="muted-text">wechat_user_id：{account.wechat_user_id || "未知"}</Text>
+                  <Text className="muted-text">base_url：{account.base_url}</Text>
+                  <Text className="muted-text">
+                    最近活跃：{account.last_active_time ? formatDateTime(account.last_active_time) : "未知"}
+                  </Text>
+                </Space>
+              </Card>
+            ))}
+          </Space>
+        ) : (
+          <Empty description="当前没有通道账号" />
+        )}
+      </Card>
     </Space>
   );
 }
