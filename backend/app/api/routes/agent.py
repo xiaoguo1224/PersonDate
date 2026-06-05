@@ -10,21 +10,23 @@ from app.schemas.common import ApiResponse
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
-@router.post("/debug/message")
-def debug_message(
-    payload: DebugMessageRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ApiResponse[DebugMessageResponse]:
+def run_agent_message(
+    *,
+    db: Session,
+    current_user: User,
+    message: str,
+    conversation_id: str,
+    channel: str,
+) -> DebugMessageResponse:
     graph = SchedulePlanningGraph(db)
     state = graph.invoke(
         current_user=current_user,
-        message=payload.message,
-        conversation_id="debug",
-        channel="web",
+        message=message,
+        conversation_id=conversation_id,
+        channel=channel,
     )
     db.commit()
-    response = DebugMessageResponse(
+    return DebugMessageResponse(
         success=state.success,
         final_response=state.final_response,
         intent=state.intent,
@@ -34,4 +36,19 @@ def debug_message(
         graph_trace=state.graph_trace,
         error=state.error,
     )
-    return ApiResponse(data=response, message=state.final_response)
+
+
+@router.post("/debug/message")
+def debug_message(
+    payload: DebugMessageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[DebugMessageResponse]:
+    response = run_agent_message(
+        db=db,
+        current_user=current_user,
+        message=payload.message,
+        conversation_id="debug",
+        channel="web",
+    )
+    return ApiResponse(data=response, message=response.final_response)

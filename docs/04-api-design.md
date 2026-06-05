@@ -707,13 +707,49 @@ POST /api/agent/debug/message
 
 说明：该接口用于 Web 调试，应走与微信相同的 SchedulePlanningGraph，但 `channel = web`。
 
-### 15.2 我的 Agent 日志
+### 15.2 Web 正式 Agent 消息
+
+```http
+POST /api/me/agent/message
+```
+
+权限：登录用户。
+
+请求：
+
+```json
+{
+  "message": "明天写论文 2 小时，帮我安排一下"
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "data": {
+    "final_response": "我建议明天 09:00-11:00 写论文，是否确认？",
+    "intent": "create_task",
+    "tools_called": [],
+    "pending_state": {}
+  }
+}
+```
+
+说明：
+
+1. 该接口用于 Web Dashboard 的正式自然语言入口。
+2. 该接口应走与微信相同的 SchedulePlanningGraph，但 `channel = web`。
+3. 该接口的 `conversation_id` 由后端根据当前登录用户生成，避免与调试入口互相干扰。
+
+### 15.3 我的 Agent 日志
 
 ```http
 GET /api/my-agent-logs?page=1&page_size=20
 ```
 
-### 15.3 全局 Agent 日志
+### 15.4 全局 Agent 日志
 
 ```http
 GET /api/admin/agent-logs?page=1&page_size=20

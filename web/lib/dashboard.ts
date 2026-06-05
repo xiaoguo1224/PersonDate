@@ -105,6 +105,17 @@ export type ReminderListResponse = {
   items: ReminderItem[];
 };
 
+export type AgentMessageResponse = {
+  success: boolean;
+  final_response?: string | null;
+  intent?: string | null;
+  tool_calls: Array<Record<string, unknown>>;
+  tool_results: Array<Record<string, unknown>>;
+  pending_state?: Record<string, unknown> | null;
+  graph_trace: string[];
+  error?: string | null;
+};
+
 export type TodayDashboardData = {
   plan: DayPlan | null;
   events: CalendarEventItem[];
@@ -253,6 +264,20 @@ export async function deletePlanItem(accessToken: string, planItemId: string): P
     `/api/plan-items/${planItemId}`,
     {
       method: "DELETE",
+    },
+    accessToken,
+  );
+}
+
+export async function sendAgentMessage(
+  accessToken: string,
+  message: string,
+): Promise<AgentMessageResponse> {
+  return requestJson<AgentMessageResponse>(
+    "/api/me/agent/message",
+    {
+      method: "POST",
+      body: JSON.stringify({ message }),
     },
     accessToken,
   );

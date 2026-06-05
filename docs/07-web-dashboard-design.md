@@ -174,6 +174,7 @@ DELETE /api/plan-items/{id}
 编辑计划项
 完成计划项
 删除计划项
+自然语言 Agent 添加
 ```
 
 调用 API：
@@ -187,6 +188,7 @@ POST /api/plan-items
 PATCH /api/plan-items/{id}
 PATCH /api/plan-items/{id}/complete
 DELETE /api/plan-items/{id}
+POST /api/me/agent/message
 ```
 
 ### 4.5 任务池页
