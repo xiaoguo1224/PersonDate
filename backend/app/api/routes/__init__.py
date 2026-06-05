@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.agent_logs import router as agent_logs_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.calendar_events import router as calendar_events_router
 from app.api.routes.conflicts import router as conflicts_router
@@ -22,6 +23,7 @@ api_router.include_router(me_router)
 api_router.include_router(invite_codes_router)
 api_router.include_router(users_router)
 api_router.include_router(system_settings_router)
+api_router.include_router(agent_logs_router)
 api_router.include_router(calendar_events_router)
 api_router.include_router(agent_router)
 api_router.include_router(tasks_router)

@@ -29,6 +29,26 @@ export type UserSettingsResponse = {
   daily_plan_push_enabled: boolean;
 };
 
+export type AgentLogItem = {
+  id: string;
+  user_id?: string | null;
+  channel: string;
+  conversation_id?: string | null;
+  input_text: string;
+  intent?: string | null;
+  graph_trace?: string[] | null;
+  tools_called?: Array<Record<string, unknown>> | null;
+  tool_results?: Array<Record<string, unknown>> | null;
+  final_response?: string | null;
+  success: boolean;
+  error_message?: string | null;
+  created_at: string;
+};
+
+export type AgentLogListResponse = {
+  items: AgentLogItem[];
+};
+
 export type ApiEnvelope<T> = {
   success: boolean;
   data: T;
