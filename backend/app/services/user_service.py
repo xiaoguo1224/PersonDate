@@ -17,6 +17,10 @@ class UserService:
     def get_by_id(self, user_id: str) -> User | None:
         return self.db.get(User, user_id)
 
+    def list_users(self) -> list[User]:
+        stmt = select(User).where(User.status != UserStatus.DELETED.value)
+        return list(self.db.scalars(stmt.order_by(User.created_at.desc())))
+
     def create_user(
         self,
         *,
@@ -51,3 +55,11 @@ class UserService:
 
     def mark_login(self, user: User) -> None:
         user.last_login_at = datetime.now(UTC)
+
+    def disable_user(self, user: User) -> User:
+        user.status = UserStatus.DISABLED.value
+        return user
+
+    def enable_user(self, user: User) -> User:
+        user.status = UserStatus.ACTIVE.value
+        return user

@@ -19,3 +19,7 @@ class ChannelIdentityService:
     def get_conversation_id(self, user_id: str) -> str:
         identity = self.get_active_wechat_identity(user_id)
         return identity.conversation_id if identity else user_id
+
+    def list_identities(self, user_id: str) -> list[ChannelIdentity]:
+        stmt = select(ChannelIdentity).where(ChannelIdentity.user_id == user_id)
+        return list(self.db.scalars(stmt.order_by(ChannelIdentity.created_at.desc())))

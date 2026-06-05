@@ -10,12 +10,14 @@ from app.api.routes.invite_codes import router as invite_codes_router
 from app.api.routes.reminders import router as reminders_router
 from app.api.routes.setup import router as setup_router
 from app.api.routes.tasks import router as tasks_router
+from app.api.routes.users import router as users_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(setup_router)
 api_router.include_router(auth_router)
 api_router.include_router(invite_codes_router)
+api_router.include_router(users_router)
 api_router.include_router(calendar_events_router)
 api_router.include_router(agent_router)
 api_router.include_router(tasks_router)
