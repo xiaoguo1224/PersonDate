@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
-from app.core.config import get_settings
 from app.models import ChannelIdentity, ChannelMessageLog, User, WechatAccount, WechatLoginSession
 from app.schemas.common import ApiResponse
 from app.schemas.wechat import (
@@ -22,8 +21,7 @@ from app.schemas.wechat import (
     WechatSendTextResponse,
     WechatStatusResponse,
 )
-from app.services.channel_identity_service import ChannelIdentityService
-from app.services.user_service import UserService
+from app.services.wechat_channel_adapter import WechatChannelAdapter
 from app.services.wechat_channel_service import WechatChannelService
 
 router = APIRouter(tags=["wechat"])
@@ -61,12 +59,6 @@ def _to_message_log_item(log: ChannelMessageLog) -> ChannelMessageLogItem:
         error_message=log.error_message,
         created_at=log.created_at,
     )
-
-
-def _validate_channel_token(channel_token: str | None) -> None:
-    settings = get_settings()
-    if settings.wechat_channel_token and channel_token != settings.wechat_channel_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="微信通道令牌无效")
 
 
 def _to_login_session_item(session: WechatLoginSession) -> WechatLoginSessionItem:
@@ -299,93 +291,9 @@ def inbound_wechat_message(
     db: Session = Depends(get_db),
     channel_token: str | None = Header(default=None, alias="X-Channel-Token"),
 ) -> ApiResponse[WechatInboundResponse]:
-    _validate_channel_token(channel_token)
-
-    service = WechatChannelService(db)
-    identity_service = ChannelIdentityService(db)
-    content = payload.content.strip()
-
-    if payload.message_id and service.get_message_log_by_message_id(
-        payload.message_id,
-        account_id=payload.account_id,
-    ):
-        return ApiResponse(
-            data=WechatInboundResponse(
-                handled=True,
-                reply="消息已处理，请勿重复发送。",
-            ),
-            message="消息已处理",
-        )
-
-    inbound_log = service.create_message_log(
-        user_id=None,
-        account_id=payload.account_id,
-        message_id=payload.message_id,
-        conversation_id=payload.conversation_id,
-        channel_user_id=payload.channel_user_id,
-        direction="inbound",
-        content_type=payload.content_type,
-        content=payload.content,
-        raw_payload=payload.raw_payload,
-    )
-
-    if payload.content_type.lower() != "text":
-        inbound_log.status = "ignored"
-        inbound_log.error_message = "目前仅支持文本消息"
-        db.commit()
-        return ApiResponse(
-            data=WechatInboundResponse(
-                handled=True,
-                reply="目前仅支持文本消息。",
-            ),
-            message="目前仅支持文本消息",
-        )
-
-    identity = (
-        identity_service.get_active_by_channel_user_id(payload.channel_user_id)
-        or identity_service.get_active_by_conversation_id(payload.conversation_id)
-    )
-    if identity is None:
-        inbound_log.status = "unbound"
-        inbound_log.error_message = "用户未绑定"
-        db.commit()
-        return ApiResponse(
-            data=WechatInboundResponse(
-                handled=True,
-                reply="你还没有绑定账号，请先在 Web 中创建二维码登录会话并完成微信确认。",
-            ),
-            message="用户未绑定",
-        )
-
-    user = UserService(db).get_by_id(identity.user_id)
-    if user is None or user.status != "active":
-        inbound_log.user_id = identity.user_id
-        inbound_log.status = "failed"
-        inbound_log.error_message = "账号当前不可用"
-        db.commit()
-        return ApiResponse(
-            data=WechatInboundResponse(
-                handled=True,
-                reply="你的账号当前不可用，请联系系统主用户。",
-            ),
-            message="账号当前不可用",
-        )
-
-    inbound_log.user_id = user.id
-    graph = SchedulePlanningGraph(db)
-    state = graph.invoke(
-        current_user=user,
-        message=content,
-        conversation_id=payload.conversation_id,
-        channel="wechat",
-    )
-    inbound_log.status = "processed" if state.success else "failed"
-    inbound_log.error_message = state.error
-    db.commit()
+    adapter = WechatChannelAdapter(db, graph_cls=SchedulePlanningGraph)
+    result = adapter.handle_inbound_message(payload, channel_token)
     return ApiResponse(
-        data=WechatInboundResponse(
-            handled=True,
-            reply=state.final_response or "处理完成。",
-        ),
-        message=state.final_response or "处理完成",
+        data=result.response,
+        message=result.message,
     )
