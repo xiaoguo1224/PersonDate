@@ -14,6 +14,7 @@ from app.api.routes.setup import router as setup_router
 from app.api.routes.system_settings import router as system_settings_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.users import router as users_router
+from app.api.routes.wechat import router as wechat_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
@@ -30,3 +31,4 @@ api_router.include_router(tasks_router)
 api_router.include_router(day_plans_router)
 api_router.include_router(conflicts_router)
 api_router.include_router(reminders_router)
+api_router.include_router(wechat_router)

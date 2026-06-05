@@ -13,7 +13,7 @@ class ChannelIdentityService:
             ChannelIdentity.user_id == user_id,
             ChannelIdentity.channel == "wechat",
             ChannelIdentity.status == "active",
-        )
+        ).order_by(ChannelIdentity.created_at.desc())
         return self.db.scalar(stmt)
 
     def get_conversation_id(self, user_id: str) -> str:

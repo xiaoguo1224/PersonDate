@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,7 @@ from app.services.system_setting_service import SystemSettingService
 router = APIRouter(prefix="/admin", tags=["system-settings"])
 
 
-def _to_item(service: SystemSettingService, setting) -> SystemSettingItem:  # noqa: ANN001
+def _to_item(service: SystemSettingService, setting: Any) -> SystemSettingItem:
     data = service.to_public_dict(setting)
     return SystemSettingItem(**data)
 

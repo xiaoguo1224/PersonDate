@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -10,7 +12,7 @@ from app.services.user_service import UserService
 router = APIRouter(prefix="/me", tags=["me"])
 
 
-def _to_settings_response(settings) -> UserSettingsResponse:  # noqa: ANN001
+def _to_settings_response(settings: Any) -> UserSettingsResponse:
     return UserSettingsResponse(
         default_timezone=settings.default_timezone,
         workday_start_time=settings.workday_start_time,

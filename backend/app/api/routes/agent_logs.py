@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +12,14 @@ from app.schemas.common import ApiResponse
 router = APIRouter(tags=["agent-logs"])
 
 
+def _as_list(value: object | None) -> list[object]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
 def _to_item(log: AgentRunLog) -> AgentLogItem:
     return AgentLogItem(
         id=log.id,
@@ -18,9 +28,9 @@ def _to_item(log: AgentRunLog) -> AgentLogItem:
         conversation_id=log.conversation_id,
         input_text=log.input_text,
         intent=log.intent,
-        graph_trace=list(log.graph_trace or []),
-        tools_called=list(log.tools_called or []),
-        tool_results=list(log.tool_results or []),
+        graph_trace=cast(list[str], _as_list(log.graph_trace)),
+        tools_called=cast(list[dict[str, Any]], _as_list(log.tools_called)),
+        tool_results=cast(list[dict[str, Any]], _as_list(log.tool_results)),
         final_response=log.final_response,
         success=log.success,
         error_message=log.error_message,

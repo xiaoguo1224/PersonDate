@@ -49,6 +49,59 @@ export type AgentLogListResponse = {
   items: AgentLogItem[];
 };
 
+export type WechatBindingCodeResponse = {
+  code: string;
+  expires_at: string;
+};
+
+export type ChannelIdentityItem = {
+  id: string;
+  user_id: string;
+  channel: string;
+  channel_user_id: string;
+  conversation_id: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  status: string;
+  bound_at?: string | null;
+  created_at: string;
+};
+
+export type ChannelIdentityListResponse = {
+  items: ChannelIdentityItem[];
+};
+
+export type ChannelMessageLogItem = {
+  id: string;
+  user_id?: string | null;
+  channel: string;
+  message_id?: string | null;
+  conversation_id: string;
+  channel_user_id?: string | null;
+  direction: string;
+  content_type: string;
+  content?: string | null;
+  raw_payload?: Record<string, unknown> | null;
+  status: string;
+  error_message?: string | null;
+  created_at: string;
+};
+
+export type ChannelMessageLogListResponse = {
+  items: ChannelMessageLogItem[];
+};
+
+export type WechatStatusResponse = {
+  connected: boolean;
+  channel_token_configured: boolean;
+  total_identities: number;
+  active_identities: number;
+  bound_users: number;
+  last_message_at?: string | null;
+  recent_inbound_messages: ChannelMessageLogItem[];
+  recent_outbound_messages: ChannelMessageLogItem[];
+};
+
 export type ApiEnvelope<T> = {
   success: boolean;
   data: T;
