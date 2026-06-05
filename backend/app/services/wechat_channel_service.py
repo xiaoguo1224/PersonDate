@@ -78,6 +78,21 @@ class WechatChannelService:
         )
         return list(self.db.scalars(stmt))
 
+    def get_account_by_account_id(self, account_id: str) -> WechatAccount | None:
+        stmt = select(WechatAccount).where(WechatAccount.account_id == account_id)
+        return self.db.scalar(stmt)
+
+    def list_active_accounts(self) -> list[WechatAccount]:
+        stmt = (
+            select(WechatAccount)
+            .where(WechatAccount.status == "active")
+            .order_by(
+                WechatAccount.last_active_time.desc().nullslast(),
+                WechatAccount.created_at.desc(),
+            )
+        )
+        return list(self.db.scalars(stmt))
+
     def confirm_login_session(
         self,
         *,
@@ -187,6 +202,20 @@ class WechatChannelService:
             return None
         identity.status = "disabled"
         return identity
+
+    def update_account_cursor(
+        self,
+        *,
+        account_id: str,
+        cursor: str | None,
+        last_active_time: datetime | None = None,
+    ) -> WechatAccount | None:
+        account = self.get_account_by_account_id(account_id)
+        if account is None:
+            return None
+        account.cursor = cursor
+        account.last_active_time = last_active_time or datetime.now(UTC)
+        return account
 
     def list_message_logs(
         self,

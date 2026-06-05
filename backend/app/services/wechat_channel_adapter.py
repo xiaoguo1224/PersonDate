@@ -33,10 +33,16 @@ class WechatChannelAdapter:
         self,
         payload: WechatInboundRequest,
         channel_token: str | None,
+        *,
+        require_auth: bool = True,
     ) -> WechatInboundHandlingResult:
-        settings = get_settings()
-        if settings.wechat_channel_token and channel_token != settings.wechat_channel_token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="微信通道令牌无效")
+        if require_auth:
+            settings = get_settings()
+            if settings.wechat_channel_token and channel_token != settings.wechat_channel_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="微信通道令牌无效",
+                )
 
         service = WechatChannelService(self.db)
         identity_service = ChannelIdentityService(self.db)
