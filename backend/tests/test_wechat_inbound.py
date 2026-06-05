@@ -115,12 +115,25 @@ def test_wechat_inbound_binding_success() -> None:
     _, member, _, member_token = _seed_users(session)
 
     client = TestClient(app)
-    code_response = client.post(
-        "/api/me/wechat-binding-code",
+    create_response = client.post(
+        "/api/me/wechat-login-sessions",
         headers={"Authorization": f"Bearer {member_token}"},
     )
-    assert code_response.status_code == 200
-    code = code_response.json()["data"]["code"]
+    assert create_response.status_code == 200
+    session_id = create_response.json()["data"]["login_session_id"]
+
+    confirm_response = client.post(
+        f"/api/me/wechat-login-sessions/{session_id}/confirm",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={
+            "account_id": "wx_account_member",
+            "wechat_user_id": "wx_user_member",
+            "bot_token": "token_member",
+            "base_url": "https://wechat.example.com",
+            "remark": "成员微信",
+        },
+    )
+    assert confirm_response.status_code == 200
 
     inbound_response = client.post(
         "/api/wechat/inbound",
@@ -131,7 +144,7 @@ def test_wechat_inbound_binding_success() -> None:
             "channel_user_id": "wx_user_member",
             "display_name": "成员一号",
             "content_type": "text",
-            "content": f"绑定 {code}",
+            "content": "明天下午 3 点开会",
             "raw_payload": {},
         },
     )
@@ -139,7 +152,7 @@ def test_wechat_inbound_binding_success() -> None:
     assert inbound_response.status_code == 200
     body = inbound_response.json()
     assert body["success"] is True
-    assert body["data"]["reply"] == "绑定成功，你现在可以通过微信使用日程 Agent 了。"
+    assert body["data"]["reply"].startswith("已为你创建日程：开会")
 
     identity_response = client.get(
         "/api/me/channel-identities",
@@ -171,7 +184,8 @@ def test_wechat_inbound_unbound_prompt() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["reply"] == "你还没有绑定账号，请先在 Web 中使用邀请码注册并绑定微信。"
+    expected_reply = "你还没有绑定账号，请先在 Web 中创建二维码登录会话并完成微信确认。"
+    assert body["data"]["reply"] == expected_reply
 
 
 def test_wechat_inbound_routes_to_agent_graph(monkeypatch) -> None:

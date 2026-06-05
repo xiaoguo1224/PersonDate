@@ -141,3 +141,41 @@ def test_confirm_wechat_login_session_creates_account() -> None:
     assert account["account_id"] == "wx_account_001"
     assert account["wechat_user_id"] == "wx_user_001"
     assert account["status"] == "active"
+
+
+def test_confirm_wechat_login_session_binds_channel_identity() -> None:
+    app, session = _build_client()
+    _, member, _, member_token = _seed_users(session)
+
+    client = TestClient(app)
+    create_response = client.post(
+        "/api/me/wechat-login-sessions",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    session_id = create_response.json()["data"]["login_session_id"]
+
+    confirm_response = client.post(
+        f"/api/me/wechat-login-sessions/{session_id}/confirm",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={
+            "account_id": "wx_account_002",
+            "wechat_user_id": "wx_user_002",
+            "bot_token": "token_002",
+            "base_url": "https://wechat.example.com",
+            "remark": "测试账号二",
+        },
+    )
+
+    assert confirm_response.status_code == 200
+
+    identity_response = client.get(
+        "/api/me/channel-identities",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    assert identity_response.status_code == 200
+    identity_body = identity_response.json()
+    assert len(identity_body["data"]["items"]) == 1
+    identity = identity_body["data"]["items"][0]
+    assert identity["channel_user_id"] == "wx_user_002"
+    assert identity["conversation_id"] == "wx_user_002"
+    assert identity["status"] == "active"

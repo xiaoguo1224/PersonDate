@@ -13,7 +13,6 @@ from app.models import (
     ChannelMessageLog,
     MessageDirection,
     WechatAccount,
-    WechatBindingCode,
     WechatLoginSession,
 )
 
@@ -38,9 +37,7 @@ class WechatStatusSummary(TypedDict):
 
 
 class WechatChannelService:
-    BINDING_CODE_TTL_MINUTES = 10
-    BINDING_CODE_LENGTH = 6
-    BINDING_CODE_RETRY_LIMIT = 20
+    LOGIN_SESSION_TTL_MINUTES = 10
     LOG_LIST_LIMIT = 100
 
     def __init__(self, db: Session, sender: Any | None = None) -> None:
@@ -55,7 +52,7 @@ class WechatChannelService:
             login_session_id=login_session_id,
             qr_payload=f"wechat-qr:{login_session_id}",
             status="qr_created",
-            expires_at=now + timedelta(minutes=self.BINDING_CODE_TTL_MINUTES),
+            expires_at=now + timedelta(minutes=self.LOGIN_SESSION_TTL_MINUTES),
         )
         self.db.add(session)
         self.db.flush()
@@ -129,6 +126,35 @@ class WechatChannelService:
             account.bind_time = datetime.now(UTC)
             account.last_active_time = datetime.now(UTC)
 
+        channel_user_id = wechat_user_id or account_id
+        identity = self.db.scalar(
+            select(ChannelIdentity).where(
+                ChannelIdentity.channel == "wechat",
+                ChannelIdentity.channel_user_id == channel_user_id,
+            )
+        )
+        if identity is not None and identity.user_id != owner_user_id:
+            raise ValueError("该微信身份已绑定到其他用户")
+        if identity is None:
+            identity = ChannelIdentity(
+                user_id=owner_user_id,
+                channel="wechat",
+                channel_user_id=channel_user_id,
+                conversation_id=channel_user_id,
+                display_name=remark,
+                status="active",
+                bound_at=datetime.now(UTC),
+            )
+            self.db.add(identity)
+        else:
+            identity.user_id = owner_user_id
+            identity.channel = "wechat"
+            identity.conversation_id = channel_user_id
+            if remark is not None:
+                identity.display_name = remark
+            identity.status = "active"
+            identity.bound_at = datetime.now(UTC)
+
         session.status = "confirmed"
         session.confirmed_at = datetime.now(UTC)
         self.db.flush()
@@ -146,44 +172,6 @@ class WechatChannelService:
         if account_id is not None:
             stmt = stmt.where(ChannelMessageLog.account_id == account_id)
         return self.db.scalar(stmt.order_by(ChannelMessageLog.created_at.desc()))
-
-    def generate_binding_code(self, user_id: str) -> WechatBindingCode:
-        now = datetime.now(UTC)
-        self._refresh_binding_code_statuses(user_id=user_id, now=now)
-
-        latest_active = self.db.scalar(
-            select(WechatBindingCode)
-            .where(
-                WechatBindingCode.user_id == user_id,
-                WechatBindingCode.status == "active",
-                WechatBindingCode.expires_at > now,
-            )
-            .order_by(WechatBindingCode.created_at.desc())
-        )
-        if latest_active is not None:
-            return latest_active
-
-        expires_at = now + timedelta(minutes=self.BINDING_CODE_TTL_MINUTES)
-        for _ in range(self.BINDING_CODE_RETRY_LIMIT):
-            random_number = secrets.randbelow(10 ** self.BINDING_CODE_LENGTH)
-            code = f"{random_number:0{self.BINDING_CODE_LENGTH}d}"
-            exists = self.db.scalar(
-                select(WechatBindingCode.id).where(WechatBindingCode.code == code)
-            )
-            if exists is not None:
-                continue
-
-            binding_code = WechatBindingCode(
-                user_id=user_id,
-                code=code,
-                expires_at=expires_at,
-                status="active",
-            )
-            self.db.add(binding_code)
-            self.db.flush()
-            return binding_code
-
-        raise RuntimeError("生成微信绑定码失败，请稍后重试")
 
     def list_identities(self, user_id: str) -> list[ChannelIdentity]:
         stmt = (
@@ -310,24 +298,6 @@ class WechatChannelService:
             error_message=error_message,
         )
 
-    def consume_binding_code(self, code: str) -> WechatBindingCode | None:
-        now = datetime.now(UTC)
-        binding_code = self.db.scalar(
-            select(WechatBindingCode).where(WechatBindingCode.code == code)
-        )
-        if binding_code is None:
-            return None
-        if binding_code.status == "used":
-            return None
-        if binding_code.status == "disabled":
-            return None
-        if _as_utc(binding_code.expires_at) <= now:
-            binding_code.status = "expired"
-            return None
-        binding_code.status = "used"
-        binding_code.used_at = now
-        return binding_code
-
     def get_status_summary(self, *, recent_limit: int = 10) -> WechatStatusSummary:
         settings = get_settings()
         channel_token_configured = bool(settings.wechat_channel_token)
@@ -395,12 +365,3 @@ class WechatChannelService:
             "created_at": account.created_at,
             "updated_at": account.updated_at,
         }
-
-    def _refresh_binding_code_statuses(self, *, user_id: str, now: datetime) -> None:
-        stmt = select(WechatBindingCode).where(
-            WechatBindingCode.user_id == user_id,
-            WechatBindingCode.status == "active",
-        )
-        for binding_code in self.db.scalars(stmt):
-            if binding_code.expires_at <= now:
-                binding_code.status = "expired"

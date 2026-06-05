@@ -73,18 +73,6 @@ class WechatLoginSession(UUIDMixin, TimestampMixin, Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class WechatBindingCode(UUIDMixin, TimestampMixin, Base):
-    __tablename__ = "wechat_binding_codes"
-
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-
-
 class ChannelMessageLog(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "channel_message_logs"
     __table_args__ = (

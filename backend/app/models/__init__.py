@@ -3,7 +3,6 @@ from app.models.channel import (
     ChannelIdentity,
     ChannelMessageLog,
     WechatAccount,
-    WechatBindingCode,
     WechatLoginSession,
 )
 from app.models.enums import (
@@ -76,6 +75,5 @@ __all__ = [
     "UserRole",
     "UserSettings",
     "UserStatus",
-    "WechatBindingCode",
     "WechatLoginSession",
 ]

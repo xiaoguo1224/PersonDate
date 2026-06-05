@@ -71,35 +71,50 @@ def _seed_users(session):  # noqa: ANN001
     return owner, member, owner_token, member_token
 
 
-def test_wechat_binding_code_and_unbind_flow() -> None:
+def test_wechat_login_session_and_unbind_flow() -> None:
     app, session = _build_client()
     _, member, _, member_token = _seed_users(session)
 
     client = TestClient(app)
-    response = client.post(
-        "/api/me/wechat-binding-code",
+    create_response = client.post(
+        "/api/me/wechat-login-sessions",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    assert create_response.status_code == 200
+    session_id = create_response.json()["data"]["login_session_id"]
+
+    confirm_response = client.post(
+        f"/api/me/wechat-login-sessions/{session_id}/confirm",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={
+            "account_id": "wx_account_001",
+            "wechat_user_id": "wx_user_001",
+            "bot_token": "token_001",
+            "base_url": "https://wechat.example.com",
+            "remark": "测试账号",
+        },
+    )
+
+    assert confirm_response.status_code == 200
+
+    account_response = client.get(
+        "/api/me/wechat-accounts",
         headers={"Authorization": f"Bearer {member_token}"},
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["success"] is True
-    assert body["data"]["code"].isdigit()
-    assert len(body["data"]["code"]) == 6
-    assert "绑定" in body["message"]
+    assert account_response.status_code == 200
+    account_body = account_response.json()
+    assert len(account_body["data"]["items"]) == 1
+    assert account_body["data"]["items"][0]["account_id"] == "wx_account_001"
 
-    identity = ChannelIdentity(
-        user_id=member.id,
-        channel="wechat",
-        channel_user_id="wx_user_001",
-        conversation_id="wx_user_001",
-        display_name="成员一号",
-        status="active",
-        bound_at=datetime.now(UTC),
+    identity_response = client.get(
+        "/api/me/channel-identities",
+        headers={"Authorization": f"Bearer {member_token}"},
     )
-    session.add(identity)
-    session.commit()
-    session.refresh(identity)
+    assert identity_response.status_code == 200
+    identity_body = identity_response.json()
+    assert len(identity_body["data"]["items"]) == 1
+    assert identity_body["data"]["items"][0]["channel_user_id"] == "wx_user_001"
 
     list_response = client.get(
         "/api/me/channel-identities",
@@ -110,15 +125,17 @@ def test_wechat_binding_code_and_unbind_flow() -> None:
     list_body = list_response.json()
     assert len(list_body["data"]["items"]) == 1
     assert list_body["data"]["items"][0]["channel_user_id"] == "wx_user_001"
+    identity_id = list_body["data"]["items"][0]["id"]
 
     unbind_response = client.delete(
-        f"/api/me/channel-identities/{identity.id}",
+        f"/api/me/channel-identities/{identity_id}",
         headers={"Authorization": f"Bearer {member_token}"},
     )
 
     assert unbind_response.status_code == 200
-    session.refresh(identity)
-    assert identity.status == "disabled"
+    unbound_identity = session.get(ChannelIdentity, identity_id)
+    assert unbound_identity is not None
+    assert unbound_identity.status == "disabled"
 
 
 def test_wechat_message_logs_and_status() -> None:

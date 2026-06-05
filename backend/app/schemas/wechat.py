@@ -31,11 +31,6 @@ class WechatLoginSessionConfirmRequest(BaseModel):
     remark: str | None = None
 
 
-class WechatBindingCodeResponse(BaseModel):
-    code: str
-    expires_at: datetime
-
-
 class ChannelIdentityItem(BaseModel):
     id: str
     user_id: str
