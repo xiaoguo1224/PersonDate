@@ -3,6 +3,7 @@ from app.models.channel import (
     ChannelIdentity,
     ChannelMessageLog,
     WechatAccount,
+    WechatChannelInboundMessage,
     WechatLoginSession,
 )
 from app.models.enums import (
@@ -44,6 +45,7 @@ __all__ = [
     "CalendarEvent",
     "ChannelIdentity",
     "ChannelMessageLog",
+    "WechatChannelInboundMessage",
     "WechatAccount",
     "ChannelType",
     "ConflictSeverity",

@@ -6,7 +6,12 @@ import httpx
 from fastapi import FastAPI
 
 from app.core.config import get_settings
-from app.schemas.wechat_channel import WechatGetUpdatesResponse, WechatSendTextResponse
+from app.schemas.wechat_channel import (
+    WechatGetConfigResponse,
+    WechatGetUpdatesResponse,
+    WechatSendTextResponse,
+    WechatSendTypingResponse,
+)
 
 
 @dataclass
@@ -34,13 +39,9 @@ class WechatChannelHttpClient:
         payload: dict[str, object] = {"bot_token": bot_token}
         if cursor is not None:
             payload["get_updates_buf"] = cursor
-        response = self._client.post(
-            "/getupdates",
-            json=payload,
-            headers=self._headers(),
+        return WechatGetUpdatesResponse.model_validate(
+            self._request_json("/getupdates", payload)
         )
-        response.raise_for_status()
-        return WechatGetUpdatesResponse.model_validate(response.json())
 
     def send_text(
         self,
@@ -60,13 +61,63 @@ class WechatChannelHttpClient:
             json=payload,
             headers=self._headers(),
         )
-        response.raise_for_status()
-        return WechatSendTextResponse.model_validate(response.json())
+        return WechatSendTextResponse.model_validate(self._response_json(response))
+
+    def get_config(
+        self,
+        *,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+    ) -> WechatGetConfigResponse:
+        payload: dict[str, object] = {}
+        if account_id is not None:
+            payload["account_id"] = account_id
+        if bot_token is not None:
+            payload["bot_token"] = bot_token
+        return WechatGetConfigResponse.model_validate(
+            self._request_json("/getconfig", payload)
+        )
+
+    def send_typing(
+        self,
+        *,
+        conversation_id: str,
+        typing: bool = True,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+        typing_ticket: str | None = None,
+    ) -> WechatSendTypingResponse:
+        payload: dict[str, object] = {
+            "conversation_id": conversation_id,
+            "typing": typing,
+        }
+        if account_id is not None:
+            payload["account_id"] = account_id
+        if bot_token is not None:
+            payload["bot_token"] = bot_token
+        if typing_ticket is not None:
+            payload["typing_ticket"] = typing_ticket
+        return WechatSendTypingResponse.model_validate(
+            self._request_json("/sendtyping", payload)
+        )
 
     def _headers(self) -> dict[str, str]:
         if not self.channel_token:
             return {}
         return {"X-Channel-Token": self.channel_token}
+
+    def _request_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+        response = self._client.post(path, json=payload, headers=self._headers())
+        return self._response_json(response)
+
+    def _response_json(self, response: httpx.Response) -> dict[str, object]:
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict) and "data" in payload and isinstance(payload["data"], dict):
+            return payload["data"]
+        if isinstance(payload, dict):
+            return payload
+        raise TypeError("微信通道响应必须是 JSON 对象")
 
 
 def build_wechat_channel_client() -> WechatChannelHttpClient | None:
@@ -88,7 +139,7 @@ def attach_wechat_channel_client(app: FastAPI) -> None:
 def require_wechat_channel_client(app: FastAPI) -> WechatChannelHttpClient:
     client = build_wechat_channel_client()
     if client is None:
-        raise RuntimeError("WECHAT_CHANNEL_BASE_URL 未配置，无法启动独立微信通道服务")
+        raise RuntimeError("WECHAT_CHANNEL_BASE_URL 未配置，无法初始化微信通道客户端")
     app.state.wechat_sender = client
     app.state.wechat_updates_client = client
     return client

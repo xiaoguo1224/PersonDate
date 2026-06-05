@@ -659,6 +659,6 @@ FastAPI 只处理标准化后的消息和业务结果。
 
 一句话总结：**你不是要把 Agent 直接塞进微信协议里，而是要在 Agent 外面做一层独立的微信通道服务，负责扫码登录、拉消息、标准化、发消息和状态管理。**
 
-推荐通过 `WECHAT_CHANNEL_BASE_URL` 配置我们自研的微信通道服务地址，由 `wechat-channel` 进程启动时初始化 `wechat_sender` 和 `wechat_updates_client`，并由 APScheduler 常驻轮询活跃账号。
+推荐通过 `WECHAT_CHANNEL_BASE_URL` 配置我们自研的微信通道服务地址，Docker 内部默认使用 `http://wechat-channel:18789`，本地调试可使用 `http://127.0.0.1:18789`。backend 启动时会初始化 `wechat_sender`，`wechat-channel` 进程则负责暴露协议接口。
 
 在 Docker 编排中，建议把长轮询逻辑放到独立的 `wechat-channel` 进程里运行，backend 仅保留业务 API 和提醒调度，避免两处同时轮询同一批账号。

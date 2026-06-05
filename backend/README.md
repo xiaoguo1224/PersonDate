@@ -33,4 +33,4 @@ WECHAT_CHANNEL_TOKEN
 - `JWT_SECRET` 建议至少 32 位，避免启动和测试时出现弱密钥警告。
 - `ADMIN_PASSWORD` 是初始化 `admin` 账号的密码。
 - `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL` 只在需要真实模型能力时填写。
-- `WECHAT_CHANNEL_BASE_URL` 是我们自研微信通道服务的地址，可以先留空；当前 `wechat-channel` 进程在未配置该地址时会保持空闲，不会阻塞 Docker 启动。
+- `WECHAT_CHANNEL_BASE_URL` 是我们自研微信通道服务的地址，本地调试通常填 `http://127.0.0.1:18789`，Docker 内部互联使用 `http://wechat-channel:18789`。

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict
@@ -13,7 +14,14 @@ from app.models import (
     ChannelMessageLog,
     MessageDirection,
     WechatAccount,
+    WechatChannelInboundMessage,
     WechatLoginSession,
+)
+from app.schemas.wechat_channel import (
+    WechatChannelMessageItem,
+    WechatGetConfigResponse,
+    WechatGetUpdatesResponse,
+    WechatSendTypingResponse,
 )
 
 
@@ -82,6 +90,10 @@ class WechatChannelService:
         stmt = select(WechatAccount).where(WechatAccount.account_id == account_id)
         return self.db.scalar(stmt)
 
+    def get_account_by_bot_token(self, bot_token: str) -> WechatAccount | None:
+        stmt = select(WechatAccount).where(WechatAccount.bot_token == bot_token)
+        return self.db.scalar(stmt)
+
     def list_active_accounts(self) -> list[WechatAccount]:
         stmt = (
             select(WechatAccount)
@@ -92,6 +104,26 @@ class WechatChannelService:
             )
         )
         return list(self.db.scalars(stmt))
+
+    def _resolve_account(
+        self,
+        *,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+    ) -> WechatAccount | None:
+        if account_id is not None:
+            return self.get_account_by_account_id(account_id)
+        if bot_token is not None:
+            return self.get_account_by_bot_token(bot_token)
+        return None
+
+    def resolve_account(
+        self,
+        *,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+    ) -> WechatAccount | None:
+        return self._resolve_account(account_id=account_id, bot_token=bot_token)
 
     def confirm_login_session(
         self,
@@ -230,6 +262,149 @@ class WechatChannelService:
         account.status = status
         account.last_active_time = last_active_time or datetime.now(UTC)
         return account
+
+    def enqueue_inbound_message(
+        self,
+        *,
+        account_id: str,
+        message_id: str | None,
+        conversation_id: str,
+        channel_user_id: str,
+        display_name: str | None = None,
+        content_type: str = "text",
+        content: str | None = None,
+        context_token: str | None = None,
+        raw_payload: dict[str, Any] | None = None,
+    ) -> WechatChannelInboundMessage:
+        if message_id is None:
+            message_id = f"wx_msg_{secrets.token_hex(8)}"
+        message = WechatChannelInboundMessage(
+            account_id=account_id,
+            message_id=message_id,
+            cursor_token=self._build_cursor_token(),
+            conversation_id=conversation_id,
+            channel_user_id=channel_user_id,
+            display_name=display_name,
+            content_type=content_type,
+            content=content,
+            context_token=context_token,
+            raw_payload=raw_payload or {},
+            status="pending",
+        )
+        self.db.add(message)
+        self.db.flush()
+        return message
+
+    def get_updates(
+        self,
+        *,
+        bot_token: str | None = None,
+        account_id: str | None = None,
+        get_updates_buf: str | None = None,
+    ) -> WechatGetUpdatesResponse:
+        account = self._resolve_account(account_id=account_id, bot_token=bot_token)
+        if account is None:
+            if account_id is None and bot_token is None:
+                return WechatGetUpdatesResponse(
+                    success=True,
+                    ret=0,
+                    messages=[],
+                    next_cursor=get_updates_buf or "",
+                    longpolling_timeout_ms=35000,
+                )
+            return WechatGetUpdatesResponse(
+                success=False,
+                ret=-1,
+                messages=[],
+                next_cursor=get_updates_buf or "",
+                error_code="ACCOUNT_NOT_FOUND",
+                error_message="微信账号不存在或未绑定",
+                longpolling_timeout_ms=35000,
+            )
+
+        cursor = get_updates_buf or account.cursor or ""
+        stmt = select(WechatChannelInboundMessage).where(
+            WechatChannelInboundMessage.account_id == account.account_id,
+        )
+        if cursor:
+            stmt = stmt.where(WechatChannelInboundMessage.cursor_token > cursor)
+        stmt = stmt.order_by(WechatChannelInboundMessage.cursor_token.asc()).limit(50)
+        messages = list(self.db.scalars(stmt))
+
+        return WechatGetUpdatesResponse(
+            success=True,
+            ret=0,
+            messages=[self._to_inbound_item(message) for message in messages],
+            next_cursor=messages[-1].cursor_token if messages else cursor,
+            longpolling_timeout_ms=35000,
+        )
+
+    def get_config(
+        self,
+        *,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+    ) -> WechatGetConfigResponse:
+        account = self._resolve_account(account_id=account_id, bot_token=bot_token)
+        if account is None:
+            if account_id is None and bot_token is None:
+                return WechatGetConfigResponse(
+                    success=True,
+                    ret=0,
+                    status="idle",
+                    cursor=None,
+                    remark=None,
+                    typing_ticket=None,
+                )
+            return WechatGetConfigResponse(
+                success=False,
+                ret=-1,
+                error_code="ACCOUNT_NOT_FOUND",
+                error_message="微信账号不存在或未绑定",
+            )
+
+        return WechatGetConfigResponse(
+            success=True,
+            ret=0,
+            account_id=account.account_id,
+            status=account.status,
+            cursor=account.cursor,
+            remark=account.remark,
+            typing_ticket=self._build_typing_ticket(account),
+        )
+
+    def send_typing(
+        self,
+        *,
+        conversation_id: str,
+        typing: bool,
+        account_id: str | None = None,
+        bot_token: str | None = None,
+        typing_ticket: str | None = None,
+    ) -> WechatSendTypingResponse:
+        account = self._resolve_account(account_id=account_id, bot_token=bot_token)
+        if account is None:
+            if account_id is None and bot_token is None:
+                return WechatSendTypingResponse(success=True, ret=0, typing=typing)
+            return WechatSendTypingResponse(
+                success=False,
+                ret=-1,
+                typing=typing,
+                error_code="ACCOUNT_NOT_FOUND",
+                error_message="微信账号不存在或未绑定",
+            )
+
+        expected_ticket = self._build_typing_ticket(account)
+        if typing_ticket is not None and typing_ticket != expected_ticket:
+            return WechatSendTypingResponse(
+                success=False,
+                ret=-1,
+                typing=typing,
+                error_code="INVALID_TYPING_TICKET",
+                error_message="typing_ticket 无效",
+            )
+
+        return WechatSendTypingResponse(success=True, ret=0, typing=typing)
 
     def list_message_logs(
         self,
@@ -436,6 +611,34 @@ class WechatChannelService:
             "created_at": account.created_at,
             "updated_at": account.updated_at,
         }
+
+    def _build_cursor_token(self) -> str:
+        timestamp = int(datetime.now(UTC).timestamp() * 1000)
+        return f"{timestamp:013d}_{secrets.token_hex(8)}"
+
+    def _build_typing_ticket(self, account: WechatAccount) -> str:
+        digest = hashlib.sha256(
+            f"{account.account_id}:{account.bot_token}".encode()
+        ).hexdigest()
+        return f"typing_{digest[:32]}"
+
+    def _to_inbound_item(
+        self,
+        message: WechatChannelInboundMessage,
+    ) -> WechatChannelMessageItem:
+        return WechatChannelMessageItem(
+            message_id=message.message_id,
+            from_user_id=message.channel_user_id,
+            to_user_id=message.account_id,
+            session_id=message.conversation_id,
+            conversation_id=message.conversation_id,
+            channel_user_id=message.channel_user_id,
+            display_name=message.display_name,
+            content_type=message.content_type,
+            content=message.content,
+            context_token=message.context_token,
+            raw_payload=message.raw_payload or {},
+        )
 
     def _send_text_to_channel(
         self,
