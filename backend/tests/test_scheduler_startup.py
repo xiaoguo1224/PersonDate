@@ -76,6 +76,26 @@ def test_create_app_starts_and_stops_scheduler(monkeypatch) -> None:
     assert fake_scheduler.shutdown_called is True
 
 
+def test_create_app_initializes_wechat_channel_client(monkeypatch) -> None:
+    from app import main as main_module
+
+    fake_scheduler = FakeScheduler()
+    fake_client = object()
+
+    monkeypatch.setattr(
+        main_module,
+        "build_reminder_scheduler",
+        lambda session_factory=None, sender_provider=None, updates_client_provider=None: fake_scheduler,  # noqa: E501
+    )
+    monkeypatch.setattr("app.core.wechat_channel.build_wechat_channel_client", lambda: fake_client)
+
+    app = main_module.create_app()
+
+    with TestClient(app):
+        assert app.state.wechat_sender is fake_client
+        assert app.state.wechat_updates_client is fake_client
+
+
 def test_run_wechat_poll_scan_dispatches_active_accounts(monkeypatch) -> None:
     from app.core import scheduler as scheduler_module
 

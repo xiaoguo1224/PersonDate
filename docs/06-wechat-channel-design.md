@@ -645,3 +645,5 @@ FastAPI 只处理标准化后的消息和业务结果。
 ```
 
 一句话总结：**你不是要把 Agent 直接塞进微信协议里，而是要在 Agent 外面做一层独立的微信通道服务，负责扫码登录、拉消息、标准化、发消息和状态管理。**
+
+推荐通过 `WECHAT_CHANNEL_BASE_URL` 配置独立微信通道服务地址，后端启动时会自动初始化 `wechat_sender` 和 `wechat_updates_client`，并由 APScheduler 常驻轮询活跃账号。
