@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/amd64
+    container_name: schedule-agent-postgres
+    environment:
+      POSTGRES_DB: schedule_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - schedule_agent_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d schedule_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    platform: linux/amd64
+    container_name: schedule-agent-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "uv run alembic upgrade head
+      && uv run python -m app.bootstrap
+      && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    platform: linux/amd64
+    container_name: schedule-agent-web
+    env_file:
+      - ./web/.env
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  schedule_agent_pgdata:

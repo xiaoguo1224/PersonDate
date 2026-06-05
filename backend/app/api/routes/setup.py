@@ -9,6 +9,7 @@ from app.services.setup_service import SetupService
 router = APIRouter(tags=["setup"])
 
 
+@router.get("/setup/status")
 def setup_status(db: Session = Depends(get_db)) -> ApiResponse[dict[str, bool]]:
     service = SetupService(db)
     return ApiResponse(data={"initialized": service.is_initialized()})
