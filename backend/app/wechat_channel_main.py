@@ -4,22 +4,15 @@ import time
 from contextlib import suppress
 
 from app.core.scheduler import build_wechat_channel_scheduler
-from app.core.wechat_channel import (
-    attach_wechat_channel_client,
-    close_wechat_channel_client,
-)
+from app.core.wechat_channel import close_wechat_channel_client, require_wechat_channel_client
 from app.main import create_app
 
 
 def run() -> None:
     app = create_app()
-    attach_wechat_channel_client(app)
+    client = require_wechat_channel_client(app)
     scheduler = build_wechat_channel_scheduler(
-        updates_client_provider=lambda: getattr(
-            app.state,
-            "wechat_updates_client",
-            None,
-        ),
+        updates_client_provider=lambda: client,
     )
     scheduler.start()
     app.state.wechat_channel_scheduler = scheduler

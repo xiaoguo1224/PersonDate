@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import httpx
 
+from app.core import wechat_channel as wechat_channel_module
 from app.core.wechat_channel import WechatChannelHttpClient
 
 
@@ -38,3 +40,20 @@ def test_wechat_channel_http_client_posts_sendmessage_and_getupdates() -> None:
     assert requests[1][1] == "token_001"
     assert requests[1][2]["bot_token"] == "bot_001"
     assert requests[1][2]["get_updates_buf"] == "cursor_0"
+
+
+def test_require_wechat_channel_client_raises_without_base_url(monkeypatch) -> None:
+    monkeypatch.setattr(
+        wechat_channel_module,
+        "build_wechat_channel_client",
+        lambda: None,
+    )
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    try:
+        wechat_channel_module.require_wechat_channel_client(app)  # type: ignore[arg-type]
+    except RuntimeError as exc:
+        assert "WECHAT_CHANNEL_BASE_URL" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")

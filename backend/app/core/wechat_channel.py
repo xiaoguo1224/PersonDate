@@ -85,6 +85,15 @@ def attach_wechat_channel_client(app: FastAPI) -> None:
     app.state.wechat_updates_client = client
 
 
+def require_wechat_channel_client(app: FastAPI) -> WechatChannelHttpClient:
+    client = build_wechat_channel_client()
+    if client is None:
+        raise RuntimeError("WECHAT_CHANNEL_BASE_URL 未配置，无法启动独立微信通道服务")
+    app.state.wechat_sender = client
+    app.state.wechat_updates_client = client
+    return client
+
+
 def close_wechat_channel_client(app: FastAPI) -> None:
     client = getattr(app.state, "wechat_sender", None)
     if client is not None and hasattr(client, "close"):
