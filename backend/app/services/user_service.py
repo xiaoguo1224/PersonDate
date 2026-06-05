@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models import User, UserSettings, UserStatus
+from app.schemas.user_settings import UpdateUserSettingsRequest
 
 
 class UserService:
@@ -63,3 +64,19 @@ class UserService:
     def enable_user(self, user: User) -> User:
         user.status = UserStatus.ACTIVE.value
         return user
+
+    def update_settings(self, user_id: str, payload: UpdateUserSettingsRequest) -> UserSettings:
+        settings = self.ensure_settings(user_id)
+        if payload.default_timezone is not None:
+            settings.default_timezone = payload.default_timezone
+        if payload.workday_start_time is not None:
+            settings.workday_start_time = payload.workday_start_time
+        if payload.workday_end_time is not None:
+            settings.workday_end_time = payload.workday_end_time
+        if payload.daily_plan_push_time is not None:
+            settings.daily_plan_push_time = payload.daily_plan_push_time
+        if payload.default_remind_before_minutes is not None:
+            settings.default_remind_before_minutes = payload.default_remind_before_minutes
+        if payload.daily_plan_push_enabled is not None:
+            settings.daily_plan_push_enabled = payload.daily_plan_push_enabled
+        return settings

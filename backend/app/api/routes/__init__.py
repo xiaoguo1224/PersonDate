@@ -7,6 +7,7 @@ from app.api.routes.conflicts import router as conflicts_router
 from app.api.routes.day_plans import router as day_plans_router
 from app.api.routes.health import router as health_router
 from app.api.routes.invite_codes import router as invite_codes_router
+from app.api.routes.me import router as me_router
 from app.api.routes.reminders import router as reminders_router
 from app.api.routes.setup import router as setup_router
 from app.api.routes.tasks import router as tasks_router
@@ -16,6 +17,7 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(setup_router)
 api_router.include_router(auth_router)
+api_router.include_router(me_router)
 api_router.include_router(invite_codes_router)
 api_router.include_router(users_router)
 api_router.include_router(calendar_events_router)
