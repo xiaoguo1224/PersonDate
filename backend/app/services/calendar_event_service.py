@@ -112,6 +112,7 @@ class CalendarEventService:
 
     def delete_event(self, event: CalendarEvent) -> CalendarEvent:
         event.status = EventStatus.DELETED.value
+        self.conflicts.resolve_conflicts_for_event(event.user_id, event.id)
         self.reminders.cancel_by_target(user_id=event.user_id, target_id=event.id)
         return event
 

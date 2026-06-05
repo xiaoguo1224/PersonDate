@@ -11,6 +11,7 @@ from app.models import (
     ConflictSeverity,
     ConflictStatus,
     ConflictType,
+    EventStatus,
     ScheduleConflict,
 )
 
@@ -48,6 +49,22 @@ class ConflictService:
             if self._pair_key(conflict.related_item_ids) == target_pair:
                 return True
         return False
+
+    def _has_active_related_events(
+        self,
+        user_id: str,
+        related_item_ids: dict[str, Any] | None,
+    ) -> bool:
+        target_pair = self._pair_key(related_item_ids)
+        if target_pair is None:
+            return True
+        stmt = select(CalendarEvent.id).where(
+            CalendarEvent.user_id == user_id,
+            CalendarEvent.status == EventStatus.ACTIVE.value,
+            CalendarEvent.id.in_(target_pair),
+        )
+        active_event_ids = set(self.db.scalars(stmt))
+        return len(active_event_ids) == len(target_pair)
 
     def _event_sort_key(self, event: CalendarEvent) -> tuple[str, str, str]:
         return (
@@ -165,6 +182,11 @@ class ConflictService:
         seen: set[tuple[str, str, tuple[str, str] | None]] = set()
         unique_conflicts: list[ScheduleConflict] = []
         for conflict in conflicts:
+            if conflict.status == ConflictStatus.OPEN.value and not self._has_active_related_events(
+                user_id,
+                conflict.related_item_ids,
+            ):
+                continue
             pair_key = self._pair_key(conflict.related_item_ids)
             key = (conflict.conflict_type, conflict.status, pair_key)
             if key in seen:
@@ -172,6 +194,22 @@ class ConflictService:
             seen.add(key)
             unique_conflicts.append(conflict)
         return unique_conflicts
+
+    def resolve_conflicts_for_event(self, user_id: str, event_id: str) -> list[ScheduleConflict]:
+        stmt = select(ScheduleConflict).where(
+            ScheduleConflict.user_id == user_id,
+            ScheduleConflict.status == ConflictStatus.OPEN.value,
+        )
+        resolved_conflicts: list[ScheduleConflict] = []
+        for conflict in self.db.scalars(stmt):
+            pair_key = self._pair_key(conflict.related_item_ids)
+            if pair_key is None or event_id not in pair_key:
+                continue
+            conflict.status = ConflictStatus.RESOLVED.value
+            conflict.resolved_at = datetime.now(UTC)
+            resolved_conflicts.append(conflict)
+        self.db.flush()
+        return resolved_conflicts
 
     def get_conflict(self, user_id: str, conflict_id: str) -> ScheduleConflict | None:
         stmt = select(ScheduleConflict).where(

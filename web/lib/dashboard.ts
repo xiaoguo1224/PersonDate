@@ -33,6 +33,16 @@ export type CalendarEventsResponse = {
   items: CalendarEventItem[];
 };
 
+export type CalendarEventUpsertPayload = {
+  title: string;
+  description?: string | null;
+  start_time: string;
+  end_time?: string | null;
+  timezone: string;
+  location?: string | null;
+  remind_before_minutes?: number | null;
+};
+
 export type TaskItem = {
   id: string;
   title: string;
@@ -106,6 +116,80 @@ export async function loadTodayDashboard(
     conflicts: conflicts.items,
     reminders: reminders.items,
   };
+}
+
+export async function loadCalendarEvents(accessToken: string): Promise<CalendarEventsResponse> {
+  return requestJson<CalendarEventsResponse>("/api/calendar-events", {}, accessToken);
+}
+
+export async function loadDayPlan(accessToken: string, planDate: string): Promise<DayPlan | null> {
+  return requestJson<DayPlan | null>(`/api/day-plans/${planDate}`, {}, accessToken);
+}
+
+export async function createCalendarEvent(
+  accessToken: string,
+  payload: CalendarEventUpsertPayload,
+): Promise<CalendarEventItem> {
+  return requestJson<CalendarEventItem>(
+    "/api/calendar-events",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
+}
+
+export async function updateCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  payload: CalendarEventUpsertPayload,
+): Promise<CalendarEventItem> {
+  return requestJson<CalendarEventItem>(
+    `/api/calendar-events/${eventId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
+}
+
+export async function deleteCalendarEvent(accessToken: string, eventId: string): Promise<{ id: string }> {
+  return requestJson<{ id: string }>(
+    `/api/calendar-events/${eventId}`,
+    {
+      method: "DELETE",
+    },
+    accessToken,
+  );
+}
+
+export async function generateDayPlan(accessToken: string, planDate: string): Promise<DayPlan> {
+  return requestJson<DayPlan>(
+    `/api/day-plans/${planDate}/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        include_pending_tasks: true,
+        auto_detect_conflicts: true,
+      }),
+    },
+    accessToken,
+  );
+}
+
+export async function confirmDayPlan(
+  accessToken: string,
+  planId: string,
+): Promise<{ id: string; plan_date: string; status: string }> {
+  return requestJson<{ id: string; plan_date: string; status: string }>(
+    `/api/day-plans/${planId}/confirm`,
+    {
+      method: "POST",
+    },
+    accessToken,
+  );
 }
 
 export type DashboardSummary = {
