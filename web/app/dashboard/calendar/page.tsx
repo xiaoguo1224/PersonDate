@@ -10,7 +10,6 @@ import {
 import {
   Alert,
   Button,
-  Calendar,
   Card,
   Col,
   ConfigProvider,
@@ -30,7 +29,6 @@ import {
   Typography,
   message,
 } from "antd";
-import type { CalendarProps } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import dayjs, { type Dayjs } from "dayjs";
 import "dayjs/locale/zh-cn";
@@ -84,6 +82,7 @@ type WeekTimelineDay = {
   segments: WeekTimelineEventSegment[];
 };
 
+const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 const WEEK_TIMELINE_HOUR_HEIGHT = 64;
 const WEEK_TIMELINE_MIN_EVENT_HEIGHT = 40;
 const WEEK_TIMELINE_GUTTER_WIDTH = 76;
@@ -106,6 +105,18 @@ function startOfWeek(value: Dayjs) {
 
 function endOfWeek(value: Dayjs) {
   return startOfWeek(value).add(6, "day").endOf("day");
+}
+
+function startOfMonthGrid(value: Dayjs) {
+  const firstDayOfMonth = value.startOf("month");
+  const weekday = firstDayOfMonth.day();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  return firstDayOfMonth.add(diff, "day").startOf("day");
+}
+
+function buildMonthGridDays(value: Dayjs) {
+  const gridStart = startOfMonthGrid(value);
+  return Array.from({ length: 42 }, (_, index) => gridStart.add(index, "day"));
 }
 
 function getViewRange(viewMode: CalendarViewMode, focusDate: Dayjs) {
@@ -378,6 +389,7 @@ export default function CalendarPage() {
     () => buildWeekTimelineDays(weekDays, events),
     [events, weekDays],
   );
+  const monthGridDays = useMemo(() => buildMonthGridDays(focusDate), [focusDate]);
   const monthEventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEventItem[]>();
     events
@@ -551,64 +563,6 @@ export default function CalendarPage() {
     }
   }, [accessToken, dayPlan, fetchDayPlan, messageApi]);
 
-  const monthCellRender: NonNullable<CalendarProps<Dayjs>["cellRender"]> = (current, info) => {
-    if (info.type !== "date") {
-      return info.originNode;
-    }
-    const key = current.format("YYYY-MM-DD");
-    const items = monthEventsByDate.get(key) ?? [];
-    const isSelected = key === selectedDateKey;
-    const isToday = key === todayKey;
-    return (
-      <div
-        className={[
-          "calendar-month-cell",
-          isSelected ? "calendar-month-cell--selected" : "",
-          isToday ? "calendar-month-cell--today" : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <div className="calendar-month-cell__header">
-          <span
-            className="calendar-month-cell__date"
-            style={{
-              background: isSelected
-                ? "linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(59, 130, 246, 0.82))"
-                : isToday
-                  ? "rgba(251, 191, 36, 0.18)"
-                  : "rgba(255, 255, 255, 0.04)",
-              color: isSelected ? "#06111f" : "var(--text-primary)",
-            }}
-          >
-            {current.date()}
-          </span>
-          {items.length ? (
-            <Tag color={isSelected ? "cyan" : "blue"} style={{ marginInlineEnd: 0 }}>
-              {items.length} 条
-            </Tag>
-          ) : null}
-        </div>
-        <div className="calendar-month-cell__dots">
-          {items.slice(0, 3).map((event) => (
-            <span
-              key={event.id}
-              title={event.title}
-              className="calendar-month-cell__dot"
-              style={{ background: getEventDotColor(event.status) }}
-            />
-          ))}
-          {items.length > 3 ? <span className="calendar-month-cell__more">+{items.length - 3}</span> : null}
-        </div>
-        {items.slice(0, 2).map((event) => (
-          <Text key={event.id} className="calendar-month-cell__title" title={event.title}>
-            {event.title}
-          </Text>
-        ))}
-      </div>
-    );
-  };
-
   const selectedDayPlanItems = dayPlan?.items ?? [];
 
   const heroTags = [
@@ -733,17 +687,113 @@ export default function CalendarPage() {
               {eventsLoading ? (
                 <CalendarLoading />
               ) : viewMode === "month" ? (
-                <Calendar
-                  value={focusDate}
-                  onSelect={(value) => {
-                    setFocusDate(value);
-                    detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                  onPanelChange={(value) => setFocusDate(value)}
-                  cellRender={monthCellRender}
-                />
+                <div className="calendar-month-shell">
+                  <div className="calendar-month-shell__meta">
+                    <div>
+                      <Text className="muted-text">月视图</Text>
+                      <Title level={4} style={{ color: "var(--text-primary)", margin: "6px 0 0" }}>
+                        {focusDate.format("YYYY年M月")}
+                      </Title>
+                    </div>
+                    <Space wrap>
+                      <Tag color="cyan">{visibleEvents.length} 条当前月日程</Tag>
+                      <Tag color="gold">{selectedDayEvents.length} 条选中日程</Tag>
+                      <Tag color="default">{toDisplayDate(focusDate)}</Tag>
+                    </Space>
+                  </div>
+
+                  <div className="calendar-month-shell__weekdays">
+                    {WEEKDAY_LABELS.map((label) => (
+                      <span key={label} className="calendar-month-weekday">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="calendar-month-grid">
+                    {monthGridDays.map((current) => {
+                      const key = current.format("YYYY-MM-DD");
+                      const items = monthEventsByDate.get(key) ?? [];
+                      const isSelected = key === selectedDateKey;
+                      const isToday = key === todayKey;
+                      const isOutsideMonth = !current.isSame(focusDate, "month");
+                      return (
+                        <div
+                          key={key}
+                          role="button"
+                          tabIndex={0}
+                          className={[
+                            "calendar-month-cell",
+                            isSelected ? "calendar-month-cell--selected" : "",
+                            isToday ? "calendar-month-cell--today" : "",
+                            isOutsideMonth ? "calendar-month-cell--outside" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={() => {
+                            setFocusDate(current);
+                            detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setFocusDate(current);
+                              detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }}
+                        >
+                          <div className="calendar-month-cell__header">
+                            <span
+                              className="calendar-month-cell__date"
+                              style={{
+                                background: isSelected
+                                  ? "linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(59, 130, 246, 0.82))"
+                                  : isToday
+                                    ? "rgba(251, 191, 36, 0.2)"
+                                    : "rgba(255, 255, 255, 0.04)",
+                                color: isSelected ? "#06111f" : "var(--text-primary)",
+                              }}
+                            >
+                              {current.date()}
+                            </span>
+                            <Space wrap size={6}>
+                              {isToday ? <Tag color="gold">今天</Tag> : null}
+                              {items.length ? <span className="calendar-month-cell__count">{items.length}</span> : null}
+                            </Space>
+                          </div>
+
+                          <div className="calendar-month-cell__events">
+                            {items.slice(0, 2).map((event) => (
+                              <button
+                                key={event.id}
+                                type="button"
+                                className="calendar-month-cell__event"
+                                onClick={(eventClick) => {
+                                  eventClick.stopPropagation();
+                                  openEditModal(event);
+                                }}
+                              >
+                                <span
+                                  className="calendar-month-cell__event-dot"
+                                  style={{ background: getEventDotColor(event.status) }}
+                                />
+                                <Text strong ellipsis className="calendar-month-cell__event-title">
+                                  {event.title}
+                                </Text>
+                              </button>
+                            ))}
+                            {items.length > 2 ? (
+                              <span className="calendar-month-cell__more">+{items.length - 2}</span>
+                            ) : null}
+                            {!items.length ? <span className="calendar-month-cell__empty">暂无日程</span> : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : viewMode === "week" ? (
-                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                <Space direction="vertical" size={16} style={{ width: "100%" }} className="calendar-week-shell">
                   <div
                     className="calendar-week-scroll"
                     style={{ minWidth: WEEK_TIMELINE_GUTTER_WIDTH + weekDays.length * WEEK_TIMELINE_MIN_COLUMN_WIDTH }}
@@ -874,6 +924,7 @@ export default function CalendarPage() {
                 </Space>
               ) : selectedDayEvents.length ? (
                 <Timeline
+                  className="calendar-day-timeline"
                   items={selectedDayEvents.map((event) => ({
                     color: getEventColor(event.status),
                     children: (

@@ -16,3 +16,4 @@ node_modules/
 .next/
 dist/
 .codex-*.png
+.playwright-mcp/
