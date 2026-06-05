@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import httpx
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -102,3 +103,32 @@ def test_poll_account_once_updates_cursor_and_dispatches_messages() -> None:
     assert refreshed is not None
     assert refreshed.cursor == "cursor_1"
     assert refreshed.last_active_time is not None
+
+
+def test_poll_account_once_marks_expired_on_auth_failure() -> None:
+    session = _build_session()
+    account = WechatAccount(
+        owner_user_id="owner-1",
+        account_id="wx_account_002",
+        wechat_user_id="wx_user_002",
+        bot_token="token_002",
+        base_url="https://wechat.example.com",
+        cursor="cursor_0",
+        status="active",
+    )
+    session.add(account)
+    session.commit()
+
+    class ExpiredUpdatesClient:
+        def get_updates(self, *, bot_token: str, cursor: str | None = None):  # noqa: ANN001
+            request = httpx.Request("POST", "https://wechat.example.com/getupdates")
+            response = httpx.Response(401, request=request, json={"error_message": "expired"})
+            raise httpx.HTTPStatusError("expired", request=request, response=response)
+
+    poller = WechatChannelPoller(session, ExpiredUpdatesClient(), FakeAdapter())
+    processed = poller.poll_account_once("wx_account_002")
+
+    assert processed == 0
+    refreshed = session.get(WechatAccount, account.id)
+    assert refreshed is not None
+    assert refreshed.status == "expired"

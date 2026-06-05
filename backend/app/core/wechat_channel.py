@@ -6,6 +6,7 @@ import httpx
 from fastapi import FastAPI
 
 from app.core.config import get_settings
+from app.schemas.wechat_channel import WechatGetUpdatesResponse, WechatSendTextResponse
 
 
 @dataclass
@@ -24,7 +25,12 @@ class WechatChannelHttpClient:
     def close(self) -> None:
         self._client.close()
 
-    def get_updates(self, *, bot_token: str, cursor: str | None = None) -> dict[str, object]:
+    def get_updates(
+        self,
+        *,
+        bot_token: str,
+        cursor: str | None = None,
+    ) -> WechatGetUpdatesResponse:
         payload: dict[str, object] = {"bot_token": bot_token}
         if cursor is not None:
             payload["get_updates_buf"] = cursor
@@ -34,14 +40,14 @@ class WechatChannelHttpClient:
             headers=self._headers(),
         )
         response.raise_for_status()
-        return response.json()
+        return WechatGetUpdatesResponse.model_validate(response.json())
 
     def send_text(
         self,
         conversation_id: str,
         content: str,
         context_token: str | None = None,
-    ) -> dict[str, object]:
+    ) -> WechatSendTextResponse:
         payload: dict[str, object] = {
             "to_user_id": conversation_id,
             "conversation_id": conversation_id,
@@ -55,7 +61,7 @@ class WechatChannelHttpClient:
             headers=self._headers(),
         )
         response.raise_for_status()
-        return response.json()
+        return WechatSendTextResponse.model_validate(response.json())
 
     def _headers(self) -> dict[str, str]:
         if not self.channel_token:

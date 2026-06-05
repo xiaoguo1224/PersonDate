@@ -217,6 +217,20 @@ class WechatChannelService:
         account.last_active_time = last_active_time or datetime.now(UTC)
         return account
 
+    def update_account_status(
+        self,
+        *,
+        account_id: str,
+        status: str,
+        last_active_time: datetime | None = None,
+    ) -> WechatAccount | None:
+        account = self.get_account_by_account_id(account_id)
+        if account is None:
+            return None
+        account.status = status
+        account.last_active_time = last_active_time or datetime.now(UTC)
+        return account
+
     def list_message_logs(
         self,
         *,

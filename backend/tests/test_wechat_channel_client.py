@@ -27,8 +27,9 @@ def test_wechat_channel_http_client_posts_sendmessage_and_getupdates() -> None:
     send_result = client.send_text("wx_user_001", "提醒：15:00 开会", context_token="ctx_001")
     updates_result = client.get_updates(bot_token="bot_001", cursor="cursor_0")
 
-    assert send_result["message_id"] == "wx_out_001"
-    assert updates_result["get_updates_buf"] == "cursor_1"
+    assert send_result.message_id == "wx_out_001"
+    assert updates_result.next_cursor == "cursor_1"
+    assert updates_result.messages == []
     assert requests[0][0] == "/sendmessage"
     assert requests[0][1] == "token_001"
     assert requests[0][2]["to_user_id"] == "wx_user_001"

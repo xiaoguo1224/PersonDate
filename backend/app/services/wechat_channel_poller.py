@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app.schemas.wechat import WechatInboundRequest
@@ -51,9 +52,34 @@ class WechatChannelPoller:
         if account is None or account.status != "active":
             return 0
 
-        result = self._normalize_updates(
-            self.updates_client.get_updates(bot_token=account.bot_token, cursor=account.cursor)
-        )
+        try:
+            result = self._normalize_updates(
+                self.updates_client.get_updates(bot_token=account.bot_token, cursor=account.cursor)
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {401, 403}:
+                service.update_account_status(
+                    account_id=account.account_id,
+                    status="expired",
+                    last_active_time=datetime.now(UTC),
+                )
+                self.db.commit()
+                return 0
+            service.update_account_status(
+                account_id=account.account_id,
+                status="error",
+                last_active_time=datetime.now(UTC),
+            )
+            self.db.commit()
+            raise
+        except httpx.RequestError:
+            service.update_account_status(
+                account_id=account.account_id,
+                status="error",
+                last_active_time=datetime.now(UTC),
+            )
+            self.db.commit()
+            raise
 
         processed_count = 0
         for message in result.messages:
@@ -101,7 +127,11 @@ class WechatChannelPoller:
                 "msgs",
                 None,
             ) or []
-            next_cursor = getattr(payload, "get_updates_buf", None) or getattr(
+            next_cursor = getattr(payload, "next_cursor", None) or getattr(
+                payload,
+                "get_updates_buf",
+                None,
+            ) or getattr(
                 payload,
                 "cursor",
                 None,
