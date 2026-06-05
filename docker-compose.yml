@@ -38,6 +38,26 @@ services:
       && uv run python -m app.bootstrap
       && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
+  wechat-channel:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    platform: linux/amd64
+    container_name: schedule-agent-wechat-channel
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "uv run alembic upgrade head
+      && uv run python -m app.wechat_channel_main"
+
   web:
     build:
       context: ./web

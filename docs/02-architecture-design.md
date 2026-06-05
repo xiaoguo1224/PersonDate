@@ -628,7 +628,7 @@ services:
     PostgreSQL
 
   wechat-channel:
-    自研微信通道服务 / 消息通道
+    自研微信通道服务 / 长轮询与消息转发进程
 ```
 
 后端内部包含：

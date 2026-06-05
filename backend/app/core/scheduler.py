@@ -54,7 +54,6 @@ def build_reminder_scheduler(
     *,
     session_factory: SessionFactory = SessionLocal,
     sender_provider: SenderProvider | None = None,
-    updates_client_provider: UpdatesClientProvider | None = None,
 ) -> BackgroundScheduler:
     settings = get_settings()
     scheduler = BackgroundScheduler(timezone="UTC")
@@ -71,6 +70,16 @@ def build_reminder_scheduler(
             "sender_provider": sender_provider,
         },
     )
+    return scheduler
+
+
+def build_wechat_channel_scheduler(
+    *,
+    session_factory: SessionFactory = SessionLocal,
+    updates_client_provider: UpdatesClientProvider | None = None,
+) -> BackgroundScheduler:
+    settings = get_settings()
+    scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(
         run_wechat_poll_scan,
         trigger="interval",
@@ -101,7 +110,6 @@ def start_reminder_scheduler(
     scheduler = build_reminder_scheduler(
         session_factory=session_factory,
         sender_provider=sender_provider,
-        updates_client_provider=updates_client_provider,
     )
     scheduler.start()
     app.state.reminder_scheduler = scheduler

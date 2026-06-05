@@ -32,28 +32,22 @@ def test_build_reminder_scheduler_registers_interval_job(monkeypatch) -> None:
         "get_settings",
         lambda: SimpleNamespace(
             reminder_scan_interval_seconds=15,
-            wechat_poll_interval_seconds=7,
         ),
     )
 
     scheduler = scheduler_module.build_reminder_scheduler(
         session_factory=lambda: None,
         sender_provider=lambda: None,
-        updates_client_provider=lambda: None,
     )
 
     assert scheduler is fake_scheduler
-    assert len(fake_scheduler.jobs) == 2
-    reminder_job = next(job for job in fake_scheduler.jobs if job["id"] == "reminder-scan")
-    wechat_job = next(job for job in fake_scheduler.jobs if job["id"] == "wechat-poll-scan")
+    assert len(fake_scheduler.jobs) == 1
+    reminder_job = fake_scheduler.jobs[0]
+    assert reminder_job["id"] == "reminder-scan"
     assert reminder_job["trigger"] == "interval"
     assert reminder_job["seconds"] == 15
     assert reminder_job["max_instances"] == 1
     assert reminder_job["coalesce"] is True
-    assert wechat_job["trigger"] == "interval"
-    assert wechat_job["seconds"] == 7
-    assert wechat_job["max_instances"] == 1
-    assert wechat_job["coalesce"] is True
 
 
 def test_create_app_starts_and_stops_scheduler(monkeypatch) -> None:
@@ -76,24 +70,30 @@ def test_create_app_starts_and_stops_scheduler(monkeypatch) -> None:
     assert fake_scheduler.shutdown_called is True
 
 
-def test_create_app_initializes_wechat_channel_client(monkeypatch) -> None:
-    from app import main as main_module
+def test_build_wechat_channel_scheduler_registers_poll_job(monkeypatch) -> None:
+    from app.core import scheduler as scheduler_module
 
     fake_scheduler = FakeScheduler()
-    fake_client = object()
-
+    monkeypatch.setattr(scheduler_module, "BackgroundScheduler", lambda **kwargs: fake_scheduler)
     monkeypatch.setattr(
-        main_module,
-        "build_reminder_scheduler",
-        lambda session_factory=None, sender_provider=None, updates_client_provider=None: fake_scheduler,  # noqa: E501
+        scheduler_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_poll_interval_seconds=7),
     )
-    monkeypatch.setattr("app.core.wechat_channel.build_wechat_channel_client", lambda: fake_client)
 
-    app = main_module.create_app()
+    scheduler = scheduler_module.build_wechat_channel_scheduler(
+        session_factory=lambda: None,
+        updates_client_provider=lambda: None,
+    )
 
-    with TestClient(app):
-        assert app.state.wechat_sender is fake_client
-        assert app.state.wechat_updates_client is fake_client
+    assert scheduler is fake_scheduler
+    assert len(fake_scheduler.jobs) == 1
+    job = fake_scheduler.jobs[0]
+    assert job["id"] == "wechat-poll-scan"
+    assert job["trigger"] == "interval"
+    assert job["seconds"] == 7
+    assert job["max_instances"] == 1
+    assert job["coalesce"] is True
 
 
 def test_run_wechat_poll_scan_dispatches_active_accounts(monkeypatch) -> None:
