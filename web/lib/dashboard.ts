@@ -101,9 +101,10 @@ export async function loadTodayDashboard(
   accessToken: string,
   planDate: string,
 ): Promise<TodayDashboardData> {
+  const todayEventsPath = `/api/calendar-events?start_date=${encodeURIComponent(planDate)}&end_date=${encodeURIComponent(planDate)}`;
   const [plan, events, tasks, conflicts, reminders] = await Promise.all([
     requestJson<DayPlan | null>(`/api/day-plans/${planDate}`, {}, accessToken),
-    requestJson<CalendarEventsResponse>("/api/calendar-events", {}, accessToken),
+    requestJson<CalendarEventsResponse>(todayEventsPath, {}, accessToken),
     requestJson<TaskListResponse>("/api/tasks", {}, accessToken),
     requestJson<ConflictListResponse>("/api/conflicts?status=open", {}, accessToken),
     requestJson<ReminderListResponse>("/api/reminders?status=pending", {}, accessToken),

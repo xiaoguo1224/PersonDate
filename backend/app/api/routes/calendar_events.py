@@ -35,6 +35,8 @@ def _to_item(event: CalendarEvent) -> CalendarEventItem:
 
 @router.get("")
 def list_calendar_events(
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse[CalendarEventListResponse]:
@@ -45,6 +47,8 @@ def list_calendar_events(
         _to_item(event)
         for event in CalendarEventService(db).list_events(
             current_user.id,
+            start_date=start_date,
+            end_date=end_date,
             timezone_name=timezone_name,
         )
     ]
