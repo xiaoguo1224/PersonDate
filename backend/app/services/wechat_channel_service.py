@@ -16,6 +16,12 @@ from app.models import (
 )
 
 
+def _as_utc(datetime_value: datetime) -> datetime:
+    if datetime_value.tzinfo is None:
+        return datetime_value.replace(tzinfo=UTC)
+    return datetime_value.astimezone(UTC)
+
+
 class WechatStatusSummary(TypedDict):
     connected: bool
     channel_token_configured: bool
@@ -35,6 +41,13 @@ class WechatChannelService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def get_message_log_by_message_id(self, message_id: str) -> ChannelMessageLog | None:
+        stmt = select(ChannelMessageLog).where(
+            ChannelMessageLog.channel == "wechat",
+            ChannelMessageLog.message_id == message_id,
+        )
+        return self.db.scalar(stmt.order_by(ChannelMessageLog.created_at.desc()))
 
     def generate_binding_code(self, user_id: str) -> WechatBindingCode:
         now = datetime.now(UTC)
@@ -106,6 +119,55 @@ class WechatChannelService:
             stmt = stmt.where(ChannelMessageLog.direction == direction)
         stmt = stmt.order_by(ChannelMessageLog.created_at.desc()).limit(limit)
         return list(self.db.scalars(stmt))
+
+    def create_message_log(
+        self,
+        *,
+        user_id: str | None,
+        message_id: str | None,
+        conversation_id: str,
+        channel_user_id: str | None,
+        direction: str,
+        content_type: str,
+        content: str | None,
+        raw_payload: dict[str, object] | None = None,
+        status: str = "received",
+        error_message: str | None = None,
+    ) -> ChannelMessageLog:
+        log = ChannelMessageLog(
+            user_id=user_id,
+            channel="wechat",
+            message_id=message_id,
+            conversation_id=conversation_id,
+            channel_user_id=channel_user_id,
+            direction=direction,
+            content_type=content_type,
+            content=content,
+            raw_payload=raw_payload or {},
+            status=status,
+            error_message=error_message,
+        )
+        self.db.add(log)
+        self.db.flush()
+        return log
+
+    def consume_binding_code(self, code: str) -> WechatBindingCode | None:
+        now = datetime.now(UTC)
+        binding_code = self.db.scalar(
+            select(WechatBindingCode).where(WechatBindingCode.code == code)
+        )
+        if binding_code is None:
+            return None
+        if binding_code.status == "used":
+            return None
+        if binding_code.status == "disabled":
+            return None
+        if _as_utc(binding_code.expires_at) <= now:
+            binding_code.status = "expired"
+            return None
+        binding_code.status = "used"
+        binding_code.used_at = now
+        return binding_code
 
     def get_status_summary(self, *, recent_limit: int = 10) -> WechatStatusSummary:
         settings = get_settings()

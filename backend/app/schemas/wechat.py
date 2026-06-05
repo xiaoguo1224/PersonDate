@@ -55,3 +55,19 @@ class WechatStatusResponse(BaseModel):
     last_message_at: datetime | None = None
     recent_inbound_messages: list[ChannelMessageLogItem]
     recent_outbound_messages: list[ChannelMessageLogItem]
+
+
+class WechatInboundRequest(BaseModel):
+    message_id: str | None = None
+    conversation_id: str
+    channel_user_id: str
+    display_name: str | None = None
+    avatar_url: str | None = None
+    content_type: str = "text"
+    content: str
+    raw_payload: dict[str, Any] | None = None
+
+
+class WechatInboundResponse(BaseModel):
+    handled: bool
+    reply: str

@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import re
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
+from app.core.config import get_settings
 from app.models import ChannelIdentity, ChannelMessageLog, User
 from app.schemas.common import ApiResponse
 from app.schemas.wechat import (
@@ -10,8 +14,12 @@ from app.schemas.wechat import (
     ChannelMessageLogItem,
     ChannelMessageLogListResponse,
     WechatBindingCodeResponse,
+    WechatInboundRequest,
+    WechatInboundResponse,
     WechatStatusResponse,
 )
+from app.services.channel_identity_service import ChannelIdentityService
+from app.services.user_service import UserService
 from app.services.wechat_channel_service import WechatChannelService
 
 router = APIRouter(tags=["wechat"])
@@ -48,6 +56,19 @@ def _to_message_log_item(log: ChannelMessageLog) -> ChannelMessageLogItem:
         error_message=log.error_message,
         created_at=log.created_at,
     )
+
+
+def _validate_channel_token(channel_token: str | None) -> None:
+    settings = get_settings()
+    if settings.wechat_channel_token and channel_token != settings.wechat_channel_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="微信通道令牌无效")
+
+
+def _extract_binding_code(content: str) -> str | None:
+    match = re.fullmatch(r"绑定\s*(\d{6})", content.strip())
+    if match is None:
+        return None
+    return match.group(1)
 
 
 @router.post("/me/wechat-binding-code")
@@ -150,5 +171,162 @@ def list_admin_message_logs(
             direction=direction,
             limit=limit,
         )
-    ]
+        ]
     return ApiResponse(data=ChannelMessageLogListResponse(items=items))
+
+
+@router.post("/wechat/inbound")
+def inbound_wechat_message(
+    payload: WechatInboundRequest,
+    db: Session = Depends(get_db),
+    channel_token: str | None = Header(default=None, alias="X-Channel-Token"),
+) -> ApiResponse[WechatInboundResponse]:
+    _validate_channel_token(channel_token)
+
+    service = WechatChannelService(db)
+    identity_service = ChannelIdentityService(db)
+    content = payload.content.strip()
+
+    if payload.message_id and service.get_message_log_by_message_id(payload.message_id):
+        return ApiResponse(
+            data=WechatInboundResponse(
+                handled=True,
+                reply="消息已处理，请勿重复发送。",
+            ),
+            message="消息已处理",
+        )
+
+    inbound_log = service.create_message_log(
+        user_id=None,
+        message_id=payload.message_id,
+        conversation_id=payload.conversation_id,
+        channel_user_id=payload.channel_user_id,
+        direction="inbound",
+        content_type=payload.content_type,
+        content=payload.content,
+        raw_payload=payload.raw_payload,
+    )
+
+    if payload.content_type.lower() != "text":
+        inbound_log.status = "ignored"
+        inbound_log.error_message = "目前仅支持文本消息"
+        db.commit()
+        return ApiResponse(
+            data=WechatInboundResponse(
+                handled=True,
+                reply="目前仅支持文本消息。",
+            ),
+            message="目前仅支持文本消息",
+        )
+
+    binding_code = _extract_binding_code(content)
+    if binding_code is not None:
+        code = service.consume_binding_code(binding_code)
+        if code is None:
+            inbound_log.status = "failed"
+            inbound_log.error_message = "绑定码无效或已过期"
+            db.commit()
+            return ApiResponse(
+                data=WechatInboundResponse(
+                    handled=True,
+                    reply="绑定码无效或已过期，请在 Web 中重新生成。",
+                ),
+                message="绑定码无效或已过期",
+            )
+
+        user = UserService(db).get_by_id(code.user_id)
+        if user is None or user.status != "active":
+            inbound_log.status = "failed"
+            inbound_log.error_message = "绑定目标账号不可用"
+            db.commit()
+            return ApiResponse(
+                data=WechatInboundResponse(
+                    handled=True,
+                    reply="你的账号当前不可用，请联系系统主用户。",
+                ),
+                message="绑定目标账号不可用",
+            )
+
+        existing_identity = (
+            identity_service.get_by_channel_user_id(payload.channel_user_id)
+            or identity_service.get_by_conversation_id(payload.conversation_id)
+        )
+        if existing_identity is not None and existing_identity.user_id != user.id:
+            inbound_log.status = "failed"
+            inbound_log.error_message = "该微信已绑定其他账号"
+            db.commit()
+            return ApiResponse(
+                data=WechatInboundResponse(
+                    handled=True,
+                    reply="该微信已绑定其他账号，请先解绑后再试。",
+                ),
+                message="该微信已绑定其他账号",
+            )
+
+        identity_service.upsert_wechat_identity(
+            user_id=user.id,
+            channel_user_id=payload.channel_user_id,
+            conversation_id=payload.conversation_id,
+            display_name=payload.display_name,
+            avatar_url=payload.avatar_url,
+        )
+        inbound_log.user_id = user.id
+        inbound_log.status = "processed"
+        inbound_log.error_message = None
+        db.commit()
+        return ApiResponse(
+            data=WechatInboundResponse(
+                handled=True,
+                reply="绑定成功，你现在可以通过微信使用日程 Agent 了。",
+            ),
+            message="绑定成功",
+        )
+
+    identity = (
+        identity_service.get_active_by_channel_user_id(payload.channel_user_id)
+        or identity_service.get_active_by_conversation_id(payload.conversation_id)
+    )
+    if identity is None:
+        inbound_log.status = "unbound"
+        inbound_log.error_message = "用户未绑定"
+        db.commit()
+        return ApiResponse(
+            data=WechatInboundResponse(
+                handled=True,
+                reply="你还没有绑定账号，请先在 Web 中使用邀请码注册并绑定微信。",
+            ),
+            message="用户未绑定",
+        )
+
+    user = UserService(db).get_by_id(identity.user_id)
+    if user is None or user.status != "active":
+        inbound_log.user_id = identity.user_id
+        inbound_log.status = "failed"
+        inbound_log.error_message = "账号当前不可用"
+        db.commit()
+        return ApiResponse(
+            data=WechatInboundResponse(
+                handled=True,
+                reply="你的账号当前不可用，请联系系统主用户。",
+            ),
+            message="账号当前不可用",
+        )
+
+    inbound_log.user_id = user.id
+    graph = SchedulePlanningGraph(db)
+    state = graph.invoke(
+        current_user=user,
+        message=content,
+        conversation_id=payload.conversation_id,
+        channel="wechat",
+    )
+    inbound_log.status = "processed" if state.success else "failed"
+    inbound_log.error_message = state.error
+    db.commit()
+    return ApiResponse(
+        data=WechatInboundResponse(
+            handled=True,
+            reply=state.final_response or "处理完成。",
+        ),
+        message=state.final_response or "处理完成",
+    )
