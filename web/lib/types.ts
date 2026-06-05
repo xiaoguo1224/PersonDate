@@ -49,9 +49,23 @@ export type AgentLogListResponse = {
   items: AgentLogItem[];
 };
 
-export type WechatBindingCodeResponse = {
-  code: string;
+export type WechatLoginSessionCreateResponse = {
+  login_session_id: string;
+  qr_payload: string;
   expires_at: string;
+  status: string;
+};
+
+export type WechatLoginSessionItem = {
+  id: string;
+  owner_user_id: string;
+  login_session_id: string;
+  qr_payload: string;
+  status: string;
+  expires_at: string;
+  confirmed_at?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ChannelIdentityItem = {
@@ -75,6 +89,7 @@ export type ChannelMessageLogItem = {
   id: string;
   user_id?: string | null;
   channel: string;
+  account_id?: string | null;
   message_id?: string | null;
   conversation_id: string;
   channel_user_id?: string | null;
@@ -94,6 +109,8 @@ export type ChannelMessageLogListResponse = {
 export type WechatStatusResponse = {
   connected: boolean;
   channel_token_configured: boolean;
+  total_accounts: number;
+  active_accounts: number;
   total_identities: number;
   active_identities: number;
   bound_users: number;

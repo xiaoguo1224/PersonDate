@@ -4,6 +4,25 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class WechatLoginSessionItem(BaseModel):
+    id: str
+    owner_user_id: str
+    login_session_id: str
+    qr_payload: str
+    status: str
+    expires_at: datetime
+    confirmed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WechatLoginSessionCreateResponse(BaseModel):
+    login_session_id: str
+    qr_payload: str
+    expires_at: datetime
+    status: str
+
+
 class WechatBindingCodeResponse(BaseModel):
     code: str
     expires_at: datetime
@@ -30,6 +49,7 @@ class ChannelMessageLogItem(BaseModel):
     id: str
     user_id: str | None = None
     channel: str
+    account_id: str | None = None
     message_id: str | None = None
     conversation_id: str
     channel_user_id: str | None = None
@@ -49,6 +69,8 @@ class ChannelMessageLogListResponse(BaseModel):
 class WechatStatusResponse(BaseModel):
     connected: bool
     channel_token_configured: bool
+    total_accounts: int = 0
+    active_accounts: int = 0
     total_identities: int
     active_identities: int
     bound_users: int

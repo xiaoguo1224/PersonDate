@@ -54,6 +54,8 @@ export default function WechatStatusPage() {
     return [
       { label: "通道配置", value: data.channel_token_configured ? "已配置" : "未配置", color: getStatusColor(data.channel_token_configured) },
       { label: "通道就绪", value: data.connected ? "是" : "否", color: getStatusColor(data.connected) },
+      { label: "通道账号", value: data.total_accounts, color: "cyan" },
+      { label: "活跃账号", value: data.active_accounts, color: "geekblue" },
       { label: "绑定用户", value: data.bound_users, color: "blue" },
       { label: "活跃绑定", value: data.active_identities, color: "green" },
       { label: "总绑定", value: data.total_identities, color: "gold" },

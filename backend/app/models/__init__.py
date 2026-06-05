@@ -1,5 +1,11 @@
 from app.models.agent import AgentPendingState, AgentRunLog
-from app.models.channel import ChannelIdentity, ChannelMessageLog, WechatBindingCode
+from app.models.channel import (
+    ChannelIdentity,
+    ChannelMessageLog,
+    WechatAccount,
+    WechatBindingCode,
+    WechatLoginSession,
+)
 from app.models.enums import (
     ChannelType,
     ConflictSeverity,
@@ -39,6 +45,7 @@ __all__ = [
     "CalendarEvent",
     "ChannelIdentity",
     "ChannelMessageLog",
+    "WechatAccount",
     "ChannelType",
     "ConflictSeverity",
     "ConflictStatus",
@@ -70,4 +77,5 @@ __all__ = [
     "UserSettings",
     "UserStatus",
     "WechatBindingCode",
+    "WechatLoginSession",
 ]

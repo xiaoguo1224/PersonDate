@@ -35,6 +35,44 @@ class ChannelIdentity(UUIDMixin, TimestampMixin, Base):
     bound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class WechatAccount(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "wechat_accounts"
+
+    owner_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    account_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    wechat_user_id: Mapped[str | None] = mapped_column(String(255))
+    bot_token: Mapped[str] = mapped_column(Text, nullable=False)
+    base_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    cursor: Mapped[str | None] = mapped_column(Text)
+    remark: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", index=True
+    )
+    bind_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_active_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+
+
+class WechatLoginSession(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "wechat_login_sessions"
+
+    owner_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    login_session_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    qr_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class WechatBindingCode(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "wechat_binding_codes"
 
@@ -49,6 +87,9 @@ class WechatBindingCode(UUIDMixin, TimestampMixin, Base):
 
 class ChannelMessageLog(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "channel_message_logs"
+    __table_args__ = (
+        UniqueConstraint("channel", "account_id", "message_id", name="uq_channel_account_message"),
+    )
 
     user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL")
@@ -67,3 +108,4 @@ class ChannelMessageLog(UUIDMixin, TimestampMixin, Base):
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(json_type, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="received")
     error_message: Mapped[str | None] = mapped_column(Text)
+    account_id: Mapped[str | None] = mapped_column(String(255), index=True)

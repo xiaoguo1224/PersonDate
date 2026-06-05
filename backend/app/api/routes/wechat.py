@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
 from app.core.config import get_settings
-from app.models import ChannelIdentity, ChannelMessageLog, User
+from app.models import ChannelIdentity, ChannelMessageLog, User, WechatLoginSession
 from app.schemas.common import ApiResponse
 from app.schemas.wechat import (
     ChannelIdentityItem,
@@ -16,6 +16,8 @@ from app.schemas.wechat import (
     WechatBindingCodeResponse,
     WechatInboundRequest,
     WechatInboundResponse,
+    WechatLoginSessionCreateResponse,
+    WechatLoginSessionItem,
     WechatSendTextRequest,
     WechatSendTextResponse,
     WechatStatusResponse,
@@ -47,6 +49,7 @@ def _to_message_log_item(log: ChannelMessageLog) -> ChannelMessageLogItem:
         id=log.id,
         user_id=log.user_id,
         channel=log.channel,
+        account_id=log.account_id,
         message_id=log.message_id,
         conversation_id=log.conversation_id,
         channel_user_id=log.channel_user_id,
@@ -71,6 +74,55 @@ def _extract_binding_code(content: str) -> str | None:
     if match is None:
         return None
     return match.group(1)
+
+
+def _to_login_session_item(session: WechatLoginSession) -> WechatLoginSessionItem:
+    return WechatLoginSessionItem(
+        id=session.id,
+        owner_user_id=session.owner_user_id,
+        login_session_id=session.login_session_id,
+        qr_payload=session.qr_payload,
+        status=session.status,
+        expires_at=session.expires_at,
+        confirmed_at=session.confirmed_at,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+    )
+
+
+@router.post("/me/wechat-login-sessions")
+def create_wechat_login_session(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[WechatLoginSessionCreateResponse]:
+    service = WechatChannelService(db)
+    session = service.create_login_session(current_user.id)
+    db.commit()
+    return ApiResponse(
+        data=WechatLoginSessionCreateResponse(
+            login_session_id=session.login_session_id,
+            qr_payload=session.qr_payload,
+            expires_at=session.expires_at,
+            status=session.status,
+        ),
+        message="请使用微信扫码完成登录",
+    )
+
+
+@router.get("/me/wechat-login-sessions/{login_session_id}")
+def get_my_wechat_login_session(
+    login_session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[WechatLoginSessionItem]:
+    service = WechatChannelService(db)
+    session = service.get_login_session(
+        owner_user_id=current_user.id,
+        login_session_id=login_session_id,
+    )
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="登录会话不存在")
+    return ApiResponse(data=_to_login_session_item(session))
 
 
 @router.post("/me/wechat-binding-code")
@@ -143,6 +195,8 @@ def get_wechat_status(
         data=WechatStatusResponse(
             connected=summary["connected"],
             channel_token_configured=summary["channel_token_configured"],
+            total_accounts=summary["total_accounts"],
+            active_accounts=summary["active_accounts"],
             total_identities=summary["total_identities"],
             active_identities=summary["active_identities"],
             bound_users=summary["bound_users"],

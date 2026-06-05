@@ -7,7 +7,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
-import type { ChannelIdentityItem, ChannelIdentityListResponse, WechatBindingCodeResponse } from "@/lib/types";
+import type {
+  ChannelIdentityItem,
+  ChannelIdentityListResponse,
+  WechatLoginSessionCreateResponse,
+  WechatLoginSessionItem,
+} from "@/lib/types";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -22,9 +27,10 @@ export default function WechatBindingPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const [identities, setIdentities] = useState<ChannelIdentityItem[]>([]);
+  const [loginSession, setLoginSession] = useState<WechatLoginSessionCreateResponse | null>(null);
+  const [loginSessionDetail, setLoginSessionDetail] = useState<WechatLoginSessionItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [bindingCode, setBindingCode] = useState<WechatBindingCodeResponse | null>(null);
   const [generating, setGenerating] = useState(false);
 
   const loadIdentities = useCallback(async () => {
@@ -43,6 +49,25 @@ export default function WechatBindingPage() {
     }
   }, [accessToken]);
 
+  const loadLoginSession = useCallback(
+    async (loginSessionId: string) => {
+      if (!accessToken) {
+        return;
+      }
+      try {
+        const result = await requestJson<WechatLoginSessionItem>(
+          `/api/me/wechat-login-sessions/${loginSessionId}`,
+          {},
+          accessToken,
+        );
+        setLoginSessionDetail(result);
+      } catch (caughtError: unknown) {
+        message.error(caughtError instanceof Error ? caughtError.message : "刷新登录会话失败");
+      }
+    },
+    [accessToken],
+  );
+
   useEffect(() => {
     if (session) {
       void loadIdentities();
@@ -59,19 +84,20 @@ export default function WechatBindingPage() {
     };
   }, [identities]);
 
-  const handleGenerateBindingCode = async () => {
+  const handleCreateLoginSession = async () => {
     if (!accessToken) {
       return;
     }
     setGenerating(true);
     try {
-      const result = await requestJson<WechatBindingCodeResponse>(
-        "/api/me/wechat-binding-code",
+      const result = await requestJson<WechatLoginSessionCreateResponse>(
+        "/api/me/wechat-login-sessions",
         { method: "POST" },
         accessToken,
       );
-      setBindingCode(result);
-      message.success("绑定码已生成");
+      setLoginSession(result);
+      await loadLoginSession(result.login_session_id);
+      message.success("二维码登录会话已创建");
       await loadIdentities();
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "生成失败");
@@ -80,12 +106,19 @@ export default function WechatBindingPage() {
     }
   };
 
-  const handleCopyCode = async () => {
-    if (!bindingCode) {
+  const handleCopySessionId = async () => {
+    if (!loginSession) {
       return;
     }
-    await navigator.clipboard.writeText(bindingCode.code);
-    message.success("已复制绑定码");
+    await navigator.clipboard.writeText(loginSession.login_session_id);
+    message.success("已复制会话 ID");
+  };
+
+  const handleRefreshSession = async () => {
+    if (!loginSession) {
+      return;
+    }
+    await loadLoginSession(loginSession.login_session_id);
   };
 
   const handleUnbind = async (identityId: string) => {
@@ -123,7 +156,7 @@ export default function WechatBindingPage() {
           </span>
           <Title style={{ color: "var(--text-primary)", margin: 0 }}>微信绑定</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里可以生成绑定码、查看当前绑定状态并解绑。微信只负责通道收发，不改变 Agent 的日程处理主流程。
+            这里可以创建二维码登录会话、查看当前绑定状态并解绑。微信只负责通道收发，不改变 Agent 的日程处理主流程。
           </Paragraph>
           <Space wrap>
             <Tag color="blue">{summary.total} 个绑定</Tag>
@@ -131,8 +164,8 @@ export default function WechatBindingPage() {
             <Tag color="default">{summary.disabled} 个禁用</Tag>
           </Space>
           <Space wrap>
-            <Button type="primary" icon={generating ? <LoadingOutlined /> : <QrcodeOutlined />} onClick={() => void handleGenerateBindingCode()} loading={generating}>
-              生成绑定码
+            <Button type="primary" icon={generating ? <LoadingOutlined /> : <QrcodeOutlined />} onClick={() => void handleCreateLoginSession()} loading={generating}>
+              创建二维码登录
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadIdentities()} loading={loading}>
               刷新绑定
@@ -143,16 +176,34 @@ export default function WechatBindingPage() {
 
       {error ? <Alert type="error" showIcon message="加载微信绑定失败" description={error} /> : null}
 
-      {bindingCode ? (
+      {loginSession ? (
         <Alert
           type="success"
           showIcon
-          message={`请在微信中发送：绑定 ${bindingCode.code}`}
-          description={`绑定码将在 ${formatDateTime(bindingCode.expires_at)} 过期。`}
+          message={`请使用微信扫码完成登录：${loginSession.login_session_id}`}
+          description={`二维码载荷：${loginSession.qr_payload}，会话将在 ${formatDateTime(loginSession.expires_at)} 过期。`}
           action={
-            <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopyCode()}>
-              复制绑定码
-            </Button>
+            <Space>
+              <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopySessionId()}>
+                复制会话 ID
+              </Button>
+              <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRefreshSession()}>
+                刷新会话
+              </Button>
+            </Space>
+          }
+        />
+      ) : null}
+
+      {loginSessionDetail ? (
+        <Alert
+          type={loginSessionDetail.status === "confirmed" ? "success" : "info"}
+          showIcon
+          message={`登录会话状态：${loginSessionDetail.status}`}
+          description={
+            loginSessionDetail.confirmed_at
+              ? `确认时间：${formatDateTime(loginSessionDetail.confirmed_at)}`
+              : `创建时间：${formatDateTime(loginSessionDetail.created_at)}`
           }
         />
       ) : null}

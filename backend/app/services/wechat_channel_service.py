@@ -12,7 +12,9 @@ from app.models import (
     ChannelIdentity,
     ChannelMessageLog,
     MessageDirection,
+    WechatAccount,
     WechatBindingCode,
+    WechatLoginSession,
 )
 
 
@@ -25,6 +27,8 @@ def _as_utc(datetime_value: datetime) -> datetime:
 class WechatStatusSummary(TypedDict):
     connected: bool
     channel_token_configured: bool
+    total_accounts: int
+    active_accounts: int
     total_identities: int
     active_identities: int
     bound_users: int
@@ -42,6 +46,40 @@ class WechatChannelService:
     def __init__(self, db: Session, sender: Any | None = None) -> None:
         self.db = db
         self.sender = sender
+
+    def create_login_session(self, owner_user_id: str) -> WechatLoginSession:
+        now = datetime.now(UTC)
+        login_session_id = f"login_{secrets.token_hex(8)}"
+        session = WechatLoginSession(
+            owner_user_id=owner_user_id,
+            login_session_id=login_session_id,
+            qr_payload=f"wechat-qr:{login_session_id}",
+            status="qr_created",
+            expires_at=now + timedelta(minutes=self.BINDING_CODE_TTL_MINUTES),
+        )
+        self.db.add(session)
+        self.db.flush()
+        return session
+
+    def get_login_session(
+        self,
+        *,
+        owner_user_id: str,
+        login_session_id: str,
+    ) -> WechatLoginSession | None:
+        stmt = select(WechatLoginSession).where(
+            WechatLoginSession.owner_user_id == owner_user_id,
+            WechatLoginSession.login_session_id == login_session_id,
+        )
+        return self.db.scalar(stmt)
+
+    def list_accounts(self, owner_user_id: str) -> list[WechatAccount]:
+        stmt = (
+            select(WechatAccount)
+            .where(WechatAccount.owner_user_id == owner_user_id)
+            .order_by(WechatAccount.created_at.desc())
+        )
+        return list(self.db.scalars(stmt))
 
     def get_message_log_by_message_id(self, message_id: str) -> ChannelMessageLog | None:
         stmt = select(ChannelMessageLog).where(
@@ -125,6 +163,7 @@ class WechatChannelService:
         self,
         *,
         user_id: str | None,
+        account_id: str | None = None,
         message_id: str | None,
         conversation_id: str,
         channel_user_id: str | None,
@@ -138,6 +177,7 @@ class WechatChannelService:
         log = ChannelMessageLog(
             user_id=user_id,
             channel="wechat",
+            account_id=account_id,
             message_id=message_id,
             conversation_id=conversation_id,
             channel_user_id=channel_user_id,
@@ -239,6 +279,15 @@ class WechatChannelService:
             )
             or 0
         )
+        total_accounts = self.db.scalar(select(func.count()).select_from(WechatAccount)) or 0
+        active_accounts = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(WechatAccount)
+                .where(WechatAccount.status == "active")
+            )
+            or 0
+        )
         bound_users = (
             self.db.scalar(
                 select(func.count(func.distinct(ChannelIdentity.user_id)))
@@ -259,6 +308,8 @@ class WechatChannelService:
         return {
             "connected": channel_token_configured,
             "channel_token_configured": channel_token_configured,
+            "total_accounts": total_accounts,
+            "active_accounts": active_accounts,
             "total_identities": total_identities,
             "active_identities": active_identities,
             "bound_users": bound_users,
