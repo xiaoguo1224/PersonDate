@@ -10,6 +10,7 @@ from app.api.routes.invite_codes import router as invite_codes_router
 from app.api.routes.me import router as me_router
 from app.api.routes.reminders import router as reminders_router
 from app.api.routes.setup import router as setup_router
+from app.api.routes.system_settings import router as system_settings_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.users import router as users_router
 
@@ -20,6 +21,7 @@ api_router.include_router(auth_router)
 api_router.include_router(me_router)
 api_router.include_router(invite_codes_router)
 api_router.include_router(users_router)
+api_router.include_router(system_settings_router)
 api_router.include_router(calendar_events_router)
 api_router.include_router(agent_router)
 api_router.include_router(tasks_router)

@@ -1,35 +1,38 @@
 "use client";
 
-import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, Typography, message } from "antd";
-import { useEffect, useState } from "react";
+import { SettingOutlined, SaveOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, Form, Input, InputNumber, Row, Space, Spin, Switch, Tag, Typography, message } from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { requestJson } from "@/lib/api";
-import type { UserSettingsResponse } from "@/lib/types";
+import { getSettingValue, type SystemSettingItem, type SystemSettingsResponse } from "@/lib/admin-settings";
 
 const { Title, Paragraph, Text } = Typography;
 
-type SettingsForm = {
-  default_timezone: string;
-  workday_start_time?: string | null;
-  workday_end_time?: string | null;
-  daily_plan_push_time?: string | null;
-  default_remind_before_minutes?: number | null;
-  daily_plan_push_enabled: boolean;
+type SystemSettingsForm = {
+  DEFAULT_TIMEZONE: string;
+  REMINDER_SCAN_INTERVAL_SECONDS: number;
+  DEFAULT_REMIND_BEFORE_MINUTES: number;
+  SYSTEM_DAILY_PUSH_ENABLED: boolean;
 };
 
-function normalizeText(value?: string | null) {
-  return value ?? "";
-}
-
-export default function SettingsPage() {
+export default function SystemSettingsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
-  const [form] = Form.useForm<SettingsForm>();
+  const [form] = Form.useForm<SystemSettingsForm>();
+  const [items, setItems] = useState<SystemSettingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const summary = useMemo(() => {
+    const timezone = getSettingValue(items, "DEFAULT_TIMEZONE");
+    const scanInterval = getSettingValue(items, "REMINDER_SCAN_INTERVAL_SECONDS");
+    const remindBefore = getSettingValue(items, "DEFAULT_REMIND_BEFORE_MINUTES");
+    const dailyPush = getSettingValue(items, "SYSTEM_DAILY_PUSH_ENABLED");
+    return { timezone, scanInterval, remindBefore, dailyPush };
+  }, [items]);
 
   useEffect(() => {
     async function loadSettings() {
@@ -40,14 +43,19 @@ export default function SettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await requestJson<UserSettingsResponse>("/api/me/settings", {}, accessToken);
+        const result = await requestJson<SystemSettingsResponse>("/api/admin/system-settings", {}, accessToken);
+        setItems(result.items);
         form.setFieldsValue({
-          default_timezone: result.default_timezone,
-          workday_start_time: normalizeText(result.workday_start_time),
-          workday_end_time: normalizeText(result.workday_end_time),
-          daily_plan_push_time: normalizeText(result.daily_plan_push_time),
-          default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
-          daily_plan_push_enabled: result.daily_plan_push_enabled,
+          DEFAULT_TIMEZONE: String(getSettingValue(result.items, "DEFAULT_TIMEZONE")?.value ?? "Asia/Shanghai"),
+          REMINDER_SCAN_INTERVAL_SECONDS: Number(
+            getSettingValue(result.items, "REMINDER_SCAN_INTERVAL_SECONDS")?.value ?? 10,
+          ),
+          DEFAULT_REMIND_BEFORE_MINUTES: Number(
+            getSettingValue(result.items, "DEFAULT_REMIND_BEFORE_MINUTES")?.value ?? 0,
+          ),
+          SYSTEM_DAILY_PUSH_ENABLED: Boolean(
+            getSettingValue(result.items, "SYSTEM_DAILY_PUSH_ENABLED")?.value ?? false,
+          ),
         });
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");
@@ -59,29 +67,22 @@ export default function SettingsPage() {
     void loadSettings();
   }, [accessToken, form]);
 
-  const handleFinish = async (values: SettingsForm) => {
+  const handleFinish = async (values: SystemSettingsForm) => {
     if (!accessToken) {
       return;
     }
     setSaving(true);
     try {
-      const result = await requestJson<UserSettingsResponse>(
-        "/api/me/settings",
+      const result = await requestJson<SystemSettingsResponse>(
+        "/api/admin/system-settings",
         {
           method: "PATCH",
           body: JSON.stringify(values),
         },
         accessToken,
       );
-      form.setFieldsValue({
-        default_timezone: result.default_timezone,
-        workday_start_time: normalizeText(result.workday_start_time),
-        workday_end_time: normalizeText(result.workday_end_time),
-        daily_plan_push_time: normalizeText(result.daily_plan_push_time),
-        default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
-        daily_plan_push_enabled: result.daily_plan_push_enabled,
-      });
-      message.success("设置已保存");
+      setItems(result.items);
+      message.success("系统设置已更新");
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "保存失败");
     } finally {
@@ -92,7 +93,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载个人设置..." />
+        <Spin size="large" tip="正在加载系统设置..." />
       </div>
     );
   }
@@ -103,77 +104,97 @@ export default function SettingsPage() {
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <SettingOutlined />
-            个人设置
+            owner 管理
           </span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>我的设置</Title>
+          <Title style={{ color: "var(--text-primary)", margin: 0 }}>系统设置</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里会保存你的默认时区、工作时间段和每日计划推送设置，这些配置会被 Agent 和页面展示共同使用。
+            这里管理全局默认时区、提醒扫描间隔和系统级推送开关。敏感配置统一在“模型配置”页单独维护。
           </Paragraph>
+          <Space wrap>
+            <Tag color="blue">默认时区：{summary.timezone?.value ? String(summary.timezone.value) : "未设置"}</Tag>
+            <Tag color="green">
+              扫描间隔：{summary.scanInterval?.value ? String(summary.scanInterval.value) : "10"} 秒
+            </Tag>
+            <Tag color="gold">
+              默认提醒：{summary.remindBefore?.value ? String(summary.remindBefore.value) : "0"} 分钟
+            </Tag>
+            <Tag color={summary.dailyPush?.value ? "green" : "default"}>
+              每日推送：{summary.dailyPush?.value ? "开启" : "关闭"}
+            </Tag>
+          </Space>
         </Space>
       </Card>
 
-      {error ? <Alert type="error" showIcon message="加载设置失败" description={error} /> : null}
+      {error ? <Alert type="error" showIcon message="加载系统设置失败" description={error} /> : null}
 
       <Row gutter={[16, 16]}>
-        <Card className="section-card" bordered={false} style={{ width: "100%" }}>
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            onFinish={(values) => void handleFinish(values)}
-            initialValues={{
-              default_timezone: "Asia/Shanghai",
-              default_remind_before_minutes: 0,
-              daily_plan_push_enabled: false,
-            }}
-          >
-            <Form.Item
-              label="默认时区"
-              name="default_timezone"
-              rules={[{ required: true, message: "请输入默认时区" }]}
+        <Col xs={24} xl={14}>
+          <Card className="section-card" bordered={false}>
+            <Form<SystemSettingsForm>
+              form={form}
+              layout="vertical"
+              requiredMark={false}
+              onFinish={(values) => void handleFinish(values)}
             >
-              <Input placeholder="Asia/Shanghai" />
-            </Form.Item>
+              <Form.Item
+                label="默认时区"
+                name="DEFAULT_TIMEZONE"
+                rules={[{ required: true, message: "请输入默认时区" }]}
+              >
+                <Input placeholder="Asia/Shanghai" />
+              </Form.Item>
 
-            <Form.Item label="工作开始时间" name="workday_start_time">
-              <Input placeholder="09:00:00" />
-            </Form.Item>
+              <Form.Item
+                label="提醒扫描间隔（秒）"
+                name="REMINDER_SCAN_INTERVAL_SECONDS"
+                rules={[{ required: true, message: "请输入扫描间隔" }]}
+              >
+                <InputNumber min={1} style={{ width: "100%" }} />
+              </Form.Item>
 
-            <Form.Item label="工作结束时间" name="workday_end_time">
-              <Input placeholder="18:00:00" />
-            </Form.Item>
+              <Form.Item
+                label="系统默认提醒提前分钟数"
+                name="DEFAULT_REMIND_BEFORE_MINUTES"
+                rules={[{ required: true, message: "请输入默认提醒分钟数" }]}
+              >
+                <InputNumber min={0} style={{ width: "100%" }} />
+              </Form.Item>
 
-            <Form.Item label="每日计划推送时间" name="daily_plan_push_time">
-              <Input placeholder="08:00:00" />
-            </Form.Item>
+              <Form.Item label="每日推送开关" name="SYSTEM_DAILY_PUSH_ENABLED" valuePropName="checked">
+                <Switch />
+              </Form.Item>
 
-            <Form.Item label="默认提醒提前分钟数" name="default_remind_before_minutes">
-              <InputNumber min={0} style={{ width: "100%" }} />
-            </Form.Item>
-
-            <Form.Item
-              label="启用每日计划推送"
-              name="daily_plan_push_enabled"
-              valuePropName="checked"
-            >
-              <Switch />
-            </Form.Item>
-
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
-              保存设置
-            </Button>
-          </Form>
-        </Card>
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
+                保存系统设置
+              </Button>
+            </Form>
+          </Card>
+        </Col>
+        <Col xs={24} xl={10}>
+          <Card className="section-card" bordered={false}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Title level={4} style={{ color: "var(--text-primary)", margin: 0 }}>
+                当前配置
+              </Title>
+              <Text className="muted-text">这些值直接来自后端 `system_settings`，可以用于校验当前系统基线。</Text>
+              <div className="dashboard-empty">
+                <Space direction="vertical" size={8}>
+                  <Text className="muted-text">DEFAULT_TIMEZONE：{String(summary.timezone?.value ?? "Asia/Shanghai")}</Text>
+                  <Text className="muted-text">
+                    REMINDER_SCAN_INTERVAL_SECONDS：{String(summary.scanInterval?.value ?? 10)}
+                  </Text>
+                  <Text className="muted-text">
+                    DEFAULT_REMIND_BEFORE_MINUTES：{String(summary.remindBefore?.value ?? 0)}
+                  </Text>
+                  <Text className="muted-text">
+                    SYSTEM_DAILY_PUSH_ENABLED：{summary.dailyPush?.value ? "true" : "false"}
+                  </Text>
+                </Space>
+              </div>
+            </Space>
+          </Card>
+        </Col>
       </Row>
-
-      <Card className="section-card" bordered={false}>
-        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          <Text strong>说明</Text>
-          <Text className="muted-text">
-            当前表单直接调用 `/api/me/settings`，保存后会同步到后端 `user_settings`。
-          </Text>
-        </Space>
-      </Card>
     </Space>
   );
 }

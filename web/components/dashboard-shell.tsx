@@ -14,6 +14,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   BellOutlined,
+  UserOutlined,
   WarningOutlined,
   RobotOutlined,
 } from "@ant-design/icons";
@@ -55,6 +56,7 @@ const navigation: NavigationItem[] = [
   { key: "/dashboard/reminders", label: "提醒任务", href: "/dashboard/reminders", icon: <BellOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/agent-logs", label: "Agent 日志", href: "/dashboard/agent-logs", icon: <FileTextOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/wechat-binding", label: "微信绑定", href: "/dashboard/wechat-binding", icon: <QrcodeOutlined />, roles: ["owner", "member"] },
+  { key: "/dashboard/account", label: "我的账号设置", href: "/dashboard/account", icon: <UserOutlined />, roles: ["owner", "member"] },
   {
     key: "/dashboard/users",
     label: "用户管理",
