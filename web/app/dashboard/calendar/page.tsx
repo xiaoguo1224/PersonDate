@@ -794,128 +794,130 @@ export default function CalendarPage() {
                 </div>
               ) : viewMode === "week" ? (
                 <Space direction="vertical" size={16} style={{ width: "100%" }} className="calendar-week-shell">
-                  <div
-                    className="calendar-week-scroll"
-                    style={{ minWidth: WEEK_TIMELINE_GUTTER_WIDTH + weekDays.length * WEEK_TIMELINE_MIN_COLUMN_WIDTH }}
-                  >
-                    <div className="calendar-week-header-grid">
-                      <div className="calendar-week-gutter calendar-week-gutter--header">
-                        <Text className="muted-text">时间</Text>
-                      </div>
-                      {weekTimelineDays.map(({ day, dayKey, segments }) => {
-                        const isSelected = day.isSame(focusDate, "day");
-                        const isToday = day.isSame(dayjs(), "day");
-                        return (
-                          <button
-                            key={dayKey}
-                            type="button"
-                            className={[
-                              "calendar-week-day-header",
-                              isSelected ? "calendar-week-day-header--selected" : "",
-                              isToday ? "calendar-week-day-header--today" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            onClick={() => {
-                              setFocusDate(day);
-                              detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                            }}
-                          >
-                            <span className="calendar-week-day-header__label">{day.format("ddd")}</span>
-                            <span className="calendar-week-day-header__date">{day.format("MM/DD")}</span>
-                            <Tag color={isSelected ? "cyan" : "default"} style={{ marginInlineEnd: 0 }}>
-                              {segments.length} 条
-                            </Tag>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="calendar-week-body-grid" style={{ height: WEEK_TIMELINE_BODY_HEIGHT }}>
-                      <div className="calendar-week-gutter calendar-week-gutter--body">
-                        {Array.from({ length: 24 }, (_, hour) => (
-                          <div
-                            key={hour}
-                            className="calendar-week-hour"
-                            style={{ height: WEEK_TIMELINE_HOUR_HEIGHT }}
-                          >
-                            <span>{`${String(hour).padStart(2, "0")}:00`}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {weekTimelineDays.map(({ day, dayKey, segments }) => {
-                        const isSelected = day.isSame(focusDate, "day");
-                        const isToday = day.isSame(dayjs(), "day");
-                        return (
-                          <div
-                            key={dayKey}
-                            className={[
-                              "calendar-week-column",
-                              isSelected ? "calendar-week-column--selected" : "",
-                              isToday ? "calendar-week-column--today" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => {
-                              setFocusDate(day);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
+                  <div className="calendar-week-scroll">
+                    <div
+                      className="calendar-week-scroll__inner"
+                      style={{ minWidth: WEEK_TIMELINE_GUTTER_WIDTH + weekDays.length * WEEK_TIMELINE_MIN_COLUMN_WIDTH }}
+                    >
+                      <div className="calendar-week-header-grid">
+                        <div className="calendar-week-gutter calendar-week-gutter--header">
+                          <Text className="muted-text">时间</Text>
+                        </div>
+                        {weekTimelineDays.map(({ day, dayKey, segments }) => {
+                          const isSelected = day.isSame(focusDate, "day");
+                          const isToday = day.isSame(dayjs(), "day");
+                          return (
+                            <button
+                              key={dayKey}
+                              type="button"
+                              className={[
+                                "calendar-week-day-header",
+                                isSelected ? "calendar-week-day-header--selected" : "",
+                                isToday ? "calendar-week-day-header--today" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              onClick={() => {
                                 setFocusDate(day);
-                              }
-                            }}
-                          >
-                            <div className="calendar-week-column__grid" />
-                            <div className="calendar-week-column__events">
-                              {segments.map((segment) => {
-                                const theme = getWeekEventTheme(segment.event.status);
-                                return (
-                                  <button
-                                    key={`${segment.event.id}-${dayKey}-${segment.startLabel}`}
-                                    type="button"
-                                    className="calendar-week-event"
-                                    onClick={(eventClick) => {
-                                      eventClick.stopPropagation();
-                                      setFocusDate(day);
-                                      openEditModal(segment.event);
-                                    }}
-                                    style={{
-                                      top: segment.top,
-                                      height: segment.height,
-                                      left: `calc(${(segment.laneIndex / segment.laneCount) * 100}% + 4px)`,
-                                      width: `calc(${100 / segment.laneCount}% - 8px)`,
-                                      borderColor: theme.accent,
-                                      background: theme.background,
-                                    }}
-                                  >
-                                    <span
-                                      className="calendar-week-event__accent"
-                                      style={{ background: theme.accent }}
-                                    />
-                                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                                      <Text strong ellipsis className="calendar-week-event__title">
-                                        {segment.event.title}
-                                      </Text>
-                                      <Text className="calendar-week-event__time">
-                                        {segment.startLabel} - {segment.endLabel}
-                                      </Text>
-                                      {segment.event.location ? (
-                                        <Text className="calendar-week-event__location" ellipsis>
-                                          {segment.event.location}
-                                        </Text>
-                                      ) : null}
-                                    </Space>
-                                  </button>
-                                );
-                              })}
+                                detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }}
+                            >
+                              <span className="calendar-week-day-header__label">{day.format("ddd")}</span>
+                              <span className="calendar-week-day-header__date">{day.format("MM/DD")}</span>
+                              <Tag color={isSelected ? "cyan" : "default"} style={{ marginInlineEnd: 0 }}>
+                                {segments.length} 条
+                              </Tag>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="calendar-week-body-grid" style={{ height: WEEK_TIMELINE_BODY_HEIGHT }}>
+                        <div className="calendar-week-gutter calendar-week-gutter--body">
+                          {Array.from({ length: 24 }, (_, hour) => (
+                            <div
+                              key={hour}
+                              className="calendar-week-hour"
+                              style={{ height: WEEK_TIMELINE_HOUR_HEIGHT }}
+                            >
+                              <span>{`${String(hour).padStart(2, "0")}:00`}</span>
                             </div>
-                          </div>
-                        );
-                      })}
+                          ))}
+                        </div>
+
+                        {weekTimelineDays.map(({ day, dayKey, segments }) => {
+                          const isSelected = day.isSame(focusDate, "day");
+                          const isToday = day.isSame(dayjs(), "day");
+                          return (
+                            <div
+                              key={dayKey}
+                              className={[
+                                "calendar-week-column",
+                                isSelected ? "calendar-week-column--selected" : "",
+                                isToday ? "calendar-week-column--today" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setFocusDate(day);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setFocusDate(day);
+                                }
+                              }}
+                            >
+                              <div className="calendar-week-column__grid" />
+                              <div className="calendar-week-column__events">
+                                {segments.map((segment) => {
+                                  const theme = getWeekEventTheme(segment.event.status);
+                                  return (
+                                    <button
+                                      key={`${segment.event.id}-${dayKey}-${segment.startLabel}`}
+                                      type="button"
+                                      className="calendar-week-event"
+                                      onClick={(eventClick) => {
+                                        eventClick.stopPropagation();
+                                        setFocusDate(day);
+                                        openEditModal(segment.event);
+                                      }}
+                                      style={{
+                                        top: segment.top,
+                                        height: segment.height,
+                                        left: `calc(${(segment.laneIndex / segment.laneCount) * 100}% + 4px)`,
+                                        width: `calc(${100 / segment.laneCount}% - 8px)`,
+                                        borderColor: theme.accent,
+                                        background: theme.background,
+                                      }}
+                                    >
+                                      <span
+                                        className="calendar-week-event__accent"
+                                        style={{ background: theme.accent }}
+                                      />
+                                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                                        <Text strong ellipsis className="calendar-week-event__title">
+                                          {segment.event.title}
+                                        </Text>
+                                        <Text className="calendar-week-event__time">
+                                          {segment.startLabel} - {segment.endLabel}
+                                        </Text>
+                                        {segment.event.location ? (
+                                          <Text className="calendar-week-event__location" ellipsis>
+                                            {segment.event.location}
+                                          </Text>
+                                        ) : null}
+                                      </Space>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <Text className="muted-text">

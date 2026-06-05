@@ -531,10 +531,21 @@ a {
 
 .calendar-week-shell {
   padding: 4px 0 0;
+  min-width: 0;
 }
 
 .calendar-week-shell .calendar-week-scroll {
   gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.calendar-week-shell .calendar-week-scroll__inner {
+  width: max-content;
+  min-width: 100%;
 }
 
 .calendar-week-shell .calendar-week-header-grid,
