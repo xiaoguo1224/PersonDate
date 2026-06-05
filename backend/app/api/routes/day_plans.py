@@ -15,11 +15,15 @@ router = APIRouter(prefix="/day-plans", tags=["day-plans"])
 def _to_item(item: PlanItem) -> PlanItemDTO:
     return PlanItemDTO(
         id=item.id,
+        day_plan_id=item.day_plan_id,
         title=item.title,
         item_type=item.item_type,
         start_time=item.start_time,
         end_time=item.end_time,
         status=item.status,
+        is_flexible=item.is_flexible,
+        sort_order=item.sort_order,
+        ref_id=item.ref_id,
     )
 
 

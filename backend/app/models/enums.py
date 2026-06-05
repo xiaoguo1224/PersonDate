@@ -65,6 +65,7 @@ class DayPlanStatus(StrEnum):
 class PlanItemStatus(StrEnum):
     PLANNED = "planned"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     SKIPPED = "skipped"
 
 

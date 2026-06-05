@@ -22,8 +22,10 @@ import {
   Modal,
   Row,
   Segmented,
+  Select,
   Space,
   Spin,
+  Switch,
   Tag,
   Timeline,
   Typography,
@@ -37,16 +39,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { requestJson } from "@/lib/api";
 import {
+  completePlanItem,
   confirmDayPlan,
   createCalendarEvent,
+  createPlanItem,
   deleteCalendarEvent,
+  deletePlanItem,
   formatRange,
   generateDayPlan,
   loadCalendarEvents,
   loadDayPlan,
+  updatePlanItem,
   type CalendarEventItem,
   type CalendarEventUpsertPayload,
   type DayPlan,
+  type DayPlanItem,
+  type PlanItemUpsertPayload,
 } from "@/lib/dashboard";
 
 dayjs.locale("zh-cn");
@@ -66,6 +74,16 @@ type CalendarEventFormValues = {
   remind_before_minutes?: number | null;
 };
 
+type PlanItemFormValues = {
+  title: string;
+  item_type: string;
+  start_time: Dayjs;
+  end_time: Dayjs;
+  status: string;
+  is_flexible: boolean;
+  sort_order?: number | null;
+};
+
 type WeekTimelineEventSegment = {
   event: CalendarEventItem;
   top: number;
@@ -81,6 +99,10 @@ type WeekTimelineDay = {
   dayKey: string;
   segments: WeekTimelineEventSegment[];
 };
+
+type DayTimelineEntry =
+  | ({ kind: "event" } & CalendarEventItem)
+  | ({ kind: "plan_item" } & DayPlanItem);
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 const WEEK_TIMELINE_HOUR_HEIGHT = 64;
@@ -144,7 +166,12 @@ function isEventInRange(event: CalendarEventItem, start: Dayjs, end: Dayjs) {
   return eventStart.isBefore(end) && eventEnd.isAfter(start);
 }
 
-function sortEvents(items: CalendarEventItem[]) {
+type SortableTimelineItem = {
+  start_time: string;
+  title: string;
+};
+
+function sortEvents<T extends SortableTimelineItem>(items: T[]) {
   return [...items].sort((left, right) => {
     const startDiff = dayjs(left.start_time).valueOf() - dayjs(right.start_time).valueOf();
     if (startDiff !== 0) {
@@ -300,6 +327,7 @@ export default function CalendarPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const [form] = Form.useForm<CalendarEventFormValues>();
+  const [planItemForm] = Form.useForm<PlanItemFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -313,8 +341,11 @@ export default function CalendarPage() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventItem | null>(null);
+  const [planItemModalOpen, setPlanItemModalOpen] = useState(false);
+  const [editingPlanItem, setEditingPlanItem] = useState<DayPlanItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
+  const [planItemSubmitting, setPlanItemSubmitting] = useState(false);
 
   const fetchEvents = useCallback(async () => {
     if (!accessToken) {
@@ -390,6 +421,22 @@ export default function CalendarPage() {
     [events, weekDays],
   );
   const monthGridDays = useMemo(() => buildMonthGridDays(focusDate), [focusDate]);
+  const selectedDayPlanItems = useMemo(
+    () =>
+      sortEvents(
+        (dayPlan?.items ?? []).filter(
+          (item) => item.status !== "cancelled" && item.status !== "skipped",
+        ),
+      ),
+    [dayPlan?.items],
+  );
+  const selectedDayTimelineEntries = useMemo(() => {
+    const entries: DayTimelineEntry[] = [
+      ...selectedDayEvents.map((event) => ({ kind: "event" as const, ...event })),
+      ...selectedDayPlanItems.map((item) => ({ kind: "plan_item" as const, ...item })),
+    ];
+    return sortEvents(entries);
+  }, [selectedDayEvents, selectedDayPlanItems]);
   const monthEventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEventItem[]>();
     events
@@ -406,7 +453,9 @@ export default function CalendarPage() {
   const todayKey = dayjs().format("YYYY-MM-DD");
 
   const summary = useMemo(() => {
-    const plannedItems = dayPlan?.items ?? [];
+    const plannedItems = (dayPlan?.items ?? []).filter(
+      (item) => item.status !== "cancelled" && item.status !== "skipped",
+    );
     const activeEvents = events.filter((event) => event.status !== "deleted");
     return {
       totalEvents: activeEvents.length,
@@ -458,9 +507,135 @@ export default function CalendarPage() {
     form.resetFields();
   }, [form]);
 
+  const openCreatePlanItemModal = useCallback(
+    (initialDate?: Dayjs) => {
+      const baseDate = (initialDate ?? focusDate).hour(9).minute(0).second(0).millisecond(0);
+      planItemForm.setFieldsValue({
+        title: "",
+        item_type: "manual",
+        start_time: baseDate,
+        end_time: baseDate.add(1, "hour"),
+        status: "planned",
+        is_flexible: true,
+        sort_order: 0,
+      });
+      setEditingPlanItem(null);
+      setPlanItemModalOpen(true);
+    },
+    [focusDate, planItemForm],
+  );
+
+  const openEditPlanItemModal = useCallback(
+    (item: DayPlanItem) => {
+      setEditingPlanItem(item);
+      planItemForm.setFieldsValue({
+        title: item.title,
+        item_type: item.item_type,
+        start_time: dayjs(item.start_time),
+        end_time: dayjs(item.end_time),
+        status: item.status,
+        is_flexible: item.is_flexible,
+        sort_order: item.sort_order ?? 0,
+      });
+      setPlanItemModalOpen(true);
+    },
+    [planItemForm],
+  );
+
+  const closePlanItemModal = useCallback(() => {
+    setPlanItemModalOpen(false);
+    setEditingPlanItem(null);
+    planItemForm.resetFields();
+  }, [planItemForm]);
+
   const refreshData = useCallback(async () => {
     await Promise.all([fetchEvents(), fetchDayPlan()]);
   }, [fetchDayPlan, fetchEvents]);
+
+  const handlePlanItemSubmit = useCallback(
+    async (values: PlanItemFormValues) => {
+      if (!accessToken) {
+        return;
+      }
+      if (values.end_time.isBefore(values.start_time)) {
+        messageApi.error("结束时间不能早于开始时间");
+        return;
+      }
+      const payload: PlanItemUpsertPayload = {
+        plan_date: toDateKey(focusDate),
+        title: values.title.trim(),
+        item_type: values.item_type,
+        start_time: values.start_time.toISOString(),
+        end_time: values.end_time.toISOString(),
+        status: values.status,
+        is_flexible: values.is_flexible,
+        sort_order: values.sort_order ?? 0,
+      };
+
+      setPlanItemSubmitting(true);
+      try {
+        if (editingPlanItem) {
+          await updatePlanItem(accessToken, editingPlanItem.id, payload);
+          messageApi.success("计划项已更新");
+        } else {
+          await createPlanItem(accessToken, payload);
+          messageApi.success("计划项已创建");
+        }
+        closePlanItemModal();
+        await refreshData();
+      } catch (caughtError: unknown) {
+        messageApi.error(caughtError instanceof Error ? caughtError.message : "保存失败");
+      } finally {
+        setPlanItemSubmitting(false);
+      }
+    },
+    [accessToken, closePlanItemModal, editingPlanItem, focusDate, messageApi, refreshData],
+  );
+
+  const handleCompletePlanItem = useCallback(
+    async (item: DayPlanItem) => {
+      if (!accessToken) {
+        return;
+      }
+      setPlanItemSubmitting(true);
+      try {
+        await completePlanItem(accessToken, item.id);
+        messageApi.success("计划项已完成");
+        await refreshData();
+      } catch (caughtError: unknown) {
+        messageApi.error(caughtError instanceof Error ? caughtError.message : "完成失败");
+      } finally {
+        setPlanItemSubmitting(false);
+      }
+    },
+    [accessToken, messageApi, refreshData],
+  );
+
+  const handleDeletePlanItem = useCallback(
+    (item: DayPlanItem) => {
+      Modal.confirm({
+        title: "删除计划项",
+        content: `确定删除计划项“${item.title}”吗？系统会保留记录，仅将其标记为取消。`,
+        okText: "删除",
+        okButtonProps: { danger: true },
+        cancelText: "取消",
+        onOk: async () => {
+          if (!accessToken) {
+            return;
+          }
+          try {
+            await deletePlanItem(accessToken, item.id);
+            messageApi.success("计划项已删除");
+            await refreshData();
+          } catch (caughtError: unknown) {
+            messageApi.error(caughtError instanceof Error ? caughtError.message : "删除失败");
+            throw caughtError instanceof Error ? caughtError : new Error("删除失败");
+          }
+        },
+      });
+    },
+    [accessToken, messageApi, refreshData],
+  );
 
   const handleSubmit = useCallback(
     async (values: CalendarEventFormValues) => {
@@ -562,8 +737,6 @@ export default function CalendarPage() {
       setPlanSubmitting(false);
     }
   }, [accessToken, dayPlan, fetchDayPlan, messageApi]);
-
-  const selectedDayPlanItems = dayPlan?.items ?? [];
 
   const heroTags = [
     { color: "cyan", label: `${summary.totalEvents} 条日程` },
@@ -924,30 +1097,81 @@ export default function CalendarPage() {
                     点击某个日期标题可切换右侧详情，点击日程块可直接编辑。
                   </Text>
                 </Space>
-              ) : selectedDayEvents.length ? (
+              ) : selectedDayTimelineEntries.length ? (
                 <Timeline
                   className="calendar-day-timeline"
-                  items={selectedDayEvents.map((event) => ({
-                    color: getEventColor(event.status),
-                    children: (
-                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                        <Space wrap align="center">
-                          <Text strong>{event.title}</Text>
-                          <Tag color={getEventColor(event.status)}>{event.status}</Tag>
-                          {event.location ? <Tag>{event.location}</Tag> : null}
+                  items={selectedDayTimelineEntries.map((entry) => {
+                    const color =
+                      entry.kind === "event"
+                        ? getEventColor(entry.status)
+                        : entry.status === "completed"
+                          ? "green"
+                          : entry.status === "cancelled"
+                            ? "default"
+                            : "gold";
+                    return {
+                      color,
+                      children: (
+                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                          <Space wrap align="center">
+                            <Text strong>{entry.title}</Text>
+                            <Tag color={color}>{entry.kind === "event" ? entry.status : `计划项 · ${entry.status}`}</Tag>
+                            {entry.kind === "event" && entry.location ? <Tag>{entry.location}</Tag> : null}
+                            {entry.kind === "plan_item" ? <Tag color="cyan">{entry.item_type}</Tag> : null}
+                          </Space>
+                          <Text className="muted-text">
+                            {formatRange(entry.start_time, entry.end_time)} ·{" "}
+                            {entry.kind === "event" ? "日程详情" : "计划项详情"}
+                          </Text>
+                          <Space wrap>
+                            {entry.kind === "event" ? (
+                              <>
+                                <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(entry)}>
+                                  编辑
+                                </Button>
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => handleDelete(entry)}
+                                >
+                                  删除
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="small"
+                                  icon={<EditOutlined />}
+                                  onClick={() => openEditPlanItemModal(entry)}
+                                >
+                                  编辑
+                                </Button>
+                                {entry.status !== "completed" ? (
+                                  <Button
+                                    size="small"
+                                    type="primary"
+                                    loading={planItemSubmitting}
+                                    onClick={() => void handleCompletePlanItem(entry)}
+                                  >
+                                    完成
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => handleDeletePlanItem(entry)}
+                                >
+                                  删除
+                                </Button>
+                              </>
+                            )}
+                          </Space>
                         </Space>
-                        <Text className="muted-text">{formatRange(event.start_time, event.end_time)} · 日程详情</Text>
-                        <Space wrap>
-                          <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(event)}>
-                            编辑
-                          </Button>
-                          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(event)}>
-                            删除
-                          </Button>
-                        </Space>
-                      </Space>
-                    ),
-                  }))}
+                      ),
+                    };
+                  })}
                 />
               ) : (
                 <EmptyPanel title="这一天还没有安排日程" />
@@ -964,6 +1188,7 @@ export default function CalendarPage() {
                   title={`${toDisplayDate(focusDate)} 的计划`}
                   extra={
                     <Space wrap>
+                      <Button onClick={() => openCreatePlanItemModal()}>新增计划项</Button>
                       {dayPlan?.status === "draft" ? (
                         <Button type="primary" loading={planSubmitting} onClick={() => void handleConfirmPlan()}>
                           确认计划
@@ -1071,6 +1296,77 @@ export default function CalendarPage() {
                     <EmptyPanel title="选中日期暂无日程" />
                   )}
                 </Card>
+
+                <Card className="section-card" bordered={false} title="计划项管理">
+                  {selectedDayPlanItems.length ? (
+                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                      {selectedDayPlanItems.map((item) => (
+                        <Card
+                          key={item.id}
+                          size="small"
+                          bordered={false}
+                          style={{
+                            background: "rgba(255,255,255,0.04)",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => openEditPlanItemModal(item)}
+                          extra={
+                            <Space>
+                              <Button
+                                size="small"
+                                icon={<EditOutlined />}
+                                onClick={(eventClick) => {
+                                  eventClick.stopPropagation();
+                                  openEditPlanItemModal(item);
+                                }}
+                              >
+                                编辑
+                              </Button>
+                              {item.status !== "completed" ? (
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  loading={planItemSubmitting}
+                                  onClick={(eventClick) => {
+                                    eventClick.stopPropagation();
+                                    void handleCompletePlanItem(item);
+                                  }}
+                                >
+                                  完成
+                                </Button>
+                              ) : null}
+                              <Button
+                                size="small"
+                                danger
+                                icon={<DeleteOutlined />}
+                                onClick={(eventClick) => {
+                                  eventClick.stopPropagation();
+                                  handleDeletePlanItem(item);
+                                }}
+                              >
+                                删除
+                              </Button>
+                            </Space>
+                          }
+                        >
+                          <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                            <Space wrap>
+                              <Text strong>{item.title}</Text>
+                              <Tag color="cyan">{item.item_type}</Tag>
+                              <Tag color={item.status === "completed" ? "green" : "gold"}>{item.status}</Tag>
+                              {item.is_flexible ? <Tag>可弹性</Tag> : null}
+                            </Space>
+                            <Text className="muted-text">
+                              {formatRange(item.start_time, item.end_time)} · 排序 {item.sort_order ?? 0}
+                            </Text>
+                          </Space>
+                        </Card>
+                      ))}
+                    </Space>
+                  ) : (
+                    <EmptyPanel title="选中日期暂无计划项" />
+                  )}
+                </Card>
               </Space>
             </div>
           </Col>
@@ -1131,6 +1427,103 @@ export default function CalendarPage() {
             <Form.Item name="remind_before_minutes" label="提前提醒（分钟）">
               <InputNumber min={0} max={24 * 60} style={{ width: "100%" }} />
             </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title={editingPlanItem ? "编辑计划项" : "新建计划项"}
+          open={planItemModalOpen}
+          onCancel={closePlanItemModal}
+          destroyOnClose
+          okText={editingPlanItem ? "保存修改" : "创建计划项"}
+          cancelText="取消"
+          confirmLoading={planItemSubmitting}
+          onOk={() => void planItemForm.submit()}
+        >
+          <Form
+            form={planItemForm}
+            layout="vertical"
+            requiredMark={false}
+            onFinish={(values) => void handlePlanItemSubmit(values)}
+          >
+            <Form.Item
+              name="title"
+              label="标题"
+              rules={[{ required: true, message: "请输入计划项标题" }]}
+            >
+              <Input placeholder="例如：整理论文材料" />
+            </Form.Item>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Form.Item
+                  name="item_type"
+                  label="类型"
+                  rules={[{ required: true, message: "请选择计划项类型" }]}
+                >
+                  <Select
+                    options={[
+                      { value: "manual", label: "手动" },
+                      { value: "task", label: "任务" },
+                      { value: "event", label: "日程" },
+                      { value: "break", label: "休息" },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="status"
+                  label="状态"
+                  rules={[{ required: true, message: "请选择计划项状态" }]}
+                >
+                  <Select
+                    options={[
+                      { value: "planned", label: "待安排" },
+                      { value: "in_progress", label: "进行中" },
+                      { value: "completed", label: "已完成" },
+                      { value: "skipped", label: "已跳过" },
+                      { value: "cancelled", label: "已取消" },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Form.Item
+                  name="start_time"
+                  label="开始时间"
+                  rules={[{ required: true, message: "请选择开始时间" }]}
+                >
+                  <DatePicker showTime style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="end_time"
+                  label="结束时间"
+                  rules={[{ required: true, message: "请选择结束时间" }]}
+                >
+                  <DatePicker showTime style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Form.Item name="sort_order" label="排序">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="is_flexible"
+                  label="可弹性调整"
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
+              </Col>
+            </Row>
           </Form>
         </Modal>
       </Space>

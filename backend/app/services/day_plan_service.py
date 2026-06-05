@@ -40,6 +40,17 @@ class DayPlanService:
         self.db.flush()
         return draft
 
+    def get_or_create_day_plan(
+        self,
+        user_id: str,
+        plan_date: date,
+        summary: str | None = None,
+    ) -> DayPlan:
+        plan = self.list_day_plan(user_id, plan_date)
+        if plan is not None:
+            return plan
+        return self.get_or_create_draft(user_id, plan_date, summary=summary)
+
     def generate_draft(self, user_id: str, plan_date: date) -> DayPlan:
         draft = self.get_or_create_draft(
             user_id, plan_date, summary=f"{plan_date.isoformat()} 的草案"

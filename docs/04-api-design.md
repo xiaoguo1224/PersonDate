@@ -578,16 +578,43 @@ POST /api/day-plans/{id}/regenerate
 }
 ```
 
-### 12.5 更新计划项
+### 12.5 新增计划项
+
+```http
+POST /api/plan-items
+```
+
+请求：
+
+```json
+{
+  "plan_date": "2026-06-05",
+  "title": "写论文",
+  "item_type": "task",
+  "start_time": "2026-06-05T17:00:00+08:00",
+  "end_time": "2026-06-05T19:00:00+08:00",
+  "status": "planned",
+  "is_flexible": true,
+  "sort_order": 0
+}
+```
+
+### 12.6 更新计划项
 
 ```http
 PATCH /api/plan-items/{id}
 ```
 
-### 12.6 标记计划项完成
+### 12.7 标记计划项完成
 
 ```http
 PATCH /api/plan-items/{id}/complete
+```
+
+### 12.8 删除计划项
+
+```http
+DELETE /api/plan-items/{id}
 ```
 
 ## 13. 冲突接口

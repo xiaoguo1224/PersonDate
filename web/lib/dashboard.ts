@@ -2,11 +2,15 @@ import { requestJson } from "@/lib/api";
 
 export type DayPlanItem = {
   id: string;
+  day_plan_id: string;
   title: string;
   item_type: string;
   start_time: string;
   end_time: string;
   status: string;
+  is_flexible: boolean;
+  sort_order?: number | null;
+  ref_id?: string | null;
 };
 
 export type DayPlan = {
@@ -41,6 +45,18 @@ export type CalendarEventUpsertPayload = {
   timezone: string;
   location?: string | null;
   remind_before_minutes?: number | null;
+};
+
+export type PlanItemUpsertPayload = {
+  plan_date: string;
+  title: string;
+  item_type: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  is_flexible: boolean;
+  sort_order?: number | null;
+  ref_id?: string | null;
 };
 
 export type TaskItem = {
@@ -188,6 +204,55 @@ export async function confirmDayPlan(
     `/api/day-plans/${planId}/confirm`,
     {
       method: "POST",
+    },
+    accessToken,
+  );
+}
+
+export async function createPlanItem(
+  accessToken: string,
+  payload: PlanItemUpsertPayload,
+): Promise<DayPlanItem> {
+  return requestJson<DayPlanItem>(
+    "/api/plan-items",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
+}
+
+export async function updatePlanItem(
+  accessToken: string,
+  planItemId: string,
+  payload: PlanItemUpsertPayload,
+): Promise<DayPlanItem> {
+  return requestJson<DayPlanItem>(
+    `/api/plan-items/${planItemId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
+}
+
+export async function completePlanItem(accessToken: string, planItemId: string): Promise<DayPlanItem> {
+  return requestJson<DayPlanItem>(
+    `/api/plan-items/${planItemId}/complete`,
+    {
+      method: "PATCH",
+    },
+    accessToken,
+  );
+}
+
+export async function deletePlanItem(accessToken: string, planItemId: string): Promise<DayPlanItem> {
+  return requestJson<DayPlanItem>(
+    `/api/plan-items/${planItemId}`,
+    {
+      method: "DELETE",
     },
     accessToken,
   );

@@ -135,6 +135,7 @@ POST /api/auth/register-with-invite
 展示 Agent 建议
 支持标记完成
 支持重新规划
+支持直接新增和编辑计划项
 ```
 
 调用 API：
@@ -144,6 +145,9 @@ GET /api/day-plans/{date}
 GET /api/conflicts?status=open
 POST /api/day-plans/{id}/regenerate
 PATCH /api/plan-items/{id}/complete
+POST /api/plan-items
+PATCH /api/plan-items/{id}
+DELETE /api/plan-items/{id}
 ```
 
 ### 4.4 日历视图页
@@ -166,6 +170,10 @@ PATCH /api/plan-items/{id}/complete
 手动创建日程
 编辑日程
 删除日程
+手动新增计划项
+编辑计划项
+完成计划项
+删除计划项
 ```
 
 调用 API：
@@ -175,6 +183,10 @@ GET /api/calendar-events
 POST /api/calendar-events
 PATCH /api/calendar-events/{id}
 DELETE /api/calendar-events/{id}
+POST /api/plan-items
+PATCH /api/plan-items/{id}
+PATCH /api/plan-items/{id}/complete
+DELETE /api/plan-items/{id}
 ```
 
 ### 4.5 任务池页
