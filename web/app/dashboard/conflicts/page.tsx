@@ -4,6 +4,7 @@ import { Alert, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime, type ConflictItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -48,6 +49,7 @@ function ConflictEmpty() {
 export default function ConflictsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +136,7 @@ export default function ConflictsPage() {
                     {conflict.description ? <Text className="muted-text">{conflict.description}</Text> : null}
                     {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
                     <Space wrap>
-                      <Tag>检测时间 {formatDateTime(conflict.detected_at)}</Tag>
+                      <Tag>检测时间 {formatDateTime(conflict.detected_at, timezone)}</Tag>
                       {conflict.related_item_ids?.length ? (
                         <Tag>{conflict.related_item_ids.length} 个相关事项</Tag>
                       ) : null}

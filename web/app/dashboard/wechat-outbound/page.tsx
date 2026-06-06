@@ -5,6 +5,7 @@ import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, S
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { WechatOutboundQueueItem, WechatOutboundQueueListResponse } from "@/lib/types";
@@ -27,6 +28,7 @@ function getStatusColor(status: string) {
 export default function WechatOutboundQueuePage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const isOwner = session?.role === "owner";
   const [form] = Form.useForm<OutboundQueueFilters>();
   const [items, setItems] = useState<WechatOutboundQueueItem[]>([]);
@@ -94,7 +96,7 @@ export default function WechatOutboundQueuePage() {
       title: "时间",
       dataIndex: "created_at",
       width: 180,
-      render: (value: string) => formatDateTime(value),
+      render: (value: string) => formatDateTime(value, timezone),
     },
     {
       title: "状态",
@@ -223,7 +225,7 @@ export default function WechatOutboundQueuePage() {
         {selectedItem ? (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="时间">{formatDateTime(selectedItem.created_at)}</Descriptions.Item>
+              <Descriptions.Item label="时间">{formatDateTime(selectedItem.created_at, timezone)}</Descriptions.Item>
               <Descriptions.Item label="状态">
                 <Tag color={getStatusColor(selectedItem.status)}>{selectedItem.status}</Tag>
               </Descriptions.Item>
@@ -235,7 +237,7 @@ export default function WechatOutboundQueuePage() {
               <Descriptions.Item label="retry_count">{selectedItem.retry_count}</Descriptions.Item>
               <Descriptions.Item label="error_code">{selectedItem.error_code || "-"}</Descriptions.Item>
               <Descriptions.Item label="error_message">{selectedItem.error_message || "-"}</Descriptions.Item>
-              <Descriptions.Item label="sent_at">{selectedItem.sent_at ? formatDateTime(selectedItem.sent_at) : "-"}</Descriptions.Item>
+              <Descriptions.Item label="sent_at">{selectedItem.sent_at ? formatDateTime(selectedItem.sent_at, timezone) : "-"}</Descriptions.Item>
               <Descriptions.Item label="内容">{selectedItem.content || "-"}</Descriptions.Item>
             </Descriptions>
             <Card size="small" title="原始数据" bordered={false}>

@@ -5,26 +5,16 @@ import { Alert, Button, Card, Descriptions, Modal, Space, Spin, Table, Tag, Typo
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { requestJson } from "@/lib/api";
 import type { AgentLogItem, AgentLogListResponse } from "@/lib/types";
 
 const { Title, Paragraph, Text } = Typography;
 
-function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 export default function AgentLogsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const [items, setItems] = useState<AgentLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +51,17 @@ export default function AgentLogsPage() {
     {
       title: "时间",
       dataIndex: "created_at",
-      render: (value: string) => formatTimestamp(value),
+      render: (value: string) =>
+        new Intl.DateTimeFormat("zh-CN", {
+          timeZone: timezone,
+          hour12: false,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).format(new Date(value)),
       width: 180,
     },
     {
@@ -140,7 +140,18 @@ export default function AgentLogsPage() {
         {selectedItem ? (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="时间">{formatTimestamp(selectedItem.created_at)}</Descriptions.Item>
+              <Descriptions.Item label="时间">
+                {new Intl.DateTimeFormat("zh-CN", {
+                  timeZone: timezone,
+                  hour12: false,
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(new Date(selectedItem.created_at))}
+              </Descriptions.Item>
               <Descriptions.Item label="用户输入">{selectedItem.input_text}</Descriptions.Item>
               <Descriptions.Item label="intent">{selectedItem.intent || "unknown"}</Descriptions.Item>
               <Descriptions.Item label="channel">{selectedItem.channel}</Descriptions.Item>

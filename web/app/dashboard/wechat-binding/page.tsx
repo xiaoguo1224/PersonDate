@@ -5,6 +5,7 @@ import { Alert, Button, Card, Empty, Modal, QRCode, Space, Spin, Tag, Typography
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type {
@@ -28,6 +29,7 @@ function getStatusColor(status: string) {
 export default function WechatBindingPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const [identities, setIdentities] = useState<ChannelIdentityItem[]>([]);
   const [accounts, setAccounts] = useState<WechatAccountItem[]>([]);
   const [loginSession, setLoginSession] = useState<WechatLoginSessionCreateResponse | null>(null);
@@ -239,7 +241,7 @@ export default function WechatBindingPage() {
           type="success"
           showIcon
           message="请使用微信扫码完成登录"
-          description={`会话将在 ${formatDateTime(loginSession.expires_at)} 过期。扫码后页面会自动轮询确认状态。`}
+          description={`会话将在 ${formatDateTime(loginSession.expires_at, timezone)} 过期。扫码后页面会自动轮询确认状态。`}
           action={
             <Space>
               <Button size="small" icon={<QrcodeOutlined />} onClick={() => setQrModalOpen(true)}>
@@ -275,7 +277,7 @@ export default function WechatBindingPage() {
             <Text strong>请使用微信扫码完成登录</Text>
             <Text className="muted-text">会话 ID：{loginSession?.login_session_id}</Text>
             <Text className="muted-text">
-              过期时间：{loginSession ? formatDateTime(loginSession.expires_at) : "未知"}
+              过期时间：{loginSession ? formatDateTime(loginSession.expires_at, timezone) : "未知"}
             </Text>
             <Text className="muted-text">扫码后页面会自动刷新会话状态。</Text>
           </Space>
@@ -289,8 +291,8 @@ export default function WechatBindingPage() {
           message={`登录会话状态：${loginSessionDetail.status}`}
           description={
             loginSessionDetail.confirmed_at
-              ? `确认时间：${formatDateTime(loginSessionDetail.confirmed_at)}`
-              : `创建时间：${formatDateTime(loginSessionDetail.created_at)}`
+              ? `确认时间：${formatDateTime(loginSessionDetail.confirmed_at, timezone)}`
+              : `创建时间：${formatDateTime(loginSessionDetail.created_at, timezone)}`
           }
         />
       ) : null}
@@ -321,10 +323,10 @@ export default function WechatBindingPage() {
                 <Text className="muted-text">channel_user_id：{identity.channel_user_id}</Text>
                 <Text className="muted-text">conversation_id：{identity.conversation_id}</Text>
                 <Text className="muted-text">
-                  绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at) : "未知"}
+                  绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at, timezone) : "未知"}
                 </Text>
                 <Text className="muted-text">
-                  创建时间：{formatDateTime(identity.created_at)}
+                  创建时间：{formatDateTime(identity.created_at, timezone)}
                 </Text>
               </Space>
             </Card>
@@ -349,7 +351,7 @@ export default function WechatBindingPage() {
                   <Text className="muted-text">wechat_user_id：{account.wechat_user_id || "未知"}</Text>
                   <Text className="muted-text">base_url：{account.base_url}</Text>
                   <Text className="muted-text">
-                    最近活跃：{account.last_active_time ? formatDateTime(account.last_active_time) : "未知"}
+                    最近活跃：{account.last_active_time ? formatDateTime(account.last_active_time, timezone) : "未知"}
                   </Text>
                 </Space>
               </Card>

@@ -5,6 +5,7 @@ import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Tag, Timeline, Typog
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { WechatStatusResponse } from "@/lib/types";
@@ -18,6 +19,7 @@ function getStatusColor(value: boolean) {
 export default function WechatStatusPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const isOwner = session?.role === "owner";
   const [data, setData] = useState<WechatStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +97,7 @@ export default function WechatStatusPage() {
             刷新状态
           </Button>
           {lastMessageAt ? (
-            <Text className="muted-text">最近消息时间：{formatDateTime(lastMessageAt)}</Text>
+            <Text className="muted-text">最近消息时间：{formatDateTime(lastMessageAt, timezone)}</Text>
           ) : null}
         </Space>
       </Card>
@@ -125,7 +127,7 @@ export default function WechatStatusPage() {
                     <Space direction="vertical" size={2}>
                       <Text strong>{item.content || "-"}</Text>
                       <Text className="muted-text">
-                        {formatDateTime(item.created_at)} · {item.conversation_id}
+                        {formatDateTime(item.created_at, timezone)} · {item.conversation_id}
                       </Text>
                       <Text className="muted-text">
                         状态：{item.status} · {item.message_id || "无 message_id"}
@@ -147,7 +149,7 @@ export default function WechatStatusPage() {
                     <Space direction="vertical" size={2}>
                       <Text strong>{item.content || "-"}</Text>
                       <Text className="muted-text">
-                        {formatDateTime(item.created_at)} · {item.conversation_id}
+                        {formatDateTime(item.created_at, timezone)} · {item.conversation_id}
                       </Text>
                       <Text className="muted-text">
                         状态：{item.status} · {item.error_message || "无错误"}

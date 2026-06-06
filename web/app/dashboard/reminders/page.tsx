@@ -5,6 +5,7 @@ import { Alert, Card, Col, Empty, Row, Space, Spin, Tag, Typography } from "antd
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime, type ReminderItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -44,6 +45,7 @@ function RemindersEmpty() {
 export default function RemindersPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export default function RemindersPage() {
                     <Tag color="cyan">{reminder.target_type}</Tag>
                   </Space>
                   <Text className="muted-text">
-                    触发时间：{formatDateTime(reminder.trigger_time)}
+                    触发时间：{formatDateTime(reminder.trigger_time, timezone)}
                   </Text>
                   <Text className="muted-text">会话：{reminder.conversation_id}</Text>
                   <Space wrap>

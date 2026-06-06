@@ -5,6 +5,7 @@ import { Alert, Button, Card, Col, Modal, Row, Space, Spin, Tag, Typography, mes
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -68,6 +69,7 @@ function UsersEmpty() {
 export default function UsersPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const isOwner = session?.role === "owner";
   const [users, setUsers] = useState<UserAdminItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,10 +233,10 @@ export default function UsersPage() {
                     <Text className="muted-text">时区：{user.default_timezone}</Text>
                   ) : null}
                   <Text className="muted-text">
-                    创建时间：{formatDateTime(user.created_at)}
+                    创建时间：{formatDateTime(user.created_at, timezone)}
                   </Text>
                   <Text className="muted-text">
-                    最近登录：{user.last_login_at ? formatDateTime(user.last_login_at) : "未登录"}
+                    最近登录：{user.last_login_at ? formatDateTime(user.last_login_at, timezone) : "未登录"}
                   </Text>
                 </Space>
               </Card>
@@ -270,7 +272,7 @@ export default function UsersPage() {
                   <Text className="muted-text">channel_user_id：{identity.channel_user_id}</Text>
                   <Text className="muted-text">conversation_id：{identity.conversation_id}</Text>
                   <Text className="muted-text">
-                    绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at) : "未知"}
+                    绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at, timezone) : "未知"}
                   </Text>
                 </Space>
               </Card>

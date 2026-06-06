@@ -5,6 +5,7 @@ import { Alert, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -55,6 +56,7 @@ function getStatusColor(status: string) {
 
 export default function InviteCodesPage() {
   const { session } = useAuth();
+  const { timezone } = useDashboardTimezone();
   const [form] = Form.useForm<InviteCodeCreatePayload>();
   const [codes, setCodes] = useState<InviteCodeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,7 +234,7 @@ export default function InviteCodesPage() {
                         使用次数：{item.used_count}/{item.max_uses}
                       </Text>
                       <Text className="muted-text">
-                        过期时间：{item.expires_at ? formatDateTime(item.expires_at) : "未设置"}
+                        过期时间：{item.expires_at ? formatDateTime(item.expires_at, timezone) : "未设置"}
                       </Text>
                       {item.remark ? <Text className="muted-text">备注：{item.remark}</Text> : null}
                     </Space>
