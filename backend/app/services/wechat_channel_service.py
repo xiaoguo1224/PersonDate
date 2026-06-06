@@ -362,6 +362,11 @@ class WechatChannelService:
             stmt = stmt.where(WechatChannelInboundMessage.cursor_token > cursor)
         stmt = stmt.order_by(WechatChannelInboundMessage.cursor_token.asc()).limit(50)
         messages = list(self.db.scalars(stmt))
+        if messages:
+            delivered_at = datetime.now(UTC)
+            for message in messages:
+                message.status = "delivered"
+                message.delivered_at = delivered_at
 
         return WechatGetUpdatesResponse(
             success=True,

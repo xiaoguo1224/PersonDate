@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import User, WechatAccount
+from app.models import User, WechatAccount, WechatChannelInboundMessage
 from app.schemas.wechat_channel import WechatGetUpdatesResponse
 from app.services.wechat_channel_service import WechatChannelService
 
@@ -129,6 +129,14 @@ def test_wechat_channel_app_getupdates_returns_seeded_messages(monkeypatch) -> N
     assert payload.messages[0].message_id == "wx_msg_001"
     assert payload.messages[0].content == "明天下午 3 点开会"
     assert payload.next_cursor is not None
+    delivered = session.scalar(
+        session.query(WechatChannelInboundMessage)
+        .filter_by(message_id="wx_msg_001")
+        .statement
+    )
+    assert delivered is not None
+    assert delivered.status == "delivered"
+    assert delivered.delivered_at is not None
 
 
 def test_wechat_channel_app_ingest_message_makes_it_visible_to_getupdates(monkeypatch) -> None:
@@ -187,6 +195,14 @@ def test_wechat_channel_app_ingest_message_makes_it_visible_to_getupdates(monkey
     payload = WechatGetUpdatesResponse.model_validate(updates_response.json())
     assert payload.messages[0].message_id == "wx_msg_002"
     assert payload.messages[0].content == "明天有什么安排？"
+    delivered = _session.scalar(
+        _session.query(WechatChannelInboundMessage)
+        .filter_by(message_id="wx_msg_002")
+        .statement
+    )
+    assert delivered is not None
+    assert delivered.status == "delivered"
+    assert delivered.delivered_at is not None
 
     dedupe_response = client.post(
         "/ingest",
