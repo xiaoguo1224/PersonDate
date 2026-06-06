@@ -602,18 +602,20 @@ class WechatChannelService:
                 )
                 if isinstance(result, dict):
                     success = bool(result.get("success", True))
+                    result_status = result.get("status")
                     outbound_message_id = result.get("message_id") or outbound_message_id
                     error_message = result.get("error_message") or result.get("detail")
                     error_code = result.get("error_code")
                 else:
                     success = bool(getattr(result, "success", True))
+                    result_status = getattr(result, "status", None)
                     outbound_message_id = (
                         getattr(result, "message_id", None) or outbound_message_id
                     )
                     error_message = getattr(result, "error_message", None)
                     error_code = getattr(result, "error_code", None)
                 if success:
-                    status = "sent"
+                    status = result_status or "sent"
                     error_message = None
                     error_code = None
                     outbound_retry_count = retry_count + attempt_count - 1

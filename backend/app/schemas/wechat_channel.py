@@ -66,6 +66,7 @@ class WechatGetUpdatesResponse(BaseModel):
 class WechatSendTextResponse(BaseModel):
     success: bool = True
     ret: int = 0
+    status: str | None = None
     message_id: str | None = None
     error_code: str | None = None
     error_message: str | None = None

@@ -132,4 +132,5 @@ class WechatSendTextResponse(BaseModel):
     conversation_id: str
     content: str
     message_id: str | None = None
+    status: str | None = None
     error_message: str | None = None

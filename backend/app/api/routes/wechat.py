@@ -278,13 +278,20 @@ def send_wechat_test_message(
     db.commit()
     return ApiResponse(
         data=WechatSendTextResponse(
-            sent=log.status == "sent",
+            sent=log.status in {"queued", "sent"},
             conversation_id=log.conversation_id,
             content=log.content or payload.content,
             message_id=log.message_id,
+            status=log.status,
             error_message=log.error_message,
         ),
-        message="测试消息已发送" if log.status == "sent" else "测试消息发送失败",
+        message=(
+            "测试消息已发送"
+            if log.status == "sent"
+            else "测试消息已入队"
+            if log.status == "queued"
+            else "测试消息发送失败"
+        ),
     )
 
 

@@ -23,7 +23,7 @@ class FakeWechatSender:
 
     def send_text(self, conversation_id: str, content: str):  # noqa: ANN001
         self.calls.append((conversation_id, content))
-        return {"success": True, "message_id": "wx_out_001"}
+        return {"success": True, "status": "queued", "message_id": "wx_out_001"}
 
 
 def _build_client():
@@ -98,7 +98,7 @@ def test_wechat_channel_service_send_text_records_outbound_log() -> None:
     session.commit()
 
     assert sender.calls == [("wx_user_001", "提醒：15:00 开会")]
-    assert log.status == "sent"
+    assert log.status == "queued"
     stored_log = session.scalar(session.query(ChannelMessageLog).filter_by(id=log.id).statement)
     assert stored_log is not None
     assert stored_log.direction == "outbound"
@@ -156,6 +156,59 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
     assert log.error_message == "timeout"
     assert log.context_token == "ctx_002"
     assert len(sender.calls) == 3
+
+
+def test_wechat_channel_service_send_text_records_queued_outbound_log() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+
+    class QueuedWechatSender:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def send_text(
+            self,
+            conversation_id: str,
+            content: str,
+            context_token: str | None = None,
+        ):  # noqa: ANN001
+            self.calls.append((conversation_id, content))
+            return {"success": True, "status": "queued", "message_id": "wx_out_queue_001"}
+
+    session.add(
+        ChannelMessageLog(
+            user_id="owner-001",
+            channel="wechat",
+            message_id="wx_in_004",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="明天下午 6 点开会",
+            context_token="ctx_004",
+            raw_payload={"context_token": "ctx_004"},
+            status="received",
+        )
+    )
+    session.commit()
+
+    sender = QueuedWechatSender()
+    service = WechatChannelService(session, sender=sender)
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：18:00 开会")
+    session.commit()
+
+    assert sender.calls == [("wx_user_001", "提醒：18:00 开会")]
+    assert log.status == "queued"
+    assert log.retry_count == 0
+    assert log.error_code is None
+    assert log.error_message is None
 
 
 def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
@@ -232,4 +285,5 @@ def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:
     body = response.json()
     assert body["success"] is True
     assert body["data"]["sent"] is True
+    assert body["data"]["status"] == "queued"
     assert body["data"]["message_id"] == "wx_out_001"

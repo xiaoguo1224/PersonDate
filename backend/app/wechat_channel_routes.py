@@ -138,6 +138,7 @@ def send_message(
     return WechatSendTextResponse(
         success=True,
         ret=0,
+        status="queued",
         message_id=outbound.message_id,
         detail=f"消息已入队到 {conversation_id}",
     )
