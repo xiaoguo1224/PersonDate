@@ -137,6 +137,21 @@ export async function confirmDayDrafts(planDate: string): Promise<void> {
   });
 }
 
+// ── 格式化工具 ───────────────────────────────────────────
+
+export function formatDateTime(value: string, timeZone?: string) {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 // ── 任务 API ─────────────────────────────────────────────
 
 export async function loadTasks(status?: string): Promise<TaskItem[]> {
@@ -290,6 +305,33 @@ export async function createCalendarEvent(
 }
 
 export async function deleteCalendarEvent(_id: string): Promise<void> {}
+
+// ── Agent 消息 ──────────────────────────────────────────
+
+export type AgentMessageResponse = {
+  success: boolean;
+  final_response?: string | null;
+  intent?: string | null;
+  tool_calls: Array<Record<string, unknown>>;
+  tool_results: Array<Record<string, unknown>>;
+  pending_state?: Record<string, unknown> | null;
+  graph_trace: string[];
+  error?: string | null;
+};
+
+export async function sendAgentMessage(
+  accessToken: string,
+  message: string,
+): Promise<AgentMessageResponse> {
+  return requestJson<AgentMessageResponse>(
+    "/api/me/agent/message",
+    {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    },
+    accessToken,
+  );
+}
 
 // ── 首页仪表盘 ───────────────────────────────────────────
 
