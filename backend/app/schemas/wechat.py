@@ -160,3 +160,9 @@ class WechatOutboundQueueItem(BaseModel):
 
 class WechatOutboundQueueListResponse(BaseModel):
     items: list[WechatOutboundQueueItem]
+
+
+class NotificationSettingsUpdateRequest(BaseModel):
+    daily_plan_push_enabled: bool = False
+    daily_plan_push_time: str = "08:00"
+    city: str | None = None

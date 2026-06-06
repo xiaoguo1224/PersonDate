@@ -52,6 +52,7 @@ export type AgentLogListResponse = {
 export type WechatLoginSessionCreateResponse = {
   login_session_id: string;
   qr_payload: string;
+  qr_img_content?: string;  // 新增: base64 二维码图片
   expires_at: string;
   status: string;
 };

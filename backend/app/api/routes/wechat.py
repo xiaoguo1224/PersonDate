@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
@@ -17,6 +18,7 @@ from app.schemas.wechat import (
     ChannelIdentityListResponse,
     ChannelMessageLogItem,
     ChannelMessageLogListResponse,
+    NotificationSettingsUpdateRequest,
     WechatAccountItem,
     WechatAccountListResponse,
     WechatInboundRequest,
@@ -393,6 +395,51 @@ def send_wechat_test_message(
             else "测试消息发送失败"
         ),
     )
+
+
+@router.get("/me/notification-settings")
+def get_notification_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    from app.models.user import UserSettings
+
+    settings = db.scalar(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    if settings is None:
+        return ApiResponse(data={
+            "daily_plan_push_enabled": False,
+            "daily_plan_push_time": "08:00",
+            "city": None,
+        })
+    return ApiResponse(data={
+        "daily_plan_push_enabled": settings.daily_plan_push_enabled,
+        "daily_plan_push_time": settings.daily_plan_push_time,
+        "city": settings.city,
+    })
+
+
+@router.put("/me/notification-settings")
+def update_notification_settings(
+    payload: NotificationSettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    from app.models.user import UserSettings
+
+    settings = db.scalar(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    if settings is None:
+        settings = UserSettings(user_id=current_user.id)
+        db.add(settings)
+        db.flush()
+    settings.daily_plan_push_enabled = payload.daily_plan_push_enabled
+    settings.daily_plan_push_time = payload.daily_plan_push_time
+    settings.city = payload.city
+    db.commit()
+    return ApiResponse(message="已保存")
 
 
 @router.post("/wechat/inbound")

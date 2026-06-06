@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyOutlined, LoadingOutlined, QrcodeOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
+import { LoadingOutlined, QrcodeOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Empty, Modal, QRCode, Space, Spin, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -238,13 +238,10 @@ export default function WechatBindingPage() {
         <Alert
           type="success"
           showIcon
-          message={`请使用微信扫码完成登录：${loginSession.login_session_id}`}
-          description={`会话将在 ${formatDateTime(loginSession.expires_at)} 过期。扫码后请保持当前页面打开，系统会自动轮询确认状态。`}
+          message="请使用微信扫码完成登录"
+          description={`会话将在 ${formatDateTime(loginSession.expires_at)} 过期。扫码后页面会自动轮询确认状态。`}
           action={
             <Space>
-              <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopySessionId()}>
-                复制会话 ID
-              </Button>
               <Button size="small" icon={<QrcodeOutlined />} onClick={() => setQrModalOpen(true)}>
                 查看二维码
               </Button>
@@ -265,7 +262,15 @@ export default function WechatBindingPage() {
         destroyOnClose
       >
         <Space direction="vertical" size={16} style={{ width: "100%", alignItems: "center", textAlign: "center" }}>
-          <QRCode value={loginSession?.qr_payload ?? ""} size={240} bordered />
+          {loginSession?.qr_img_content ? (
+            <img
+              src={`data:image/png;base64,${loginSession.qr_img_content}`}
+              alt="微信扫码"
+              style={{ width: 240, height: 240 }}
+            />
+          ) : (
+            <QRCode value={loginSession?.qr_payload ?? ""} size={240} bordered />
+          )}
           <Space direction="vertical" size={4}>
             <Text strong>请使用微信扫码完成登录</Text>
             <Text className="muted-text">会话 ID：{loginSession?.login_session_id}</Text>
