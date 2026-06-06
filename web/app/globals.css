@@ -3103,117 +3103,81 @@ body {
 .today-page--refined .today-gantt {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.today-page--refined .today-gantt__axis,
-.today-page--refined .today-gantt__list {
-  min-width: 920px;
 }
 
 .today-page--refined .today-gantt__axis {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 0 8px 2px;
+  padding: 0 4px 2px;
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-bottom: 4px;
+  min-width: 1400px;
 }
 
-.today-page--refined .today-gantt__list {
+.today-page--refined .today-gantt__bars {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.today-page--refined .today-gantt__row {
-  display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
-}
-
-.today-page--refined .today-gantt__meta {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-  padding: 2px 0;
-}
-
-.today-page--refined .today-gantt__title {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  line-height: 1.3;
-}
-
-.today-page--refined .today-gantt__range {
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.2;
+  gap: 6px;
+  min-width: 1400px;
 }
 
 .today-page--refined .today-gantt__track {
   position: relative;
-  min-height: 44px;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.10);
+  height: 48px;
+  border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.96)),
-    rgba(255, 255, 255, 0.96);
+    repeating-linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.06) 0,
+      rgba(148, 163, 184, 0.06) 1px,
+      transparent 1px,
+      transparent 4.166%
+    ),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.5), rgba(255, 255, 255, 0.8));
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  overflow: hidden;
 }
 
 .today-page--refined .today-gantt__grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-repeat: repeat;
-  background-size: calc(100% / 24) 100%;
   pointer-events: none;
 }
 
 .today-page--refined .today-gantt__bar {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  min-width: 16px;
-  border-radius: 6px;
+  top: 4px;
+  bottom: 4px;
+  min-width: 10px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   padding: 0 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.15s, filter 0.15s;
+  white-space: nowrap;
+  color: #fff;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
 }
 .today-page--refined .today-gantt__bar:hover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-  transform: scaleY(1.06);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  filter: brightness(1.08);
   z-index: 2;
 }
 
 .today-page--refined .today-gantt__bar--event {
-  background: linear-gradient(135deg, #2563eb, #60a5fa);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
 }
 
 .today-page--refined .today-gantt__bar--task {
-  background: linear-gradient(135deg, #059669, #34d399);
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+  background: linear-gradient(135deg, #10b981, #34d399);
 }
 
 .today-page--refined .today-gantt__bar-title {
@@ -3224,6 +3188,16 @@ body {
   font-weight: 600;
   line-height: 1.2;
   color: #fff;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.today-page--refined .today-gantt__bar-time {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.02em;
 }
 
 .today-page--refined .today-task-list,

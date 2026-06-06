@@ -101,62 +101,40 @@ function isPastTime(value: string, referenceTime = Date.now()) {
 }
 
 function getTimelineStatusLabel(
-  entry: { kind: "event" | "plan_item"; status?: string; start_time: string; end_time?: string | null },
+  entry: { status?: string; start_time: string; end_time?: string | null },
   referenceTime = Date.now(),
 ) {
-  if (entry.kind === "event") {
-    if (entry.status === "deleted") {
-      return "已删除";
-    }
-    if (isPastTime(entry.end_time ?? entry.start_time, referenceTime)) {
-      return "已结束";
-    }
-    if (!isPastTime(entry.start_time, referenceTime)) {
-      return "待开始";
-    }
-    return "进行中";
-  }
-
-  if (entry.status === "completed") {
-    return "已完成";
-  }
-  if (entry.status === "cancelled") {
-    return "已取消";
-  }
-  if (entry.status === "skipped") {
-    return "已跳过";
+  if (entry.status === "completed" || entry.status === "cancelled" || entry.status === "skipped") {
+    return entry.status === "completed" ? "已完成" : entry.status === "cancelled" ? "已取消" : "已跳过";
   }
   if (isPastTime(entry.end_time ?? entry.start_time, referenceTime)) {
     return "已结束";
+  }
+  if (!isPastTime(entry.start_time, referenceTime)) {
+    return "待开始";
   }
   return "进行中";
 }
 
 type GanttRow = {
   id: string;
-  kind: "event" | "plan_item";
   title: string;
   start_time: string;
   end_time: string;
-  item_type?: string;
   status?: string;
   location?: string | null;
   startLabel: string;
   endLabel: string;
   barLeft: number;
   barWidth: number;
-  trackLabel: string;
-  accentClass: string;
 };
 
 function buildGanttRows(
   items: Array<{
     id: string;
-    kind: "event" | "plan_item";
     title: string;
     start_time: string;
     end_time?: string | null;
-    item_type?: string;
     status?: string;
     location?: string | null;
   }>,
@@ -171,8 +149,7 @@ function buildGanttRows(
     .map((item) => {
       const start = dayjs(item.start_time);
       const rawEnd = dayjs(item.end_time ?? item.start_time);
-      const fallbackDuration = item.kind === "plan_item" ? 90 : 60;
-      const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallbackDuration, "minute");
+      const end = rawEnd.isAfter(start) ? rawEnd : start.add(60, "minute");
 
       if (end.isBefore(dayStart) || start.isAfter(nextDayStart)) {
         return null;
@@ -186,14 +163,16 @@ function buildGanttRows(
       const barWidth = Math.min(100 - barLeft, Math.max(2.5, (durationMinutes / totalMinutes) * 100));
 
       return {
-        ...item,
+        id: item.id,
+        title: item.title,
+        start_time: item.start_time,
         end_time: item.end_time ?? item.start_time,
+        status: item.status,
+        location: item.location,
         startLabel: formatClock(item.start_time, timezone),
         endLabel: formatClock(item.end_time ?? item.start_time, timezone),
         barLeft,
         barWidth,
-        trackLabel: item.kind === "plan_item" ? "安排项" : "安排",
-        accentClass: item.kind === "plan_item" ? "today-gantt__bar--task" : "today-gantt__bar--event",
       } as GanttRow;
     })
     .filter((item): item is GanttRow => item !== null);
@@ -403,11 +382,9 @@ type TodayPageViewProps = Readonly<{
   viewData: TodayDashboardData;
   combinedTimeline: Array<{
     id: string;
-    kind: "event" | "plan_item";
     start_time: string;
     end_time: string;
     title: string;
-    item_type?: string;
     status?: string;
     location?: string | null;
   }>;
@@ -554,29 +531,20 @@ function TodayPageView({
                   {combinedTimeline.map((entry) => (
                     <div key={entry.id} className="today-timeline__item">
                       <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
-                      <div
-                        className={[
-                          "today-timeline__dot",
-                          entry.kind === "plan_item" ? "today-timeline__dot--task" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      />
+                      <div className="today-timeline__dot" />
                       <Card className="today-timeline__card" bordered={false}>
                         <div className="today-timeline__head">
                           <Text strong className="today-timeline__title">
                             {entry.title}
                           </Text>
-                          <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"}>
-                            {entry.kind === "plan_item"
-                              ? `${entry.item_type ?? "安排项"} · ${getTimelineStatusLabel(entry)}`
-                              : `日程 · ${getTimelineStatusLabel(entry)}`}
+                          <Tag color="blue">
+                            安排 · {getTimelineStatusLabel(entry)}
                           </Tag>
                         </div>
                         <Text className="today-timeline__meta">
                           {formatRange(entry.start_time, entry.end_time, timezone)}
                         </Text>
-                        {entry.kind === "event" && entry.location ? (
+                        {entry.location ? (
                           <Text className="today-timeline__meta">{entry.location}</Text>
                         ) : null}
                       </Card>
@@ -799,17 +767,10 @@ function GanttChartAnimated({ rows }: Readonly<{ rows: GanttRow[] }>) {
       gsap.from(ganttRef.current?.querySelectorAll(".today-gantt__bar") ?? [], {
         scaleX: 0,
         transformOrigin: "left center",
-        duration: 0.55,
-        stagger: 0.07,
+        duration: 0.5,
+        stagger: 0.06,
         ease: "power3.out",
         clearProps: "scaleX",
-      });
-      gsap.from(ganttRef.current?.querySelectorAll(".today-gantt__row") ?? [], {
-        opacity: 0,
-        y: 8,
-        duration: 0.35,
-        stagger: 0.04,
-        ease: "power2.out",
       });
     },
     { scope: ganttRef, dependencies: [] },
@@ -818,32 +779,23 @@ function GanttChartAnimated({ rows }: Readonly<{ rows: GanttRow[] }>) {
   return (
     <div ref={ganttRef} className="today-gantt">
       <div className="today-gantt__axis">
-        <span className="today-gantt__axis-label">00:00</span>
-        <span className="today-gantt__axis-label">06:00</span>
-        <span className="today-gantt__axis-label">12:00</span>
-        <span className="today-gantt__axis-label">18:00</span>
-        <span className="today-gantt__axis-label">24:00</span>
+        <span>00:00</span>
+        <span>06:00</span>
+        <span>12:00</span>
+        <span>18:00</span>
+        <span>24:00</span>
       </div>
-      <div className="today-gantt__list">
+      <div className="today-gantt__bars">
         {rows.map((row) => (
-          <div key={row.id} className="today-gantt__row">
-            <div className="today-gantt__meta">
-              <Text strong className="today-gantt__title">
-                {row.title}
-              </Text>
-              <Text className="today-gantt__range">
-                {row.startLabel} - {row.endLabel}
-              </Text>
-              <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
-            </div>
-            <div className="today-gantt__track">
-              <div className="today-gantt__grid" />
-              <div
-                className={["today-gantt__bar", row.accentClass].join(" ")}
-                style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
-              >
-                <span className="today-gantt__bar-title">{row.title}</span>
-              </div>
+          <div key={row.id} className="today-gantt__track">
+            <div className="today-gantt__grid" />
+            <div
+              className="today-gantt__bar"
+              style={{ left: `${row.barLeft}%`, width: `${Math.max(row.barWidth, 3)}%` }}
+              title={`${row.title}\n${row.startLabel} - ${row.endLabel}`}
+            >
+              <span className="today-gantt__bar-title">{row.title}</span>
+              <span className="today-gantt__bar-time">{row.startLabel}</span>
             </div>
           </div>
         ))}
@@ -913,42 +865,25 @@ export default function TodayPage() {
     [viewData.reminders],
   );
   const combinedTimeline = useMemo(() => {
-    const entries = [
-      ...viewData.events.map((event) => ({
-        id: event.id,
-        kind: "event" as const,
-        start_time: event.start_time,
-        end_time: event.end_time ?? event.start_time,
-        title: event.title,
-        item_type: event.location ?? event.description ?? undefined,
-        status: event.status,
-        location: event.location,
-      })),
-      ...(viewData.plan?.items ?? []).map((item) => ({
-        id: item.id,
-        kind: "plan_item" as const,
-        start_time: item.start_time,
-        end_time: item.end_time,
-        title: item.title,
-        item_type: item.item_type,
-        status: item.status,
-        location: null,
-      })),
-    ];
+    const entries = viewData.events.map((event) => ({
+      id: event.id,
+      start_time: event.start_time,
+      end_time: event.end_time,
+      title: event.title,
+      status: event.status,
+      location: event.location,
+    }));
     return sortTimelineEntries(entries);
-  }, [viewData]);
+  }, [viewData.events]);
 
   const progressPercent = useMemo(() => {
-    const planItems = viewData.plan?.items ?? [];
-    const total = planItems.length || 5;
-    const completed = planItems.filter((item) => item.status === "completed").length || 2;
+    const total = viewData.events.length || 5;
+    const completed = viewData.events.filter((item) => item.status === "completed").length || 0;
     return Math.min(100, Math.round((completed / total) * 100));
-  }, [viewData.plan?.items]);
+  }, [viewData.events]);
 
   const nextEvent =
-    sortedEvents.find((event) => !isPastTime(event.end_time ?? event.start_time)) ??
-    viewData.plan?.items.find((item) => !isPastTime(item.end_time ?? item.start_time)) ??
-    null;
+    viewData.events.find((event) => !isPastTime(event.end_time ?? event.start_time)) ?? null;
   const nextReminder = sortedReminders.find((reminder) => !isPastTime(reminder.trigger_time)) ?? null;
 
   const refreshData = useCallback(() => {
