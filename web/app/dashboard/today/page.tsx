@@ -6,7 +6,6 @@ import {
   CheckCircleOutlined,
   BellOutlined,
   ExpandOutlined,
-  FireOutlined,
   RobotOutlined,
   ReloadOutlined,
   SendOutlined,
@@ -15,7 +14,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { useGSAP } from "@gsap/react";
-import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Progress, Segmented, Space, Spin, Tag, Typography, message } from "antd";
+import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Segmented, Space, Spin, Tag, Typography, message } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import gsap from "gsap";
 import { useRouter } from "next/navigation";
@@ -41,7 +40,7 @@ import {
   type TodayDashboardData,
 } from "@/lib/dashboard";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Text } = Typography;
 
 gsap.registerPlugin(useGSAP);
 
@@ -485,111 +484,59 @@ function TodayPageView({
       ) : null}
       {loading ? <TodayLoading /> : null}
 
-      <Card className="section-card dashboard-hero today-hero today-animate" bordered={false}>
-        <div className="today-hero__copy">
-          <div className="today-hero__headline">
-            <span className="hero-kicker">
-              <FireOutlined />
-              今日节奏 · 专注与平衡
-            </span>
-            <Title className="page-title today-hero__title">稳扎稳打，<br />把最重要的事先做好。</Title>
-            <Paragraph className="today-hero__lead">
-              今天的界面不再堆叠信息，而是把节奏、风险和执行顺序拉成一条清晰的主线。
-            </Paragraph>
-          </div>
-
-          <div className="today-hero__progress">
-            <div className="today-hero__progress-headline">
-              <Text className="muted-text">计划完成度</Text>
-              <Text strong>{progressPercent}%</Text>
-            </div>
-            <Progress percent={progressPercent} showInfo={false} strokeWidth={10} />
-            <div className="today-hero__mini-lines">
-              <div className="today-hero__mini-line">
-                <Text className="today-hero__mini-label">下一场</Text>
-                <Text strong className="today-hero__mini-value">
-                  {nextEvent ? nextEvent.title : "暂无排程"}
-                </Text>
-                <Text className="muted-text today-hero__mini-hint">
-                  {nextEvent ? formatRange(nextEvent.start_time, nextEvent.end_time, timezone) : "今天还没有正式安排"}
-                </Text>
-              </div>
-              <div className="today-hero__mini-line today-hero__mini-line--soft">
-                <Text className="today-hero__mini-label">最近提醒</Text>
-                <Text strong className="today-hero__mini-value">
-                  {nextReminder ? nextReminder.title : "暂无提醒"}
-                </Text>
-                <Text className="muted-text today-hero__mini-hint">
-                  {nextReminder ? formatRange(nextReminder.trigger_time, undefined, timezone) : "当前没有待触发提醒"}
-                </Text>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="today-hero__visual">
-          <div className="today-hero__art">
-            <div className="today-hero__art-badge">
-              <span className="today-hero__art-badge-dot" />
-              今日节奏 · 专注与平衡
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <div className="today-summary-grid today-animate">
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <CalendarOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">今日安排</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.eventsCount}
-            </Title>
-            <Text className="muted-text">已排定的时间块</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <CheckCircleOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">待办任务</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.tasksCount}
-            </Title>
-            <Text className="muted-text">等待安排的任务</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <WarningOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">冲突事项</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.conflictsCount}
-            </Title>
-            <Text className="muted-text">需要处理的冲突</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <BellOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">提醒任务</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.remindersCount}
-            </Title>
-            <Text className="muted-text">即将触发提醒</Text>
-          </div>
-        </Card>
-      </div>
-
       <div className="today-layout today-animate">
         <div className="today-main">
+
+          <div className="today-summary-grid">
+            <Card className="section-card today-summary-card" bordered={false}>
+              <div className="today-summary-card__icon">
+                <CalendarOutlined />
+              </div>
+              <div>
+                <div className="today-summary-card__label">今日安排</div>
+                <Title level={2} className="today-summary-card__value">
+                  {summary.eventsCount}
+                </Title>
+                <Text className="muted-text">已排定的时间块</Text>
+              </div>
+            </Card>
+            <Card className="section-card today-summary-card" bordered={false}>
+              <div className="today-summary-card__icon">
+                <CheckCircleOutlined />
+              </div>
+              <div>
+                <div className="today-summary-card__label">待办任务</div>
+                <Title level={2} className="today-summary-card__value">
+                  {summary.tasksCount}
+                </Title>
+                <Text className="muted-text">等待安排的任务</Text>
+              </div>
+            </Card>
+            <Card className="section-card today-summary-card" bordered={false}>
+              <div className="today-summary-card__icon">
+                <WarningOutlined />
+              </div>
+              <div>
+                <div className="today-summary-card__label">冲突事项</div>
+                <Title level={2} className="today-summary-card__value">
+                  {summary.conflictsCount}
+                </Title>
+                <Text className="muted-text">需要处理的冲突</Text>
+              </div>
+            </Card>
+            <Card className="section-card today-summary-card" bordered={false}>
+              <div className="today-summary-card__icon">
+                <BellOutlined />
+              </div>
+              <div>
+                <div className="today-summary-card__label">提醒任务</div>
+                <Title level={2} className="today-summary-card__value">
+                  {summary.remindersCount}
+                </Title>
+                <Text className="muted-text">即将触发提醒</Text>
+              </div>
+            </Card>
+          </div>
           <Card className="section-card today-panel" bordered={false}>
             <div className="today-panel__header today-timeline__header">
               <div>
@@ -1141,12 +1088,6 @@ export default function TodayPage() {
         duration: 0.8,
         ease: "power3.out",
         stagger: 0.08,
-      });
-      gsap.from(".today-hero__art", {
-        opacity: 0,
-        scale: 1.02,
-        duration: 1,
-        ease: "power2.out",
       });
       gsap.from(".today-summary-card, .today-panel", {
         opacity: 0,
