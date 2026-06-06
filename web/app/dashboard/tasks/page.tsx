@@ -5,6 +5,7 @@ import { Alert, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatDateTime, type TaskItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -30,13 +31,13 @@ function getStatusColor(status: string) {
 function TasksLoading() {
   return (
     <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载任务池..." />
+      <Spin size="large" tip="正在加载待办..." />
     </div>
   );
 }
 
 function TasksError({ message }: Readonly<{ message: string }>) {
-  return <Alert type="error" showIcon message="加载任务池失败" description={message} />;
+  return <Alert type="error" showIcon message="加载待办失败" description={message} />;
 }
 
 function TaskEmpty() {
@@ -50,6 +51,7 @@ function TaskEmpty() {
 export default function TasksPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone } = useDashboardTimezone();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export default function TasksPage() {
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
-      setError("请先登录后查看任务池");
+      setError("请先登录后查看待办");
       return;
     }
     let alive = true;
@@ -102,11 +104,11 @@ export default function TasksPage() {
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <RocketOutlined />
-            任务池
+            待办
           </span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>任务池总览</Title>
+          <Title style={{ color: "var(--text-primary)", margin: 0 }}>待办总览</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里已经接入后端任务列表。后续可以在此基础上加入创建、编辑、完成和自动排程入口。
+            这里已经接入后端待办列表。后续可以在此基础上加入创建、编辑、完成和自动排程入口。
           </Paragraph>
           <Space wrap>
             <Tag color="cyan">{summary.total} 个任务</Tag>
@@ -140,7 +142,7 @@ export default function TasksPage() {
                       {task.estimated_minutes ? (
                         <Tag icon={<ClockCircleOutlined />}>{task.estimated_minutes} 分钟</Tag>
                       ) : null}
-                      {task.deadline ? <Tag color="cyan">截止 {formatDateTime(task.deadline)}</Tag> : null}
+                      {task.deadline ? <Tag color="cyan">截止 {formatDateTime(task.deadline, timezone)}</Tag> : null}
                       {task.status !== "completed" ? <Tag icon={<CheckCircleOutlined />}>待完成</Tag> : null}
                     </Space>
                   </Space>

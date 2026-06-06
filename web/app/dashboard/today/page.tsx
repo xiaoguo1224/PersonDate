@@ -1,28 +1,37 @@
 "use client";
 
 import {
-  ArrowLeftOutlined,
   ArrowRightOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
-  CoffeeOutlined,
+  BellOutlined,
+  ExpandOutlined,
   FireOutlined,
   RobotOutlined,
+  ReloadOutlined,
   SendOutlined,
   ThunderboltOutlined,
   UserOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Input, Progress, Space, Spin, Tag, Typography, message } from "antd";
+import { useGSAP } from "@gsap/react";
+import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Progress, Segmented, Space, Spin, Tag, Typography, message } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
+import gsap from "gsap";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import {
   buildDashboardSummary,
+  createCalendarEvent,
   formatRange,
+  formatClock,
+  getTodayDateKey,
   loadTodayDashboard,
   sendAgentMessage,
+  type DashboardSummary,
   type CalendarEventItem,
   type ConflictItem,
   type DayPlan,
@@ -33,6 +42,8 @@ import {
 } from "@/lib/dashboard";
 
 const { Title, Paragraph, Text } = Typography;
+
+gsap.registerPlugin(useGSAP);
 
 type ChatRole = "assistant" | "user" | "system";
 
@@ -47,13 +58,19 @@ type ChatMessage = {
 
 type DemoDashboard = TodayDashboardData;
 
-function getTodayString() {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
+type TimelineMode = "timeline" | "gantt";
+
+type CalendarEventFormValues = {
+  title: string;
+  description?: string | null;
+  start_time: Dayjs;
+  end_time?: Dayjs | null;
+  timezone: string;
+  location?: string | null;
+  remind_before_minutes?: number | null;
+};
+
+const DEFAULT_TIMEZONE = "Asia/Shanghai";
 
 function getChatTimeLabel() {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -71,22 +88,10 @@ function createWelcomeMessage(): ChatMessage {
   return {
     id: "welcome",
     role: "assistant",
-    content: "你可以直接告诉我今天要做什么，我会帮你整理日程、任务、计划和冲突。",
+    content: "你可以直接告诉我今天要做什么，我会帮你整理安排、待办和冲突。",
     meta: "支持创建、修改、删除、规划和冲突处理",
     timestamp: getChatTimeLabel(),
   };
-}
-
-function startOfMonthGrid(value: Dayjs) {
-  const firstDayOfMonth = value.startOf("month");
-  const weekday = firstDayOfMonth.day();
-  const diff = weekday === 0 ? -6 : 1 - weekday;
-  return firstDayOfMonth.add(diff, "day").startOf("day");
-}
-
-function buildMonthGrid(value: Dayjs) {
-  const gridStart = startOfMonthGrid(value);
-  return Array.from({ length: 42 }, (_, index) => gridStart.add(index, "day"));
 }
 
 function sortTimelineEntries<T extends { start_time: string; title: string }>(items: T[]) {
@@ -99,73 +104,165 @@ function sortTimelineEntries<T extends { start_time: string; title: string }>(it
   });
 }
 
+function isPastTime(value: string, referenceTime = Date.now()) {
+  return new Date(value).getTime() < referenceTime;
+}
+
+function getTimelineStatusLabel(
+  entry: { kind: "event" | "plan_item"; status?: string; start_time: string; end_time?: string | null },
+  referenceTime = Date.now(),
+) {
+  if (entry.kind === "event") {
+    if (entry.status === "deleted") {
+      return "已删除";
+    }
+    if (isPastTime(entry.end_time ?? entry.start_time, referenceTime)) {
+      return "已结束";
+    }
+    if (!isPastTime(entry.start_time, referenceTime)) {
+      return "待开始";
+    }
+    return "进行中";
+  }
+
+  if (entry.status === "completed") {
+    return "已完成";
+  }
+  if (entry.status === "cancelled") {
+    return "已取消";
+  }
+  if (entry.status === "skipped") {
+    return "已跳过";
+  }
+  if (isPastTime(entry.end_time ?? entry.start_time, referenceTime)) {
+    return "已结束";
+  }
+  return "进行中";
+}
+
+type GanttRow = {
+  id: string;
+  kind: "event" | "plan_item";
+  title: string;
+  start_time: string;
+  end_time: string;
+  item_type?: string;
+  status?: string;
+  location?: string | null;
+  startLabel: string;
+  endLabel: string;
+  barLeft: number;
+  barWidth: number;
+  trackLabel: string;
+  accentClass: string;
+};
+
+function buildGanttRows(
+  items: Array<{
+    id: string;
+    kind: "event" | "plan_item";
+    title: string;
+    start_time: string;
+    end_time?: string | null;
+    item_type?: string;
+    status?: string;
+    location?: string | null;
+  }>,
+  selectedDate: Dayjs,
+  timezone: string,
+) {
+  const dayStart = selectedDate.startOf("day");
+  const nextDayStart = dayStart.add(1, "day");
+  const totalMinutes = 24 * 60;
+
+  return sortTimelineEntries(items)
+    .map((item) => {
+      const start = dayjs(item.start_time);
+      const rawEnd = dayjs(item.end_time ?? item.start_time);
+      const fallbackDuration = item.kind === "plan_item" ? 90 : 60;
+      const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallbackDuration, "minute");
+
+      if (end.isBefore(dayStart) || start.isAfter(nextDayStart)) {
+        return null;
+      }
+
+      const clampedStart = start.isBefore(dayStart) ? dayStart : start;
+      const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
+      const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
+      const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
+      const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
+      const barWidth = Math.min(100 - barLeft, Math.max(2.5, (durationMinutes / totalMinutes) * 100));
+
+      return {
+        ...item,
+        end_time: item.end_time ?? item.start_time,
+        startLabel: formatClock(item.start_time, timezone),
+        endLabel: formatClock(item.end_time ?? item.start_time, timezone),
+        barLeft,
+        barWidth,
+        trackLabel: item.kind === "plan_item" ? "安排项" : "安排",
+        accentClass: item.kind === "plan_item" ? "today-gantt__bar--task" : "today-gantt__bar--event",
+      } as GanttRow;
+    })
+    .filter((item): item is GanttRow => item !== null);
+}
+
 function buildDemoDashboardData(planDate: string): DemoDashboard {
   const base = dayjs(planDate);
   const at = (hour: number, minute: number) => base.hour(hour).minute(minute).second(0).millisecond(0).toISOString();
   const events: CalendarEventItem[] = [
     {
       id: "demo-event-1",
-      title: "团队晨会",
-      description: "同步进度与风险",
+      title: "API自动化测试 安排 A",
+      description: "安排",
       start_time: at(9, 0),
-      end_time: at(9, 30),
+      end_time: at(10, 0),
       timezone: "Asia/Shanghai",
-      location: "线上会议",
+      location: "安排",
       status: "active",
       remind_before_minutes: 10,
     },
     {
       id: "demo-event-2",
-      title: "产品需求评审",
-      description: "Q3 重点方案对齐",
-      start_time: at(10, 0),
-      end_time: at(11, 30),
+      title: "API自动化测试 安排 B",
+      description: "安排",
+      start_time: at(9, 30),
+      end_time: at(10, 30),
       timezone: "Asia/Shanghai",
-      location: "会议室 A",
+      location: "安排",
       status: "active",
       remind_before_minutes: 10,
     },
     {
       id: "demo-event-3",
-      title: "专注工作：文档撰写",
-      description: "深度工作",
-      start_time: at(13, 30),
-      end_time: at(15, 30),
+      title: "测试日报-提醒功能验证",
+      description: "安排",
+      start_time: at(16, 8),
+      end_time: at(17, 8),
       timezone: "Asia/Shanghai",
-      location: "工作区",
+      location: "安排",
       status: "active",
-      remind_before_minutes: 15,
+      remind_before_minutes: 5,
     },
     {
       id: "demo-event-4",
-      title: "运动健身",
-      description: "保持状态",
-      start_time: at(16, 0),
-      end_time: at(17, 0),
+      title: "微信提醒测试",
+      description: "安排",
+      start_time: at(16, 17),
+      end_time: at(17, 17),
       timezone: "Asia/Shanghai",
-      location: "健身房",
+      location: "安排",
       status: "active",
-      remind_before_minutes: 20,
-    },
-    {
-      id: "demo-event-5",
-      title: "阅读与复盘",
-      description: "日终整理",
-      start_time: at(20, 0),
-      end_time: at(21, 0),
-      timezone: "Asia/Shanghai",
-      location: "家中",
-      status: "active",
-      remind_before_minutes: 30,
+      remind_before_minutes: 5,
     },
   ];
 
   const tasks: TaskItem[] = [
-    { id: "demo-task-1", title: "写论文", description: "每日推进", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
-    { id: "demo-task-2", title: "整理竞品分析报告", description: "补充图表", estimated_minutes: 90, deadline: at(18, 0), priority: "high", status: "pending" },
-    { id: "demo-task-3", title: "设计评审准备", description: "对齐文档", estimated_minutes: 60, deadline: at(12, 0), priority: "medium", status: "pending" },
-    { id: "demo-task-4", title: "用户调研计划", description: "可后置", estimated_minutes: 45, deadline: at(19, 0), priority: "low", status: "pending" },
-    { id: "demo-task-5", title: "运营数据复盘", description: "周报准备", estimated_minutes: 60, deadline: at(21, 0), priority: "low", status: "pending" },
+    { id: "demo-task-1", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
+    { id: "demo-task-2", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
+    { id: "demo-task-3", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
+    { id: "demo-task-4", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
+    { id: "demo-task-5", title: "API自动化测试 任务", description: "120 分钟 · pending · 自动化测试", estimated_minutes: 120, deadline: at(23, 59), priority: "high", status: "pending" },
   ];
 
   const conflicts: ConflictItem[] = [
@@ -173,56 +270,23 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
       id: "demo-conflict-1",
       conflict_type: "time_overlap",
       severity: "high",
-      title: "团队晨会与需求评审存在 30 分钟重叠",
-      description: "09:30 - 10:00 时间段已被晨会占用。",
+      title: "安排冲突：API自动化测试 安排 A 与 API自动化测试 安排 B",
+      description: "存在时间重叠，建议调整其中一个安排时间，或选择忽略冲突。",
       related_item_ids: ["demo-event-1", "demo-event-2"],
-      suggestion: "将需求评审顺延 30 分钟，或缩短晨会时长。",
+      suggestion: "建议：调整其中一个安排时间，或选择忽略冲突。",
       status: "open",
       detected_at: at(8, 52),
-    },
-    {
-      id: "demo-conflict-2",
-      conflict_type: "deadline_risk",
-      severity: "medium",
-      title: "写论文进度略慢",
-      description: "预计剩余 120 分钟，距离今晚截止较近。",
-      related_item_ids: ["demo-task-1"],
-      suggestion: "优先在下午深度工作时段推进。",
-      status: "open",
-      detected_at: at(8, 55),
     },
   ];
 
   const reminders: ReminderItem[] = [
     {
       id: "demo-reminder-1",
-      target_type: "event",
-      target_id: "demo-event-2",
-      title: "产品需求评审提醒",
-      conversation_id: "demo-conversation-1",
-      trigger_time: at(9, 50),
-      status: "pending",
-      retry_count: 0,
-      max_retries: 3,
-    },
-    {
-      id: "demo-reminder-2",
       target_type: "task",
-      target_id: "demo-task-1",
-      title: "写论文开始提醒",
+      target_id: "demo-task-5",
+      title: "拍照",
       conversation_id: "demo-conversation-1",
-      trigger_time: at(13, 20),
-      status: "pending",
-      retry_count: 0,
-      max_retries: 3,
-    },
-    {
-      id: "demo-reminder-3",
-      target_type: "event",
-      target_id: "demo-event-4",
-      title: "运动健身提醒",
-      conversation_id: "demo-conversation-1",
-      trigger_time: at(15, 40),
+      trigger_time: at(14, 0),
       status: "pending",
       retry_count: 0,
       max_retries: 3,
@@ -233,10 +297,10 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     {
       id: "demo-plan-1",
       day_plan_id: "demo-plan",
-      title: "团队晨会",
+      title: "API自动化测试 安排 A",
       item_type: "event",
-      start_time: at(9, 0),
-      end_time: at(9, 30),
+      start_time: at(15, 0),
+      end_time: at(16, 0),
       status: "completed",
       is_flexible: false,
       sort_order: 1,
@@ -244,13 +308,46 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     {
       id: "demo-plan-2",
       day_plan_id: "demo-plan",
-      title: "产品需求评审",
+      title: "API自动化测试 安排 B",
       item_type: "event",
-      start_time: at(10, 0),
-      end_time: at(11, 30),
+      start_time: at(15, 30),
+      end_time: at(16, 30),
       status: "planned",
       is_flexible: false,
       sort_order: 2,
+    },
+    {
+      id: "demo-plan-3",
+      day_plan_id: "demo-plan",
+      title: "测试日报-提醒功能验证",
+      item_type: "event",
+      start_time: at(16, 8),
+      end_time: at(17, 8),
+      status: "planned",
+      is_flexible: false,
+      sort_order: 3,
+    },
+    {
+      id: "demo-plan-4",
+      day_plan_id: "demo-plan",
+      title: "微信提醒测试",
+      item_type: "event",
+      start_time: at(16, 17),
+      end_time: at(17, 17),
+      status: "planned",
+      is_flexible: false,
+      sort_order: 4,
+    },
+    {
+      id: "demo-plan-5",
+      day_plan_id: "demo-plan",
+      title: "API自动化测试 任务",
+      item_type: "task",
+      start_time: at(17, 0),
+      end_time: at(19, 0),
+      status: "planned",
+      is_flexible: true,
+      sort_order: 5,
     },
   ];
 
@@ -267,16 +364,6 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     conflicts,
     reminders,
   };
-}
-
-function getPriorityColor(priority: string) {
-  if (priority === "high") {
-    return "red";
-  }
-  if (priority === "medium") {
-    return "gold";
-  }
-  return "blue";
 }
 
 function getConflictColor(severity: string) {
@@ -297,6 +384,465 @@ function getReminderColor(status: string) {
     return "red";
   }
   return "orange";
+}
+
+function buildEventFormDefaults(baseDate: Dayjs): CalendarEventFormValues {
+  const startTime = baseDate.hour(9).minute(0).second(0).millisecond(0);
+  return {
+    title: "",
+    description: "",
+    start_time: startTime,
+    end_time: startTime.add(1, "hour"),
+    timezone: DEFAULT_TIMEZONE,
+    location: "",
+    remind_before_minutes: 10,
+  };
+}
+
+
+type TodayPageViewProps = Readonly<{
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  contextHolder: React.ReactNode;
+  error: string | null;
+  loading: boolean;
+  timezone: string;
+  summary: DashboardSummary;
+  progressPercent: number;
+  viewData: TodayDashboardData;
+  combinedTimeline: Array<{
+    id: string;
+    kind: "event" | "plan_item";
+    start_time: string;
+    end_time: string;
+    title: string;
+    item_type?: string;
+    status?: string;
+    location?: string | null;
+  }>;
+  selectedDate: Dayjs;
+  nextEvent: { title: string; start_time: string; end_time?: string | null } | null;
+  nextReminder: ReminderItem | null;
+  agentMessages: ChatMessage[];
+  agentMessage: string;
+  agentSubmitting: boolean;
+  chatEndRef: React.RefObject<HTMLDivElement | null>;
+  setAgentMessage: React.Dispatch<React.SetStateAction<string>>;
+  handleAgentSubmit: () => Promise<void>;
+  resetChat: () => void;
+  onNavigateCalendar: () => void;
+  onNavigateConflicts: () => void;
+  onNavigateReminders: () => void;
+  onNavigateAgentLogs: () => void;
+  onRefresh: () => void;
+  onOpenEventModal: () => void;
+  onViewConflict: (conflict: ConflictItem) => void;
+}>;
+
+function TodayPageView({
+  containerRef,
+  contextHolder,
+  error,
+  loading,
+  timezone,
+  summary,
+  progressPercent,
+  viewData,
+  combinedTimeline,
+  selectedDate,
+  nextEvent,
+  nextReminder,
+  agentMessages,
+  agentMessage,
+  agentSubmitting,
+  chatEndRef,
+  setAgentMessage,
+  handleAgentSubmit,
+  resetChat,
+  onNavigateCalendar,
+  onNavigateConflicts,
+  onNavigateReminders,
+  onNavigateAgentLogs,
+  onRefresh,
+  onOpenEventModal,
+  onViewConflict,
+}: TodayPageViewProps) {
+  const conflictRows = viewData.conflicts;
+  const reminderRows = viewData.reminders;
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("timeline");
+  const ganttRows = useMemo(
+    () => buildGanttRows(combinedTimeline, selectedDate, timezone),
+    [combinedTimeline, selectedDate, timezone],
+  );
+
+  return (
+    <div ref={containerRef} className="today-page today-page--refined">
+      {contextHolder}
+      {error ? (
+        <div className="today-page__notice today-animate">
+          <Tag color="gold">示意数据</Tag>
+          <Text className="muted-text">当前网络不可用，已切换为本地示意内容。</Text>
+        </div>
+      ) : null}
+      {loading ? <TodayLoading /> : null}
+
+      <Card className="section-card dashboard-hero today-hero today-animate" bordered={false}>
+        <div className="today-hero__copy">
+          <div className="today-hero__headline">
+            <span className="hero-kicker">
+              <FireOutlined />
+              今日节奏 · 专注与平衡
+            </span>
+            <Title className="page-title today-hero__title">稳扎稳打，<br />把最重要的事先做好。</Title>
+            <Paragraph className="today-hero__lead">
+              今天的界面不再堆叠信息，而是把节奏、风险和执行顺序拉成一条清晰的主线。
+            </Paragraph>
+          </div>
+
+          <div className="today-hero__progress">
+            <div className="today-hero__progress-headline">
+              <Text className="muted-text">计划完成度</Text>
+              <Text strong>{progressPercent}%</Text>
+            </div>
+            <Progress percent={progressPercent} showInfo={false} strokeWidth={10} />
+            <div className="today-hero__mini-lines">
+              <div className="today-hero__mini-line">
+                <Text className="today-hero__mini-label">下一场</Text>
+                <Text strong className="today-hero__mini-value">
+                  {nextEvent ? nextEvent.title : "暂无排程"}
+                </Text>
+                <Text className="muted-text today-hero__mini-hint">
+                  {nextEvent ? formatRange(nextEvent.start_time, nextEvent.end_time, timezone) : "今天还没有正式安排"}
+                </Text>
+              </div>
+              <div className="today-hero__mini-line today-hero__mini-line--soft">
+                <Text className="today-hero__mini-label">最近提醒</Text>
+                <Text strong className="today-hero__mini-value">
+                  {nextReminder ? nextReminder.title : "暂无提醒"}
+                </Text>
+                <Text className="muted-text today-hero__mini-hint">
+                  {nextReminder ? formatRange(nextReminder.trigger_time, undefined, timezone) : "当前没有待触发提醒"}
+                </Text>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="today-hero__visual">
+          <div className="today-hero__art">
+            <div className="today-hero__art-badge">
+              <span className="today-hero__art-badge-dot" />
+              今日节奏 · 专注与平衡
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <div className="today-summary-grid today-animate">
+        <Card className="section-card today-summary-card" bordered={false}>
+          <div className="today-summary-card__icon">
+            <CalendarOutlined />
+          </div>
+          <div>
+            <div className="today-summary-card__label">今日安排</div>
+            <Title level={2} className="today-summary-card__value">
+              {summary.eventsCount}
+            </Title>
+            <Text className="muted-text">已排定的时间块</Text>
+          </div>
+        </Card>
+        <Card className="section-card today-summary-card" bordered={false}>
+          <div className="today-summary-card__icon">
+            <CheckCircleOutlined />
+          </div>
+          <div>
+            <div className="today-summary-card__label">待办任务</div>
+            <Title level={2} className="today-summary-card__value">
+              {summary.tasksCount}
+            </Title>
+            <Text className="muted-text">等待安排的任务</Text>
+          </div>
+        </Card>
+        <Card className="section-card today-summary-card" bordered={false}>
+          <div className="today-summary-card__icon">
+            <WarningOutlined />
+          </div>
+          <div>
+            <div className="today-summary-card__label">冲突事项</div>
+            <Title level={2} className="today-summary-card__value">
+              {summary.conflictsCount}
+            </Title>
+            <Text className="muted-text">需要处理的冲突</Text>
+          </div>
+        </Card>
+        <Card className="section-card today-summary-card" bordered={false}>
+          <div className="today-summary-card__icon">
+            <BellOutlined />
+          </div>
+          <div>
+            <div className="today-summary-card__label">提醒任务</div>
+            <Title level={2} className="today-summary-card__value">
+              {summary.remindersCount}
+            </Title>
+            <Text className="muted-text">即将触发提醒</Text>
+          </div>
+        </Card>
+      </div>
+
+      <div className="today-layout today-animate">
+        <div className="today-column">
+          <Card className="section-card today-panel today-panel--tall" bordered={false}>
+            <div className="today-panel__header today-timeline__header">
+              <div>
+                <Title level={4} className="today-panel__title">
+                  今日时间轴
+                </Title>
+                <Text className="muted-text">日期：{selectedDate.format("YYYY年M月D日")}</Text>
+              </div>
+              <Space wrap size={10}>
+                <Segmented
+                  options={[
+                    { label: "时间轴", value: "timeline" },
+                    { label: "甘特图", value: "gantt" },
+                  ]}
+                  value={timelineMode}
+                  onChange={(value) => setTimelineMode(value as TimelineMode)}
+                  size="small"
+                />
+                <Button icon={<ArrowRightOutlined />} type="text" onClick={onNavigateCalendar}>
+                  查看日历
+                </Button>
+              </Space>
+            </div>
+            {combinedTimeline.length ? (
+              timelineMode === "timeline" ? (
+                <div className="today-timeline">
+                  {combinedTimeline.map((entry) => (
+                    <div key={entry.id} className="today-timeline__item">
+                      <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
+                      <div
+                        className={[
+                          "today-timeline__dot",
+                          entry.kind === "plan_item" ? "today-timeline__dot--task" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      />
+                      <Card className="today-timeline__card" bordered={false}>
+                        <div className="today-timeline__head">
+                          <Text strong className="today-timeline__title">
+                            {entry.title}
+                          </Text>
+                          <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"}>
+                            {entry.kind === "plan_item"
+                              ? `${entry.item_type ?? "安排项"} · ${getTimelineStatusLabel(entry)}`
+                              : `日程 · ${getTimelineStatusLabel(entry)}`}
+                          </Tag>
+                        </div>
+                        <Text className="today-timeline__meta">
+                          {formatRange(entry.start_time, entry.end_time, timezone)}
+                        </Text>
+                        {entry.kind === "event" && entry.location ? (
+                          <Text className="today-timeline__meta">{entry.location}</Text>
+                        ) : null}
+                      </Card>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="today-gantt">
+                  <div className="today-gantt__axis">
+                    <span className="today-gantt__axis-label">00:00</span>
+                    <span className="today-gantt__axis-label">06:00</span>
+                    <span className="today-gantt__axis-label">12:00</span>
+                    <span className="today-gantt__axis-label">18:00</span>
+                    <span className="today-gantt__axis-label">24:00</span>
+                  </div>
+                  <div className="today-gantt__list">
+                    {ganttRows.map((row) => (
+                      <div key={row.id} className="today-gantt__row">
+                        <div className="today-gantt__meta">
+                          <Text strong className="today-gantt__title">
+                            {row.title}
+                          </Text>
+                          <Text className="today-gantt__range">
+                            {row.startLabel} - {row.endLabel}
+                          </Text>
+                          <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
+                        </div>
+                        <div className="today-gantt__track">
+                          <div className="today-gantt__grid" />
+                          <div
+                            className={["today-gantt__bar", row.accentClass].join(" ")}
+                            style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
+                          >
+                            <span className="today-gantt__bar-title">{row.title}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            ) : (
+              <EmptyState title="今天还没有正式安排" />
+            )}
+            <Button block className="today-ghost-button" type="default" onClick={onOpenEventModal}>
+              + 新增安排
+            </Button>
+          </Card>
+        </div>
+
+        <div className="today-column">
+          <Card className="section-card today-panel" bordered={false}>
+            <SectionHeader title={`冲突事项 (${conflictRows.length})`} extra={<Button type="text" onClick={onNavigateConflicts}>全部</Button>} />
+            {conflictRows.length ? (
+              <div className="today-conflict-list">
+                {conflictRows.slice(0, 3).map((conflict) => (
+                  <div key={conflict.id} className="today-conflict-item">
+                    <span className="today-conflict-item__mark" />
+                    <div className="today-conflict-item__content">
+                      <div className="today-conflict-item__head">
+                        <Text strong className="today-conflict-item__title">
+                          {conflict.title}
+                        </Text>
+                        <Tag color={getConflictColor(conflict.severity)}>{conflict.severity}</Tag>
+                      </div>
+                      {conflict.description ? (
+                        <Text className="today-conflict-item__meta">{conflict.description}</Text>
+                      ) : null}
+                      {conflict.suggestion ? (
+                        <Text className="today-conflict-item__meta">建议：{conflict.suggestion}</Text>
+                      ) : null}
+                    </div>
+                    <Button size="small" onClick={() => onViewConflict(conflict)}>查看</Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="当前没有冲突事项" />
+            )}
+            <Button block className="today-ghost-button" type="default" onClick={onNavigateConflicts}>
+              处理冲突
+            </Button>
+          </Card>
+
+          <Card className="section-card today-panel" bordered={false}>
+            <SectionHeader title={`提醒任务 (${reminderRows.length})`} extra={<Button type="text" onClick={onNavigateReminders}>全部</Button>} />
+            {reminderRows.length ? (
+              <div className="today-reminder-list">
+                {reminderRows.slice(0, 4).map((reminder) => (
+                  <div key={reminder.id} className="today-reminder-item">
+                    <span className="today-reminder-item__mark" />
+                    <div className="today-reminder-item__content">
+                      <div className="today-reminder-item__head">
+                        <Text strong className="today-reminder-item__title">
+                          {reminder.title}
+                        </Text>
+                        <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
+                      </div>
+                      <Text className="today-reminder-item__meta">{formatRange(reminder.trigger_time, undefined, timezone)}</Text>
+                      <Text className="today-reminder-item__meta">
+                        重试 {reminder.retry_count}/{reminder.max_retries}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="当前没有提醒任务" />
+            )}
+          </Card>
+        </div>
+
+        <div className="today-column">
+          <Card className="section-card today-panel today-assistant-card" bordered={false}>
+            <div className="today-assistant__header">
+              <div>
+                <Title level={4} className="today-panel__title today-assistant__title">
+                  智能助手
+                </Title>
+                <Space size={8} align="center">
+                  <span className="today-assistant__status-indicator" />
+                  <Text className="muted-text">在线</Text>
+                </Space>
+              </div>
+              <Space size={8}>
+                <Button icon={<ReloadOutlined />} type="text" onClick={onRefresh} aria-label="刷新今日数据" />
+                <Button icon={<ExpandOutlined />} type="text" onClick={onNavigateAgentLogs} aria-label="查看 Agent 日志" />
+              </Space>
+            </div>
+
+            <div className="agent-chat-panel">
+              <div className="agent-chat-stream">
+                {agentMessages.map((messageItem) => {
+                  const isUser = messageItem.role === "user";
+                  const isSystem = messageItem.role === "system";
+                  return (
+                    <div
+                      key={messageItem.id}
+                      className={[
+                        "agent-chat-row",
+                        isUser ? "agent-chat-row--user" : "agent-chat-row--assistant",
+                        isSystem ? "agent-chat-row--system" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="agent-chat-avatar">{isUser ? <UserOutlined /> : <RobotOutlined />}</div>
+                      <div
+                        className={[
+                          "agent-chat-bubble",
+                          isUser ? "agent-chat-bubble--user" : "agent-chat-bubble--assistant",
+                          isSystem ? "agent-chat-bubble--system" : "",
+                          messageItem.pending ? "agent-chat-bubble--pending" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <div className="agent-chat-bubble__content">{messageItem.content}</div>
+                        {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
+                        <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
+                      </div>
+                    </div>
+                  );
+                })}
+                {agentSubmitting ? (
+                  <div className="agent-chat-row agent-chat-row--assistant">
+                    <div className="agent-chat-avatar">
+                      <RobotOutlined />
+                    </div>
+                    <div className="agent-chat-bubble agent-chat-bubble--assistant agent-chat-bubble--pending">
+                      <div className="agent-chat-bubble__content">Agent 正在思考...</div>
+                    </div>
+                  </div>
+                ) : null}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div className="agent-chat-composer">
+                <Input.TextArea
+                  value={agentMessage}
+                  onChange={(event) => setAgentMessage(event.target.value)}
+                  rows={3}
+                  autoSize={{ minRows: 3, maxRows: 5 }}
+                  placeholder="例如：明天下午 3 点开会，提醒我提前 10 分钟"
+                />
+                <Space wrap className="agent-chat-actions">
+                  <Button icon={<ThunderboltOutlined />} onClick={resetChat}>
+                    重新开始
+                  </Button>
+                  <Button type="primary" icon={<SendOutlined />} loading={agentSubmitting} onClick={() => void handleAgentSubmit()}>
+                    发送给 Agent
+                  </Button>
+                </Space>
+              </div>
+            </div>
+          </Card>
+
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TodayLoading() {
@@ -334,9 +880,13 @@ function SectionHeader({
 
 export default function TodayPage() {
   const { session } = useAuth();
+  const router = useRouter();
   const accessToken = session?.accessToken;
-  const planDate = useMemo(() => getTodayString(), []);
+  const { timezone, loading: timezoneLoading } = useDashboardTimezone();
+  const planDate = useMemo(() => getTodayDateKey(timezone), [timezone]);
+  const selectedDate = useMemo(() => dayjs(planDate), [planDate]);
   const demoData = useMemo(() => buildDemoDashboardData(planDate), [planDate]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<TodayDashboardData | null>(null);
@@ -345,11 +895,17 @@ export default function TodayPage() {
   const [agentMessage, setAgentMessage] = useState("");
   const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [agentMessages, setAgentMessages] = useState<ChatMessage[]>(() => [createWelcomeMessage()]);
+  const [eventForm] = Form.useForm<CalendarEventFormValues>();
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [eventSubmitting, setEventSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!accessToken) {
       setLoading(false);
-      setError("请先登录后查看今日计划");
+      setError("请先登录后查看今日安排");
+      return;
+    }
+    if (timezoneLoading) {
       return;
     }
     setLoading(true);
@@ -362,7 +918,7 @@ export default function TodayPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, planDate]);
+  }, [accessToken, planDate, timezoneLoading]);
 
   useEffect(() => {
     void fetchData();
@@ -371,27 +927,42 @@ export default function TodayPage() {
   const viewData = data ?? demoData;
 
   const summary = useMemo(() => buildDashboardSummary(viewData), [viewData]);
+  const sortedEvents = useMemo(
+    () => [...viewData.events].sort((left, right) => dayjs(left.start_time).valueOf() - dayjs(right.start_time).valueOf()),
+    [viewData.events],
+  );
+  const sortedReminders = useMemo(
+    () =>
+      [...viewData.reminders].sort(
+        (left, right) => dayjs(left.trigger_time).valueOf() - dayjs(right.trigger_time).valueOf(),
+      ),
+    [viewData.reminders],
+  );
   const combinedTimeline = useMemo(() => {
     const entries = [
-      ...viewData.events.map((event) => ({ kind: "event" as const, ...event })),
-      ...(viewData.plan?.items ?? []).map((item) => ({ kind: "plan_item" as const, ...item })),
+      ...viewData.events.map((event) => ({
+        id: event.id,
+        kind: "event" as const,
+        start_time: event.start_time,
+        end_time: event.end_time ?? event.start_time,
+        title: event.title,
+        item_type: event.location ?? event.description ?? undefined,
+        status: event.status,
+        location: event.location,
+      })),
+      ...(viewData.plan?.items ?? []).map((item) => ({
+        id: item.id,
+        kind: "plan_item" as const,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        title: item.title,
+        item_type: item.item_type,
+        status: item.status,
+        location: null,
+      })),
     ];
     return sortTimelineEntries(entries);
   }, [viewData]);
-
-  const monthDays = useMemo(() => buildMonthGrid(dayjs(planDate)), [planDate]);
-  const selectedDate = dayjs(planDate);
-  const selectedDateKey = selectedDate.format("YYYY-MM-DD");
-  const monthEventMap = useMemo(() => {
-    const map = new Map<string, CalendarEventItem[]>();
-    viewData.events.forEach((event) => {
-      const key = dayjs(event.start_time).format("YYYY-MM-DD");
-      const next = map.get(key) ?? [];
-      next.push(event);
-      map.set(key, next);
-    });
-    return map;
-  }, [viewData.events]);
 
   const progressPercent = useMemo(() => {
     const planItems = viewData.plan?.items ?? [];
@@ -399,6 +970,75 @@ export default function TodayPage() {
     const completed = planItems.filter((item) => item.status === "completed").length || 2;
     return Math.min(100, Math.round((completed / total) * 100));
   }, [viewData.plan?.items]);
+
+  const nextEvent =
+    sortedEvents.find((event) => !isPastTime(event.end_time ?? event.start_time)) ??
+    viewData.plan?.items.find((item) => !isPastTime(item.end_time ?? item.start_time)) ??
+    null;
+  const nextReminder = sortedReminders.find((reminder) => !isPastTime(reminder.trigger_time)) ?? null;
+
+  const refreshData = useCallback(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  const openEventModal = useCallback(() => {
+    eventForm.setFieldsValue(buildEventFormDefaults(selectedDate));
+    setEventModalOpen(true);
+  }, [eventForm, selectedDate]);
+
+  const handleNavigateCalendar = useCallback(() => {
+    router.push("/dashboard/calendar");
+  }, [router]);
+
+  const handleNavigateConflicts = useCallback(() => {
+    router.push("/dashboard/conflicts");
+  }, [router]);
+
+  const handleNavigateReminders = useCallback(() => {
+    router.push("/dashboard/reminders");
+  }, [router]);
+
+  const handleNavigateAgentLogs = useCallback(() => {
+    router.push("/dashboard/agent-logs");
+  }, [router]);
+
+  const handleViewConflict = useCallback(
+    (conflict: ConflictItem) => {
+      messageApi.info(`已打开冲突列表：${conflict.title}`);
+      router.push("/dashboard/conflicts");
+    },
+    [messageApi, router],
+  );
+
+  const handleCreateEvent = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+    try {
+      const values = await eventForm.validateFields();
+      setEventSubmitting(true);
+      await createCalendarEvent(accessToken, {
+        title: values.title.trim(),
+        description: values.description?.trim() ? values.description.trim() : null,
+        start_time: values.start_time.toISOString(),
+        end_time: values.end_time ? values.end_time.toISOString() : null,
+        timezone: values.timezone,
+        location: values.location?.trim() ? values.location.trim() : null,
+        remind_before_minutes: values.remind_before_minutes ?? null,
+      });
+      messageApi.success("安排已创建");
+      setEventModalOpen(false);
+      eventForm.resetFields();
+      await fetchData();
+    } catch (caughtError: unknown) {
+      if (caughtError && typeof caughtError === "object" && "errorFields" in caughtError) {
+        return;
+      }
+      messageApi.error(caughtError instanceof Error ? caughtError.message : "创建安排失败");
+    } finally {
+      setEventSubmitting(false);
+    }
+  }, [accessToken, eventForm, fetchData, messageApi]);
 
   const handleAgentSubmit = useCallback(async () => {
     if (!accessToken) {
@@ -475,375 +1115,125 @@ export default function TodayPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [agentMessages, agentSubmitting]);
 
+  useGSAP(
+    () => {
+      if (loading) {
+        return;
+      }
+
+      gsap.from(".today-animate", {
+        opacity: 0,
+        y: 20,
+        duration: 0.8,
+        ease: "power3.out",
+        stagger: 0.08,
+      });
+      gsap.from(".today-hero__art", {
+        opacity: 0,
+        scale: 1.02,
+        duration: 1,
+        ease: "power2.out",
+      });
+      gsap.from(".today-summary-card, .today-panel", {
+        opacity: 0,
+        y: 12,
+        duration: 0.55,
+        ease: "power2.out",
+        stagger: 0.05,
+      });
+    },
+    { scope: containerRef, dependencies: [loading], revertOnUpdate: true },
+  );
+
   return (
-    <div className="today-page">
-      {contextHolder}
-      {error ? (
-        <div className="today-page__notice">
-          <Tag color="gold">示意数据</Tag>
-          <Text className="muted-text">当前网络不可用，已切换为本地示意内容。</Text>
-        </div>
-      ) : null}
-      {loading ? <TodayLoading /> : null}
+    <>
+      <TodayPageView
+        containerRef={containerRef}
+        contextHolder={contextHolder}
+        error={error}
+        loading={loading}
+        timezone={timezone}
+        summary={summary}
+        progressPercent={progressPercent}
+        viewData={viewData}
+        combinedTimeline={combinedTimeline}
+        selectedDate={selectedDate}
+        nextEvent={nextEvent}
+        nextReminder={nextReminder}
+        agentMessages={agentMessages}
+        agentMessage={agentMessage}
+        agentSubmitting={agentSubmitting}
+        chatEndRef={chatEndRef}
+        setAgentMessage={setAgentMessage}
+        handleAgentSubmit={handleAgentSubmit}
+        resetChat={resetChat}
+        onNavigateCalendar={handleNavigateCalendar}
+        onNavigateConflicts={handleNavigateConflicts}
+        onNavigateReminders={handleNavigateReminders}
+        onNavigateAgentLogs={handleNavigateAgentLogs}
+        onRefresh={refreshData}
+        onOpenEventModal={openEventModal}
+        onViewConflict={handleViewConflict}
+      />
 
-      <Card className="section-card dashboard-hero today-hero" bordered={false}>
-        <div className="today-hero__copy">
-          <div className="today-hero__headline">
-            <span className="hero-kicker">
-              <FireOutlined />
-              今日节奏 · 专注与平衡
-            </span>
-            <Title className="page-title today-hero__title">稳扎稳打，当日事当日毕。</Title>
-            <Paragraph className="today-hero__lead">
-              已完成 {Math.round((progressPercent / 100) * (viewData.plan?.items.length || 5))}/
-              {viewData.plan?.items.length || 5} 项计划，保持节奏，继续推进。
-            </Paragraph>
-          </div>
-
-          <div className="today-hero__progress">
-            <Progress percent={progressPercent} showInfo={false} strokeWidth={12} />
-            <Text className="muted-text">今天的重点不是做更多，而是把最重要的事情做稳。</Text>
-          </div>
-        </div>
-
-        <div className="today-hero__art" />
-      </Card>
-
-      <div className="today-summary-grid">
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <CalendarOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">今日日程</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.eventsCount}
-            </Title>
-            <Text className="muted-text">已排定的时间块</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <CheckCircleOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">待办任务</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.tasksCount}
-            </Title>
-            <Text className="muted-text">等待安排的任务</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <WarningOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">冲突事项</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.conflictsCount}
-            </Title>
-            <Text className="muted-text">需要处理的冲突</Text>
-          </div>
-        </Card>
-        <Card className="section-card today-summary-card" bordered={false}>
-          <div className="today-summary-card__icon">
-            <CoffeeOutlined />
-          </div>
-          <div>
-            <div className="today-summary-card__label">提醒任务</div>
-            <Title level={2} className="today-summary-card__value">
-              {summary.remindersCount}
-            </Title>
-            <Text className="muted-text">即将触发提醒</Text>
-          </div>
-        </Card>
-      </div>
-
-      <div className="today-grid">
-        <div className="today-stack">
-          <Card className="section-card" bordered={false}>
-            <SectionHeader
-              title="今日时间轴"
-              extra={
-                <Button icon={<ArrowRightOutlined />} type="text">
-                  查看日历
-                </Button>
-              }
+      <Modal
+        title="新建安排"
+        open={eventModalOpen}
+        onCancel={() => {
+          setEventModalOpen(false);
+          eventForm.resetFields();
+        }}
+        onOk={() => void handleCreateEvent()}
+        okText="创建安排"
+        cancelText="取消"
+        confirmLoading={eventSubmitting}
+        destroyOnClose
+      >
+        <Form form={eventForm} layout="vertical" initialValues={buildEventFormDefaults(selectedDate)}>
+          <Form.Item
+            label="标题"
+            name="title"
+            rules={[{ required: true, message: "请输入安排标题" }]}
+          >
+            <Input placeholder="例如：项目会议" />
+          </Form.Item>
+          <Form.Item label="说明" name="description">
+            <Input.TextArea rows={3} placeholder="可选" />
+          </Form.Item>
+          <Form.Item
+            label="开始时间"
+            name="start_time"
+            rules={[{ required: true, message: "请选择开始时间" }]}
+          >
+            <DatePicker
+              showTime={{ format: "HH:mm" }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: "100%" }}
             />
-            {combinedTimeline.length ? (
-              <div className="today-timeline">
-                {combinedTimeline.slice(0, 6).map((entry) => (
-                  <div key={entry.id} className="today-timeline__item">
-                    <Text className="today-timeline__time">{dayjs(entry.start_time).format("HH:mm")}</Text>
-                    <span
-                      className={[
-                        "today-timeline__dot",
-                        entry.kind === "plan_item" ? "today-timeline__dot--task" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    />
-                    <Card className="section-card today-timeline__card" bordered={false}>
-                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                        <Space wrap>
-                          <Text strong>{entry.title}</Text>
-                          <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"}>
-                            {entry.kind === "plan_item" ? entry.item_type : entry.status}
-                          </Tag>
-                        </Space>
-                        <Text className="today-timeline__meta">
-                          {formatRange(entry.start_time, entry.end_time)} ·{" "}
-                          {entry.kind === "plan_item" ? "计划项" : "日程"}
-                        </Text>
-                        {entry.kind === "event" && entry.location ? (
-                          <Text className="today-timeline__meta">{entry.location}</Text>
-                        ) : null}
-                      </Space>
-                    </Card>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="今天还没有安排正式计划" />
-            )}
-          </Card>
+          </Form.Item>
+          <Form.Item
+            label="结束时间"
+            name="end_time"
+            rules={[{ required: true, message: "请选择结束时间" }]}
+          >
+            <DatePicker
+              showTime={{ format: "HH:mm" }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+          <Form.Item label="地点" name="location">
+            <Input placeholder="可选" />
+          </Form.Item>
+          <Form.Item label="提醒分钟数" name="remind_before_minutes">
+            <InputNumber min={0} max={24 * 60} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="时区" name="timezone">
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
 
-          <Card className="section-card" bordered={false} title="任务概览">
-            {viewData.tasks.length ? (
-              <div className="today-timeline">
-                {viewData.tasks.slice(0, 5).map((task) => (
-                  <Card key={task.id} className="section-card today-timeline__card" bordered={false}>
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      <Space wrap>
-                        <Text strong>{task.title}</Text>
-                        <Tag color={getPriorityColor(task.priority)}>{task.priority}</Tag>
-                      </Space>
-                      <Text className="today-timeline__meta">
-                        {task.estimated_minutes ? `${task.estimated_minutes} 分钟` : "未设置时长"} · {task.status}
-                      </Text>
-                      {task.description ? <Text className="today-timeline__meta">{task.description}</Text> : null}
-                    </Space>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="任务池暂无任务" />
-            )}
-          </Card>
-
-          <Card className="section-card" bordered={false} title={`冲突事项 (${viewData.conflicts.length})`}>
-            {viewData.conflicts.length ? (
-              <div className="today-timeline">
-                {viewData.conflicts.slice(0, 3).map((conflict) => (
-                  <Card key={conflict.id} className="section-card today-timeline__card" bordered={false}>
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      <Space wrap>
-                        <Text strong>{conflict.title}</Text>
-                        <Tag color={getConflictColor(conflict.severity)}>{conflict.severity}</Tag>
-                      </Space>
-                      {conflict.description ? <Text className="today-timeline__meta">{conflict.description}</Text> : null}
-                      {conflict.suggestion ? <Text className="today-timeline__meta">建议：{conflict.suggestion}</Text> : null}
-                    </Space>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="当前没有冲突事项" />
-            )}
-          </Card>
-        </div>
-
-        <div className="today-stack">
-          <Card className="section-card" bordered={false}>
-            <div className="today-mini-calendar">
-              <div className="today-mini-calendar__header">
-                <div>
-                  <Title level={4} className="today-mini-calendar__title">
-                    {selectedDate.format("YYYY年M月")}
-                  </Title>
-                  <Text className="muted-text">选中日期：{selectedDate.format("YYYY年M月D日")}</Text>
-                </div>
-                <Space>
-                  <Button icon={<ArrowLeftOutlined />} />
-                  <Button icon={<ArrowRightOutlined />} />
-                </Space>
-              </div>
-
-              <div className="today-mini-calendar__grid">
-                {["一", "二", "三", "四", "五", "六", "日"].map((weekday) => (
-                  <div key={weekday} className="today-mini-calendar__weekday">
-                    {weekday}
-                  </div>
-                ))}
-                {monthDays.map((dayItem) => {
-                  const key = dayItem.format("YYYY-MM-DD");
-                  const isActive = key === selectedDateKey;
-                  const isOutside = dayItem.month() !== selectedDate.month();
-                  const eventCount = monthEventMap.get(key)?.length ?? 0;
-                  const dots = Array.from({ length: Math.min(3, eventCount) }, (_, index) => index);
-
-                  return (
-                    <div
-                      key={key}
-                      className={[
-                        "today-mini-calendar__day",
-                        isActive ? "today-mini-calendar__day--active" : "",
-                        isOutside ? "today-mini-calendar__day--outside" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <span className="today-mini-calendar__day-number">{dayItem.date()}</span>
-                      <div className="today-mini-calendar__dots">
-                        {dots.map((dotIndex) => (
-                          <span
-                            key={dotIndex}
-                            className={[
-                              "today-mini-calendar__dot",
-                              dotIndex === 0 ? "today-mini-calendar__dot--green" : "",
-                              dotIndex === 1 ? "today-mini-calendar__dot--amber" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </Card>
-
-          <Card className="section-card" bordered={false} title="当日重点">
-            {viewData.events.length ? (
-              <div className="today-mini-calendar__list">
-                {viewData.events.slice(0, 4).map((event) => (
-                  <div key={event.id} className="today-mini-calendar__list-item">
-                    <div>
-                      <Text strong>{event.title}</Text>
-                      <div className="today-timeline__meta">{formatRange(event.start_time, event.end_time)}</div>
-                    </div>
-                    <Tag color="blue">重点</Tag>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="今日重点为空" />
-            )}
-          </Card>
-
-          <Card className="section-card" bordered={false}>
-            <div className="today-assistant">
-              <div className="today-assistant__status">
-                <div>
-                  <Title level={4} className="today-assistant__status-name">
-                    智能助手
-                  </Title>
-                  <Space size={8} align="center">
-                    <span className="today-assistant__status-indicator" />
-                    <Text className="muted-text">在线</Text>
-                  </Space>
-                </div>
-                <Space size={10}>
-                  <Button icon={<ArrowLeftOutlined />} />
-                  <Button icon={<ArrowRightOutlined />} />
-                </Space>
-              </div>
-
-              <div className="agent-chat-panel">
-                <div className="agent-chat-stream">
-                  {agentMessages.map((messageItem) => {
-                    const isUser = messageItem.role === "user";
-                    const isSystem = messageItem.role === "system";
-                    return (
-                      <div
-                        key={messageItem.id}
-                        className={[
-                          "agent-chat-row",
-                          isUser ? "agent-chat-row--user" : "agent-chat-row--assistant",
-                          isSystem ? "agent-chat-row--system" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <div className="agent-chat-avatar">{isUser ? <UserOutlined /> : <RobotOutlined />}</div>
-                        <div
-                          className={[
-                            "agent-chat-bubble",
-                            isUser ? "agent-chat-bubble--user" : "agent-chat-bubble--assistant",
-                            isSystem ? "agent-chat-bubble--system" : "",
-                            messageItem.pending ? "agent-chat-bubble--pending" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          <div className="agent-chat-bubble__content">{messageItem.content}</div>
-                          {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
-                          <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {agentSubmitting ? (
-                    <div className="agent-chat-row agent-chat-row--assistant">
-                      <div className="agent-chat-avatar">
-                        <RobotOutlined />
-                      </div>
-                      <div className="agent-chat-bubble agent-chat-bubble--assistant agent-chat-bubble--pending">
-                        <div className="agent-chat-bubble__content">Agent 正在思考...</div>
-                      </div>
-                    </div>
-                  ) : null}
-                  <div ref={chatEndRef} />
-                </div>
-
-                <div className="agent-chat-composer">
-                  <Input.TextArea
-                    value={agentMessage}
-                    onChange={(event) => setAgentMessage(event.target.value)}
-                    rows={3}
-                    autoSize={{ minRows: 3, maxRows: 5 }}
-                    placeholder="例如：明天下午 3 点开会，提醒我提前 10 分钟"
-                  />
-                  <Space wrap className="agent-chat-actions">
-                    <Button icon={<ThunderboltOutlined />} onClick={resetChat}>
-                      重新开始
-                    </Button>
-                    <Button type="primary" icon={<SendOutlined />} loading={agentSubmitting} onClick={() => void handleAgentSubmit()}>
-                      发送给 Agent
-                    </Button>
-                  </Space>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="section-card" bordered={false} title="提醒任务">
-            {viewData.reminders.length ? (
-              <div className="today-timeline">
-                {viewData.reminders.slice(0, 4).map((reminder) => (
-                  <Card key={reminder.id} className="section-card today-timeline__card" bordered={false}>
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      <Space wrap>
-                        <Text strong>{reminder.title}</Text>
-                        <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
-                      </Space>
-                      <Text className="today-timeline__meta">{formatRange(reminder.trigger_time)}</Text>
-                      <Text className="today-timeline__meta">
-                        重试 {reminder.retry_count}/{reminder.max_retries}
-                      </Text>
-                    </Space>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="当前没有提醒任务" />
-            )}
-          </Card>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

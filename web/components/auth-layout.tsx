@@ -30,13 +30,13 @@ export function AuthLayout({
               </span>
               <div className="auth-story__headline">
                 <Title className="brand-display auth-story__title" style={{ margin: 0 }}>
-                  微信智能日程规划 Agent
+                  微信智能安排规划 Agent
                 </Title>
                 <Paragraph className="muted-text auth-story__subtitle">{subtitle}</Paragraph>
               </div>
               <div className="auth-story__panel">
                 <div className="auth-story__panel-copy">
-                  <Text className="muted-text">把自然语言变成可执行的日程、任务与提醒。</Text>
+                  <Text className="muted-text">把自然语言变成可执行的安排、待办与提醒。</Text>
                   <Title level={2} className="auth-story__panel-title">
                     从登录开始，进入你的专属节奏。
                   </Title>
@@ -46,7 +46,7 @@ export function AuthLayout({
                 </div>
                 <div className="auth-story__panel-grid">
                   <Card className="auth-story__metric" bordered={false}>
-                    <Text className="muted-text">今日日程</Text>
+                    <Text className="muted-text">今日安排</Text>
                     <Title level={3}>8</Title>
                   </Card>
                   <Card className="auth-story__metric" bordered={false}>
@@ -64,9 +64,9 @@ export function AuthLayout({
                 </div>
               </div>
               <Space wrap size={10}>
-                <Text className="auth-story__tag">日程</Text>
-                <Text className="auth-story__tag">任务</Text>
-                <Text className="auth-story__tag">计划</Text>
+                <Text className="auth-story__tag">安排</Text>
+                <Text className="auth-story__tag">待办</Text>
+                <Text className="auth-story__tag">草案</Text>
                 <Text className="auth-story__tag">冲突</Text>
                 <Text className="auth-story__tag">提醒</Text>
               </Space>

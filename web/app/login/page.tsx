@@ -59,7 +59,7 @@ export default function LoginPage() {
   return (
     <AuthLayout
       title="欢迎登录"
-      subtitle="使用你的账号进入日程驾驶舱，查看计划、任务、提醒和 Agent 日志。"
+      subtitle="使用你的账号进入安排驾驶舱，查看安排、待办、提醒和 Agent 日志。"
       ctaText="前往注册"
       ctaHref="/register"
     >

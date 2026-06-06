@@ -81,9 +81,9 @@ export default function NotificationSettingsPage() {
             <BellOutlined />
             通知设置
           </span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>每日日程推送</Title>
+          <Title style={{ color: "var(--text-primary)", margin: 0 }}>每日安排推送</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            开启后，系统会在每天指定时间将当日日程和天气推送到你的微信。
+            开启后，系统会在每天指定时间将当日安排和天气推送到你的微信。
           </Paragraph>
         </Space>
       </Card>
@@ -130,7 +130,7 @@ export default function NotificationSettingsPage() {
 
 📍 北京 今日天气：☀️ 晴  22~31°C
 
-📅 今日日程：
+📅 今日安排：
   • 10:00 - 产品评审会议
 
 ✅ 待办任务：

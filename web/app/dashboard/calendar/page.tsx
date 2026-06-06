@@ -37,6 +37,7 @@ import "dayjs/locale/zh-cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { requestJson } from "@/lib/api";
 import {
   completePlanItem,
@@ -46,9 +47,12 @@ import {
   deleteCalendarEvent,
   deletePlanItem,
   formatRange,
+  formatClock,
   generateDayPlan,
   loadCalendarEvents,
   loadDayPlan,
+  getDateKey,
+  getTodayDateKey,
   updatePlanItem,
   type CalendarEventItem,
   type CalendarEventUpsertPayload,
@@ -119,6 +123,19 @@ function toDisplayDate(value: Dayjs) {
   return value.format("YYYY年M月D日");
 }
 
+function getMinutesOfDay(value: string, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date(value));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
 function startOfWeek(value: Dayjs) {
   const weekday = value.day();
   const diff = weekday === 0 ? -6 : 1 - weekday;
@@ -160,10 +177,12 @@ function getViewRange(viewMode: CalendarViewMode, focusDate: Dayjs) {
   };
 }
 
-function isEventInRange(event: CalendarEventItem, start: Dayjs, end: Dayjs) {
-  const eventStart = dayjs(event.start_time);
-  const eventEnd = event.end_time ? dayjs(event.end_time) : eventStart;
-  return eventStart.isBefore(end) && eventEnd.isAfter(start);
+function isEventInRange(event: CalendarEventItem, start: Dayjs, end: Dayjs, timeZone: string) {
+  const eventStartKey = getDateKey(event.start_time, timeZone);
+  const eventEndKey = getDateKey(event.end_time ?? event.start_time, timeZone);
+  const startKey = start.format("YYYY-MM-DD");
+  const endKey = end.format("YYYY-MM-DD");
+  return eventStartKey <= endKey && eventEndKey >= startKey;
 }
 
 type SortableTimelineItem = {
@@ -230,28 +249,23 @@ function getWeekEventTheme(status: string) {
   };
 }
 
-function getEffectiveEventEnd(event: CalendarEventItem) {
-  const eventStart = dayjs(event.start_time);
-  const rawEnd = event.end_time ? dayjs(event.end_time) : eventStart.add(30, "minute");
-  return rawEnd.isAfter(eventStart) ? rawEnd : eventStart.add(30, "minute");
-}
-
-function buildWeekTimelineDays(weekDays: Dayjs[], events: CalendarEventItem[]): WeekTimelineDay[] {
+function buildWeekTimelineDays(weekDays: Dayjs[], events: CalendarEventItem[], timeZone: string): WeekTimelineDay[] {
   return weekDays.map((day) => {
-    const dayStart = day.startOf("day");
-    const dayEnd = day.add(1, "day");
+    const dayKey = day.format("YYYY-MM-DD");
     const segments: WeekTimelineEventSegment[] = [];
 
     events
       .filter((event) => event.status !== "deleted")
-      .filter((event) => isEventInRange(event, dayStart, dayEnd))
+      .filter((event) => isEventInRange(event, day.startOf("day"), day.endOf("day"), timeZone))
       .forEach((event) => {
-        const eventStart = dayjs(event.start_time);
-        const eventEnd = getEffectiveEventEnd(event);
-        const segmentStart = eventStart.isBefore(dayStart) ? dayStart : eventStart;
-        const segmentEnd = eventEnd.isAfter(dayEnd) ? dayEnd : eventEnd;
-        const topMinutes = segmentStart.diff(dayStart, "minute", true);
-        const durationMinutes = Math.max(1, segmentEnd.diff(segmentStart, "minute", true));
+        const eventStartKey = getDateKey(event.start_time, timeZone);
+        const eventEndKey = getDateKey(event.end_time ?? event.start_time, timeZone);
+        const eventStartMinutes = getMinutesOfDay(event.start_time, timeZone);
+        const eventEndMinutes = getMinutesOfDay(event.end_time ?? event.start_time, timeZone);
+        const segmentStartMinutes = eventStartKey < dayKey ? 0 : eventStartMinutes;
+        const segmentEndMinutes = eventEndKey > dayKey ? 24 * 60 : Math.max(eventEndMinutes, segmentStartMinutes + 30);
+        const topMinutes = segmentStartMinutes;
+        const durationMinutes = Math.max(1, segmentEndMinutes - segmentStartMinutes);
         segments.push({
           event,
           top: (topMinutes / 60) * WEEK_TIMELINE_HOUR_HEIGHT,
@@ -261,8 +275,8 @@ function buildWeekTimelineDays(weekDays: Dayjs[], events: CalendarEventItem[]): 
           ),
           laneIndex: 0,
           laneCount: 1,
-          startLabel: segmentStart.format("HH:mm"),
-          endLabel: segmentEnd.format("HH:mm"),
+          startLabel: formatClock(event.start_time, timeZone),
+          endLabel: formatClock(event.end_time ?? event.start_time, timeZone),
         });
       });
 
@@ -297,7 +311,7 @@ function buildWeekTimelineDays(weekDays: Dayjs[], events: CalendarEventItem[]): 
 
     return {
       day,
-      dayKey: day.format("YYYY-MM-DD"),
+      dayKey,
       segments,
     };
   });
@@ -326,13 +340,14 @@ function EmptyPanel({ title }: Readonly<{ title: string }>) {
 export default function CalendarPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
+  const { timezone, loading: timezoneLoading } = useDashboardTimezone();
   const [form] = Form.useForm<CalendarEventFormValues>();
   const [planItemForm] = Form.useForm<PlanItemFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
-  const [focusDate, setFocusDate] = useState(() => dayjs());
+  const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<CalendarEventItem[]>([]);
   const [dayPlan, setDayPlan] = useState<DayPlan | null>(null);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -346,6 +361,10 @@ export default function CalendarPage() {
   const [submitting, setSubmitting] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
   const [planItemSubmitting, setPlanItemSubmitting] = useState(false);
+
+  useEffect(() => {
+    setFocusDate(dayjs(getTodayDateKey(timezone)));
+  }, [timezone]);
 
   const fetchEvents = useCallback(async () => {
     if (!accessToken) {
@@ -379,46 +398,52 @@ export default function CalendarPage() {
     } finally {
       setPlanLoading(false);
     }
-  }, [accessToken, focusDate]);
+  }, [accessToken, focusDate, timezoneLoading]);
 
   useEffect(() => {
     if (!accessToken) {
       setEventsLoading(false);
       setPlanLoading(false);
-      setEventsError("请先登录后查看日程总览");
+      setEventsError("请先登录后查看安排总览");
+      return;
+    }
+    if (timezoneLoading) {
       return;
     }
     void fetchEvents();
-  }, [accessToken, fetchEvents]);
+  }, [accessToken, fetchEvents, timezoneLoading]);
 
   useEffect(() => {
     if (!accessToken) {
       return;
     }
+    if (timezoneLoading) {
+      return;
+    }
     void fetchDayPlan();
-  }, [accessToken, fetchDayPlan]);
+  }, [accessToken, fetchDayPlan, timezoneLoading]);
 
   const viewRange = useMemo(() => getViewRange(viewMode, focusDate), [focusDate, viewMode]);
   const visibleEvents = useMemo(
-    () => sortEvents(events.filter((event) => isEventInRange(event, viewRange.start, viewRange.end))),
-    [events, viewRange.end, viewRange.start],
+    () => sortEvents(events.filter((event) => isEventInRange(event, viewRange.start, viewRange.end, timezone))),
+    [events, timezone, viewRange.end, viewRange.start],
   );
   const selectedDayEvents = useMemo(
     () =>
       sortEvents(
         events.filter((event) =>
-          isEventInRange(event, focusDate.startOf("day"), focusDate.endOf("day")),
+          isEventInRange(event, focusDate.startOf("day"), focusDate.endOf("day"), timezone),
         ),
       ),
-    [events, focusDate],
+    [events, focusDate, timezone],
   );
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => startOfWeek(focusDate).add(index, "day")),
     [focusDate],
   );
   const weekTimelineDays = useMemo(
-    () => buildWeekTimelineDays(weekDays, events),
-    [events, weekDays],
+    () => buildWeekTimelineDays(weekDays, events, timezone),
+    [events, timezone, weekDays],
   );
   const monthGridDays = useMemo(() => buildMonthGridDays(focusDate), [focusDate]);
   const selectedDayPlanItems = useMemo(
@@ -442,15 +467,15 @@ export default function CalendarPage() {
     events
       .filter((event) => event.status !== "deleted")
       .forEach((event) => {
-        const key = dayjs(event.start_time).format("YYYY-MM-DD");
+        const key = getDateKey(event.start_time, timezone);
         const next = map.get(key) ?? [];
         next.push(event);
         map.set(key, next);
       });
     return map;
-  }, [events]);
+  }, [events, timezone]);
   const selectedDateKey = focusDate.format("YYYY-MM-DD");
-  const todayKey = dayjs().format("YYYY-MM-DD");
+  const todayKey = getTodayDateKey(timezone);
 
   const summary = useMemo(() => {
     const plannedItems = (dayPlan?.items ?? []).filter(
@@ -474,14 +499,14 @@ export default function CalendarPage() {
         description: "",
         start_time: baseDate,
         end_time: baseDate.add(1, "hour"),
-        timezone: DEFAULT_TIMEZONE,
+        timezone,
         location: "",
         remind_before_minutes: 10,
       });
       setEditingEvent(null);
       setModalOpen(true);
     },
-    [focusDate, form],
+    [focusDate, form, timezone],
   );
 
   const openEditModal = useCallback(
@@ -492,13 +517,13 @@ export default function CalendarPage() {
         description: event.description ?? "",
         start_time: dayjs(event.start_time),
         end_time: event.end_time ? dayjs(event.end_time) : null,
-        timezone: event.timezone || DEFAULT_TIMEZONE,
+        timezone: event.timezone || timezone,
         location: event.location ?? "",
         remind_before_minutes: event.remind_before_minutes ?? 0,
       });
       setModalOpen(true);
     },
-    [form],
+    [form, timezone],
   );
 
   const closeModal = useCallback(() => {
@@ -576,10 +601,10 @@ export default function CalendarPage() {
       try {
         if (editingPlanItem) {
           await updatePlanItem(accessToken, editingPlanItem.id, payload);
-          messageApi.success("计划项已更新");
+          messageApi.success("安排项已更新");
         } else {
           await createPlanItem(accessToken, payload);
-          messageApi.success("计划项已创建");
+          messageApi.success("安排项已创建");
         }
         closePlanItemModal();
         await refreshData();
@@ -600,7 +625,7 @@ export default function CalendarPage() {
       setPlanItemSubmitting(true);
       try {
         await completePlanItem(accessToken, item.id);
-        messageApi.success("计划项已完成");
+        messageApi.success("安排项已完成");
         await refreshData();
       } catch (caughtError: unknown) {
         messageApi.error(caughtError instanceof Error ? caughtError.message : "完成失败");
@@ -614,8 +639,8 @@ export default function CalendarPage() {
   const handleDeletePlanItem = useCallback(
     (item: DayPlanItem) => {
       Modal.confirm({
-        title: "删除计划项",
-        content: `确定删除计划项“${item.title}”吗？系统会保留记录，仅将其标记为取消。`,
+        title: "删除安排项",
+        content: `确定删除安排项“${item.title}”吗？系统会保留记录，仅将其标记为取消。`,
         okText: "删除",
         okButtonProps: { danger: true },
         cancelText: "取消",
@@ -625,7 +650,7 @@ export default function CalendarPage() {
           }
           try {
             await deletePlanItem(accessToken, item.id);
-            messageApi.success("计划项已删除");
+            messageApi.success("安排项已删除");
             await refreshData();
           } catch (caughtError: unknown) {
             messageApi.error(caughtError instanceof Error ? caughtError.message : "删除失败");
@@ -651,7 +676,7 @@ export default function CalendarPage() {
         description: values.description?.trim() || null,
         start_time: values.start_time.toISOString(),
         end_time: values.end_time ? values.end_time.toISOString() : null,
-        timezone: values.timezone || DEFAULT_TIMEZONE,
+        timezone: values.timezone || timezone || DEFAULT_TIMEZONE,
         location: values.location?.trim() || null,
         remind_before_minutes: values.remind_before_minutes ?? 0,
       };
@@ -667,10 +692,10 @@ export default function CalendarPage() {
             },
             accessToken,
           );
-          messageApi.success("日程已更新");
+          messageApi.success("安排已更新");
         } else {
           await createCalendarEvent(accessToken, payload);
-          messageApi.success("日程已创建");
+          messageApi.success("安排已创建");
         }
         closeModal();
         await refreshData();
@@ -680,7 +705,7 @@ export default function CalendarPage() {
         setSubmitting(false);
       }
     },
-    [accessToken, closeModal, editingEvent, messageApi, refreshData],
+    [accessToken, closeModal, editingEvent, messageApi, refreshData, timezone],
   );
 
   const handleDelete = useCallback(
@@ -689,7 +714,7 @@ export default function CalendarPage() {
         return;
       }
       Modal.confirm({
-        title: "删除日程",
+        title: "删除安排",
         content: `确认删除「${event.title}」吗？`,
         okText: "删除",
         okButtonProps: { danger: true },
@@ -697,7 +722,7 @@ export default function CalendarPage() {
         centered: true,
         onOk: async () => {
           await deleteCalendarEvent(accessToken, event.id);
-          messageApi.success("日程已删除");
+          messageApi.success("安排已删除");
           await refreshData();
         },
       });
@@ -713,7 +738,7 @@ export default function CalendarPage() {
     try {
       const result = await generateDayPlan(accessToken, toDateKey(focusDate));
       setDayPlan(result);
-      messageApi.success("计划草案已生成");
+      messageApi.success("安排草案已生成");
     } catch (caughtError: unknown) {
       messageApi.error(caughtError instanceof Error ? caughtError.message : "生成失败");
     } finally {
@@ -739,10 +764,10 @@ export default function CalendarPage() {
   }, [accessToken, dayPlan, fetchDayPlan, messageApi]);
 
   const heroTags = [
-    { color: "cyan", label: `${summary.totalEvents} 条日程` },
+    { color: "cyan", label: `${summary.totalEvents} 条安排` },
     { color: "orange", label: `${summary.visibleEvents} 条当前视图` },
-    { color: "gold", label: `${summary.planItems} 条计划项` },
-    { color: "green", label: summary.planStatus === "none" ? "未生成计划" : summary.planStatus },
+    { color: "gold", label: `${summary.planItems} 条安排项` },
+    { color: "green", label: summary.planStatus === "none" ? "未生成安排" : summary.planStatus },
   ];
 
   return (
@@ -755,9 +780,9 @@ export default function CalendarPage() {
               <CalendarOutlined />
               日历视图
             </span>
-            <Title style={{ color: "var(--text-primary)", margin: 0 }}>日程总览</Title>
+            <Title style={{ color: "var(--text-primary)", margin: 0 }}>安排总览</Title>
             <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-              这里已经接入后端的 `calendar_events` 列表，并补齐了月/周/日视图、创建、编辑、删除，以及当日计划草案和确认入口。
+              这里已经接入后端的 `calendar_events` 列表，并补齐了月/周/日视图、创建、编辑、删除，以及当日安排草案和确认入口。
             </Paragraph>
             <Space wrap>
               {heroTags.map((item) => (
@@ -804,7 +829,7 @@ export default function CalendarPage() {
                   刷新
                 </Button>
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreateModal()}>
-                  新建日程
+                  新增安排
                 </Button>
               </Space>
             </Col>
@@ -869,8 +894,8 @@ export default function CalendarPage() {
                       </Title>
                     </div>
                     <Space wrap>
-                      <Tag color="cyan">{visibleEvents.length} 条当前月日程</Tag>
-                      <Tag color="gold">{selectedDayEvents.length} 条选中日程</Tag>
+                      <Tag color="cyan">{visibleEvents.length} 条当前月安排</Tag>
+                      <Tag color="gold">{selectedDayEvents.length} 条选中安排</Tag>
                       <Tag color="default">{toDisplayDate(focusDate)}</Tag>
                     </Space>
                   </div>
@@ -958,7 +983,7 @@ export default function CalendarPage() {
                             {items.length > 2 ? (
                               <span className="calendar-month-cell__more">+{items.length - 2}</span>
                             ) : null}
-                            {!items.length ? <span className="calendar-month-cell__empty">暂无日程</span> : null}
+                            {!items.length ? <span className="calendar-month-cell__empty">暂无安排</span> : null}
                           </div>
                         </div>
                       );
@@ -978,7 +1003,7 @@ export default function CalendarPage() {
                         </div>
                         {weekTimelineDays.map(({ day, dayKey, segments }) => {
                           const isSelected = day.isSame(focusDate, "day");
-                          const isToday = day.isSame(dayjs(), "day");
+                          const isToday = day.format("YYYY-MM-DD") === todayKey;
                           return (
                             <button
                               key={dayKey}
@@ -1020,7 +1045,7 @@ export default function CalendarPage() {
 
                         {weekTimelineDays.map(({ day, dayKey, segments }) => {
                           const isSelected = day.isSame(focusDate, "day");
-                          const isToday = day.isSame(dayjs(), "day");
+                          const isToday = day.format("YYYY-MM-DD") === todayKey;
                           return (
                             <div
                               key={dayKey}
@@ -1094,7 +1119,7 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <Text className="muted-text">
-                    点击某个日期标题可切换右侧详情，点击日程块可直接编辑。
+                    点击某个日期标题可切换右侧详情，点击安排块可直接编辑。
                   </Text>
                 </Space>
               ) : selectedDayTimelineEntries.length ? (
@@ -1115,13 +1140,13 @@ export default function CalendarPage() {
                         <Space direction="vertical" size={6} style={{ width: "100%" }}>
                           <Space wrap align="center">
                             <Text strong>{entry.title}</Text>
-                            <Tag color={color}>{entry.kind === "event" ? entry.status : `计划项 · ${entry.status}`}</Tag>
+                            <Tag color={color}>{entry.kind === "event" ? entry.status : `安排项 · ${entry.status}`}</Tag>
                             {entry.kind === "event" && entry.location ? <Tag>{entry.location}</Tag> : null}
                             {entry.kind === "plan_item" ? <Tag color="cyan">{entry.item_type}</Tag> : null}
                           </Space>
                           <Text className="muted-text">
-                            {formatRange(entry.start_time, entry.end_time)} ·{" "}
-                            {entry.kind === "event" ? "日程详情" : "计划项详情"}
+                            {formatRange(entry.start_time, entry.end_time, timezone)} ·{" "}
+                            {entry.kind === "event" ? "安排详情" : "安排项详情"}
                           </Text>
                           <Space wrap>
                             {entry.kind === "event" ? (
@@ -1174,7 +1199,7 @@ export default function CalendarPage() {
                   })}
                 />
               ) : (
-                <EmptyPanel title="这一天还没有安排日程" />
+                <EmptyPanel title="这一天还没有安排" />
               )}
             </Card>
           </Col>
@@ -1188,7 +1213,7 @@ export default function CalendarPage() {
                   title={`${toDisplayDate(focusDate)} 的计划`}
                   extra={
                     <Space wrap>
-                      <Button onClick={() => openCreatePlanItemModal()}>新增计划项</Button>
+                      <Button onClick={() => openCreatePlanItemModal()}>新增安排项</Button>
                       {dayPlan?.status === "draft" ? (
                         <Button type="primary" loading={planSubmitting} onClick={() => void handleConfirmPlan()}>
                           确认计划
@@ -1208,7 +1233,7 @@ export default function CalendarPage() {
                     <Space direction="vertical" size={12} style={{ width: "100%" }}>
                       <Space wrap>
                         <Tag color={getPlanColor(dayPlan.status)}>{dayPlan.status}</Tag>
-                        <Tag color="cyan">{dayPlan.items.length} 条计划项</Tag>
+                        <Tag color="cyan">{dayPlan.items.length} 条安排项</Tag>
                       </Space>
                       <Text className="muted-text">{dayPlan.summary || "暂无计划摘要"}</Text>
                       <Divider style={{ margin: "8px 0" }} />
@@ -1220,25 +1245,25 @@ export default function CalendarPage() {
                               <Space direction="vertical" size={2}>
                                 <Text strong>{item.title}</Text>
                                 <Text className="muted-text">
-                                  {formatRange(item.start_time, item.end_time)} · {item.item_type} · {item.status}
+                                  {formatRange(item.start_time, item.end_time, timezone)} · {item.item_type} · {item.status}
                                 </Text>
                               </Space>
                             ),
                           }))}
                         />
                       ) : (
-                        <Empty description="这一天还没有计划项" />
+                        <Empty description="这一天还没有安排项" />
                       )}
                     </Space>
                   ) : (
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                      <Text className="muted-text">当前日期还没有生成正式计划。</Text>
-                      <Text className="muted-text">你可以先生成计划草案，系统会自动把任务填进这一天。</Text>
+                      <Text className="muted-text">当前日期还没有生成正式安排。</Text>
+                      <Text className="muted-text">你可以先生成安排草案，系统会自动把待办填进这一天。</Text>
                     </Space>
                   )}
                 </Card>
 
-                <Card className="section-card" bordered={false} title="当日日程">
+                <Card className="section-card" bordered={false} title="当日安排">
                   {selectedDayEvents.length ? (
                     <Space direction="vertical" size={12} style={{ width: "100%" }}>
                       {selectedDayEvents.map((event) => (
@@ -1284,7 +1309,7 @@ export default function CalendarPage() {
                               {event.location ? <Tag>{event.location}</Tag> : null}
                             </Space>
                             <Text className="muted-text">
-                              {formatRange(event.start_time, event.end_time)} · 提醒{" "}
+                              {formatRange(event.start_time, event.end_time, timezone)} · 提醒{" "}
                               {event.remind_before_minutes ?? 0} 分钟
                             </Text>
                             {event.description ? <Text className="muted-text">{event.description}</Text> : null}
@@ -1293,11 +1318,11 @@ export default function CalendarPage() {
                       ))}
                     </Space>
                   ) : (
-                    <EmptyPanel title="选中日期暂无日程" />
+                    <EmptyPanel title="选中日期暂无安排" />
                   )}
                 </Card>
 
-                <Card className="section-card" bordered={false} title="计划项管理">
+                <Card className="section-card" bordered={false} title="安排项管理">
                   {selectedDayPlanItems.length ? (
                     <Space direction="vertical" size={12} style={{ width: "100%" }}>
                       {selectedDayPlanItems.map((item) => (
@@ -1357,14 +1382,14 @@ export default function CalendarPage() {
                               {item.is_flexible ? <Tag>可弹性</Tag> : null}
                             </Space>
                             <Text className="muted-text">
-                              {formatRange(item.start_time, item.end_time)} · 排序 {item.sort_order ?? 0}
+                              {formatRange(item.start_time, item.end_time, timezone)} · 排序 {item.sort_order ?? 0}
                             </Text>
                           </Space>
                         </Card>
                       ))}
                     </Space>
                   ) : (
-                    <EmptyPanel title="选中日期暂无计划项" />
+                    <EmptyPanel title="选中日期暂无安排项" />
                   )}
                 </Card>
               </Space>
@@ -1373,11 +1398,11 @@ export default function CalendarPage() {
         </Row>
 
         <Modal
-          title={editingEvent ? "编辑日程" : "新建日程"}
+          title={editingEvent ? "编辑安排" : "新建安排"}
           open={modalOpen}
           onCancel={closeModal}
           destroyOnClose
-          okText={editingEvent ? "保存修改" : "创建日程"}
+          okText={editingEvent ? "保存修改" : "创建安排"}
           cancelText="取消"
           confirmLoading={submitting}
           onOk={() => void form.submit()}
@@ -1391,7 +1416,7 @@ export default function CalendarPage() {
             <Form.Item
               name="title"
               label="标题"
-              rules={[{ required: true, message: "请输入日程标题" }]}
+              rules={[{ required: true, message: "请输入安排标题" }]}
             >
               <Input placeholder="例如：项目会议" />
             </Form.Item>
@@ -1431,11 +1456,11 @@ export default function CalendarPage() {
         </Modal>
 
         <Modal
-          title={editingPlanItem ? "编辑计划项" : "新建计划项"}
+          title={editingPlanItem ? "编辑安排项" : "新建安排项"}
           open={planItemModalOpen}
           onCancel={closePlanItemModal}
           destroyOnClose
-          okText={editingPlanItem ? "保存修改" : "创建计划项"}
+          okText={editingPlanItem ? "保存修改" : "创建安排项"}
           cancelText="取消"
           confirmLoading={planItemSubmitting}
           onOk={() => void planItemForm.submit()}
@@ -1449,7 +1474,7 @@ export default function CalendarPage() {
             <Form.Item
               name="title"
               label="标题"
-              rules={[{ required: true, message: "请输入计划项标题" }]}
+              rules={[{ required: true, message: "请输入安排项标题" }]}
             >
               <Input placeholder="例如：整理论文材料" />
             </Form.Item>
@@ -1458,13 +1483,13 @@ export default function CalendarPage() {
                 <Form.Item
                   name="item_type"
                   label="类型"
-                  rules={[{ required: true, message: "请选择计划项类型" }]}
+                  rules={[{ required: true, message: "请选择安排项类型" }]}
                 >
                   <Select
                     options={[
                       { value: "manual", label: "手动" },
                       { value: "task", label: "任务" },
-                      { value: "event", label: "日程" },
+                      { value: "event", label: "安排" },
                       { value: "break", label: "休息" },
                     ]}
                   />
@@ -1474,7 +1499,7 @@ export default function CalendarPage() {
                 <Form.Item
                   name="status"
                   label="状态"
-                  rules={[{ required: true, message: "请选择计划项状态" }]}
+                  rules={[{ required: true, message: "请选择安排项状态" }]}
                 >
                   <Select
                     options={[
