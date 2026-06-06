@@ -416,6 +416,24 @@ GET /api/admin/wechat/status
 
 权限：owner。
 
+响应建议包含：
+
+```text
+connected
+channel_token_configured
+total_accounts
+active_accounts
+queued_outbound_messages
+sent_outbound_messages
+failed_outbound_messages
+total_identities
+active_identities
+bound_users
+last_message_at
+recent_inbound_messages
+recent_outbound_messages
+```
+
 ## 10. 日程接口
 
 ### 10.1 创建固定日程

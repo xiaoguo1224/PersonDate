@@ -96,6 +96,9 @@ class WechatStatusResponse(BaseModel):
     channel_token_configured: bool
     total_accounts: int = 0
     active_accounts: int = 0
+    queued_outbound_messages: int = 0
+    sent_outbound_messages: int = 0
+    failed_outbound_messages: int = 0
     total_identities: int
     active_identities: int
     bound_users: int

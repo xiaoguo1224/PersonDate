@@ -155,6 +155,9 @@ export type WechatStatusResponse = {
   channel_token_configured: boolean;
   total_accounts: number;
   active_accounts: number;
+  queued_outbound_messages: number;
+  sent_outbound_messages: number;
+  failed_outbound_messages: number;
   total_identities: number;
   active_identities: number;
   bound_users: number;

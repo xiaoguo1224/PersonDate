@@ -39,6 +39,9 @@ class WechatStatusSummary(TypedDict):
     channel_token_configured: bool
     total_accounts: int
     active_accounts: int
+    queued_outbound_messages: int
+    sent_outbound_messages: int
+    failed_outbound_messages: int
     total_identities: int
     active_identities: int
     bound_users: int
@@ -796,6 +799,30 @@ class WechatChannelService:
             )
             or 0
         )
+        queued_outbound_messages = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(WechatChannelOutboundMessage)
+                .where(WechatChannelOutboundMessage.status == "queued")
+            )
+            or 0
+        )
+        sent_outbound_messages = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(WechatChannelOutboundMessage)
+                .where(WechatChannelOutboundMessage.status == "sent")
+            )
+            or 0
+        )
+        failed_outbound_messages = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(WechatChannelOutboundMessage)
+                .where(WechatChannelOutboundMessage.status == "failed")
+            )
+            or 0
+        )
         bound_users = (
             self.db.scalar(
                 select(func.count(func.distinct(ChannelIdentity.user_id)))
@@ -818,6 +845,9 @@ class WechatChannelService:
             "channel_token_configured": channel_token_configured,
             "total_accounts": total_accounts,
             "active_accounts": active_accounts,
+            "queued_outbound_messages": queued_outbound_messages,
+            "sent_outbound_messages": sent_outbound_messages,
+            "failed_outbound_messages": failed_outbound_messages,
             "total_identities": total_identities,
             "active_identities": active_identities,
             "bound_users": bound_users,

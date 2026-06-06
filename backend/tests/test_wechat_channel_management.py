@@ -196,7 +196,29 @@ def test_wechat_message_logs_and_status() -> None:
         status="sent",
         retry_count=0,
     )
-    session.add_all([inbound_log, outbound_log])
+    queued_outbound = WechatChannelOutboundMessage(
+        account_id="wx_account_001",
+        message_id="msg-out-queue-2",
+        to_user_id="wx_user_owner",
+        conversation_id="wx_user_owner",
+        content="提醒：待派发消息。",
+        context_token="ctx-out-queue-2",
+        raw_payload={"source": "worker"},
+        status="queued",
+        retry_count=0,
+    )
+    sent_outbound = WechatChannelOutboundMessage(
+        account_id="wx_account_001",
+        message_id="msg-out-sent-2",
+        to_user_id="wx_user_owner",
+        conversation_id="wx_user_owner",
+        content="提醒：已发送消息。",
+        context_token="ctx-out-sent-2",
+        raw_payload={"source": "worker"},
+        status="sent",
+        retry_count=0,
+    )
+    session.add_all([inbound_log, outbound_log, queued_outbound, sent_outbound])
     session.commit()
 
     status_response = TestClient(app).get(
@@ -209,6 +231,9 @@ def test_wechat_message_logs_and_status() -> None:
     assert status_body["data"]["total_identities"] == 2
     assert status_body["data"]["active_identities"] == 2
     assert status_body["data"]["bound_users"] == 2
+    assert status_body["data"]["queued_outbound_messages"] == 1
+    assert status_body["data"]["sent_outbound_messages"] == 1
+    assert status_body["data"]["failed_outbound_messages"] == 0
     assert len(status_body["data"]["recent_inbound_messages"]) == 1
     assert len(status_body["data"]["recent_outbound_messages"]) == 1
     assert status_body["data"]["recent_inbound_messages"][0]["context_token"] == "ctx-in-1"
