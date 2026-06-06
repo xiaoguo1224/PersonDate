@@ -101,6 +101,19 @@ class WechatChannelPoller:
             )
             if handling.response.handled:
                 processed_count += 1
+                reply = handling.response.reply
+                if reply and message.context_token:
+                    try:
+                        service.send_text(
+                            conversation_id=message.conversation_id,
+                            content=reply,
+                            context_token=message.context_token,
+                            user_id=None,
+                            channel_user_id=message.channel_user_id,
+                        )
+                        self.db.commit()
+                    except Exception:
+                        self.db.rollback()
 
         service.update_account_cursor(
             account_id=account.account_id,
@@ -161,7 +174,7 @@ class WechatChannelPoller:
             content_type = item.get("content_type") or item.get("message_type") or "text"
             content = item.get("content") or item.get("text") or ""
         else:
-            raw_payload = {"value": item}
+            raw_payload = item.model_dump() if hasattr(item, "model_dump") else {"value": str(item)}
             message_id = getattr(item, "message_id", None) or getattr(item, "msg_id", None)
             conversation_id = (
                 getattr(item, "conversation_id", None)

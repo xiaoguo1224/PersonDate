@@ -6,20 +6,35 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import api_router
 from app.core.config import get_settings
-from app.core.scheduler import build_reminder_scheduler, stop_reminder_scheduler
+from app.core.scheduler import (
+    build_reminder_scheduler,
+    build_wechat_channel_scheduler,
+    stop_reminder_scheduler,
+)
 from app.core.wechat_channel import attach_wechat_channel_client, close_wechat_channel_client
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     attach_wechat_channel_client(app)
-    scheduler = build_reminder_scheduler()
-    scheduler.start()
-    app.state.reminder_scheduler = scheduler
+
+    reminder_scheduler = build_reminder_scheduler()
+    reminder_scheduler.start()
+    app.state.reminder_scheduler = reminder_scheduler
+
+    wechat_scheduler = build_wechat_channel_scheduler(
+        updates_client_provider=lambda: getattr(app.state, "wechat_updates_client", None),
+    )
+    wechat_scheduler.start()
+    app.state.wechat_scheduler = wechat_scheduler
+
     try:
         yield
     finally:
         stop_reminder_scheduler(app)
+        if wechat_scheduler:
+            wechat_scheduler.shutdown(wait=False)
+        app.state.wechat_scheduler = None
         close_wechat_channel_client(app)
 
 

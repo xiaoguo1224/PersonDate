@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
 from app.core.config import get_settings
 from app.schemas.wechat import WechatInboundRequest, WechatInboundResponse
+from app.models import ChannelIdentity, WechatAccount
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.user_service import UserService
 from app.services.wechat_channel_service import WechatChannelService
@@ -93,6 +95,22 @@ class WechatChannelAdapter:
             identity_service.get_active_by_channel_user_id(payload.channel_user_id)
             or identity_service.get_active_by_conversation_id(payload.conversation_id)
         )
+        if identity is None and payload.account_id:
+            account = self.db.scalar(
+                select(WechatAccount).where(WechatAccount.account_id == payload.account_id)
+            )
+            if account is not None:
+                identity = self.db.scalar(
+                    select(ChannelIdentity).where(
+                        ChannelIdentity.channel == "wechat",
+                        ChannelIdentity.user_id == account.owner_user_id,
+                        ChannelIdentity.status == "active",
+                    )
+                )
+                if identity is not None:
+                    identity.channel_user_id = payload.channel_user_id
+                    identity.conversation_id = payload.conversation_id
+                    self.db.flush()
         if identity is None:
             inbound_log.status = "unbound"
             inbound_log.error_message = "用户未绑定"

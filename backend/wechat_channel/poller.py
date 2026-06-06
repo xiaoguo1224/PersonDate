@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 import secrets
 import threading
 import time
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,24 +18,27 @@ from wechat_channel.ilink_client import ILinkClient, ILinkSessionExpired
 logger = logging.getLogger(__name__)
 
 
-@dataclass
 class PollerThread(threading.Thread):
     """单个微信账号的长轮询拉取线程。"""
 
-    account_id: str
-    bot_token: str
-    cursor: str | None
-    db_url: str
-    ilink: ILinkClient = field(default_factory=ILinkClient)
-    daemon: bool = True
-
-    def __post_init__(self) -> None:
-        super().__init__(name=f"poller-{self.account_id[:8]}", daemon=True)
+    def __init__(
+        self,
+        account_id: str,
+        bot_token: str,
+        cursor: str | None,
+        db_url: str,
+        ilink: ILinkClient | None = None,
+    ) -> None:
+        super().__init__(name=f"poller-{account_id[:8]}", daemon=True)
+        self.account_id = account_id
+        self.bot_token = bot_token
+        self.db_url = db_url
+        self.ilink = ilink or ILinkClient()
         engine = create_engine(self.db_url)
         self._session_factory = sessionmaker(bind=engine)
         self._stop_event = threading.Event()
-
-    @property
+        self._last_cursor_token: str | None = None
+        self._i_link_cursor: str | None = None
     def running(self) -> bool:
         return not self._stop_event.is_set()
 
@@ -47,15 +50,15 @@ class PollerThread(threading.Thread):
             try:
                 result = self.ilink.get_updates(
                     bot_token=self.bot_token,
-                    cursor=self.cursor,
+                    cursor=self._i_link_cursor,
                 )
                 consecutive_errors = 0
 
                 if result.msgs:
                     self._process_messages(result.msgs)
 
-                if result.new_cursor != self.cursor:
-                    self.cursor = result.new_cursor
+                if result.new_cursor != self._i_link_cursor:
+                    self._i_link_cursor = result.new_cursor
                     self._save_cursor()
 
             except ILinkSessionExpired:
@@ -111,6 +114,8 @@ class PollerThread(threading.Thread):
                     status="pending",
                 )
                 db.add(inbound)
+                db.flush()
+                self._last_cursor_token = inbound.cursor_token
                 db.commit()
         except Exception:
             db.rollback()
@@ -126,7 +131,8 @@ class PollerThread(threading.Thread):
                 WechatAccount.account_id == self.account_id
             ).first()
             if account:
-                account.cursor = self.cursor
+                if self._last_cursor_token:
+                    account.cursor = self._last_cursor_token
                 account.last_active_time = datetime.now(UTC)
                 db.commit()
         except Exception:
