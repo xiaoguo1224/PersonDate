@@ -49,9 +49,7 @@ import {
   generateDayPlan,
   loadCalendarEvents,
   loadDayPlan,
-  sendAgentMessage,
   updatePlanItem,
-  type AgentMessageResponse,
   type CalendarEventItem,
   type CalendarEventUpsertPayload,
   type DayPlan,
@@ -348,10 +346,6 @@ export default function CalendarPage() {
   const [submitting, setSubmitting] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
   const [planItemSubmitting, setPlanItemSubmitting] = useState(false);
-  const [agentMessage, setAgentMessage] = useState("");
-  const [agentSubmitting, setAgentSubmitting] = useState(false);
-  const [agentResponse, setAgentResponse] = useState<AgentMessageResponse | null>(null);
-  const [agentError, setAgentError] = useState<string | null>(null);
 
   const fetchEvents = useCallback(async () => {
     if (!accessToken) {
@@ -597,41 +591,6 @@ export default function CalendarPage() {
     },
     [accessToken, closePlanItemModal, editingPlanItem, focusDate, messageApi, refreshData],
   );
-
-  const handleAgentSubmit = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-    const content = agentMessage.trim();
-    if (!content) {
-      messageApi.warning("请输入一句话后再发送给 Agent");
-      return;
-    }
-    setAgentSubmitting(true);
-    setAgentError(null);
-    try {
-      const result = await sendAgentMessage(accessToken, content);
-      setAgentResponse(result);
-      if (result.success) {
-        messageApi.success(result.final_response || "Agent 已处理");
-      } else {
-        messageApi.warning(result.final_response || "Agent 返回了待处理结果");
-      }
-      setAgentMessage("");
-      await refreshData();
-    } catch (caughtError: unknown) {
-      const errorMessage = caughtError instanceof Error ? caughtError.message : "发送失败";
-      setAgentError(errorMessage);
-      messageApi.error(errorMessage);
-    } finally {
-      setAgentSubmitting(false);
-    }
-  }, [accessToken, agentMessage, messageApi, refreshData]);
-
-  const clearAgentResponse = useCallback(() => {
-    setAgentResponse(null);
-    setAgentError(null);
-  }, []);
 
   const handleCompletePlanItem = useCallback(
     async (item: DayPlanItem) => {
@@ -1277,64 +1236,6 @@ export default function CalendarPage() {
                       <Text className="muted-text">你可以先生成计划草案，系统会自动把任务填进这一天。</Text>
                     </Space>
                   )}
-                </Card>
-
-                <Card className="section-card" bordered={false} title="Agent 添加">
-                  <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                    <Text className="muted-text">
-                      直接发一句话给 Agent，它会按当前登录账号的上下文理解日程、任务、计划和冲突处理。
-                    </Text>
-                    <Input.TextArea
-                      value={agentMessage}
-                      onChange={(event) => setAgentMessage(event.target.value)}
-                      rows={4}
-                      placeholder="例如：明天下午 3 点开会，提醒我提前 10 分钟；或者 明天写论文 2 小时，帮我安排一下"
-                    />
-                    <Space wrap>
-                      <Button
-                        type="primary"
-                        loading={agentSubmitting}
-                        onClick={() => void handleAgentSubmit()}
-                      >
-                        发送给 Agent
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setAgentMessage("");
-                          clearAgentResponse();
-                        }}
-                      >
-                        清空
-                      </Button>
-                    </Space>
-                    {agentError ? (
-                      <Alert type="error" showIcon message="Agent 添加失败" description={agentError} />
-                    ) : null}
-                    {agentResponse ? (
-                      <Alert
-                        type={agentResponse.success ? "success" : "warning"}
-                        showIcon
-                        message={agentResponse.final_response || "Agent 已返回结果"}
-                        description={
-                          <Space direction="vertical" size={4}>
-                            <Text className="muted-text">
-                              intent: {agentResponse.intent || "unknown"}
-                            </Text>
-                            {agentResponse.pending_state ? (
-                              <Text className="muted-text">
-                                当前处于待处理状态，请继续按提示回复。
-                              </Text>
-                            ) : null}
-                          </Space>
-                        }
-                        action={
-                          <Button size="small" onClick={clearAgentResponse}>
-                            关闭
-                          </Button>
-                        }
-                      />
-                    ) : null}
-                  </Space>
                 </Card>
 
                 <Card className="section-card" bordered={false} title="当日日程">
