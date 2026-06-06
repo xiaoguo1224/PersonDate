@@ -40,25 +40,16 @@ import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { requestJson } from "@/lib/api";
 import {
-  completePlanItem,
-  confirmDayPlan,
-  createCalendarEvent,
-  createPlanItem,
-  deleteCalendarEvent,
-  deletePlanItem,
+  completeScheduledItem,
+  createScheduledItem,
+  deleteScheduledItem,
   formatRange,
   formatClock,
-  generateDayPlan,
-  loadCalendarEvents,
-  loadDayPlan,
   getDateKey,
   getTodayDateKey,
-  updatePlanItem,
-  type CalendarEventItem,
-  type CalendarEventUpsertPayload,
-  type DayPlan,
-  type DayPlanItem,
-  type PlanItemUpsertPayload,
+  loadScheduledItems,
+  updateScheduledItem,
+  type ScheduledItem,
 } from "@/lib/dashboard";
 
 dayjs.locale("zh-cn");

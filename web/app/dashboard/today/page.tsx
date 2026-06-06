@@ -23,19 +23,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import {
-  buildDashboardSummary,
-  createCalendarEvent,
   formatRange,
   formatClock,
   getTodayDateKey,
   loadTodayDashboard,
   sendAgentMessage,
-  type DashboardSummary,
-  type CalendarEventItem,
   type ConflictItem,
-  type DayPlan,
-  type DayPlanItem,
   type ReminderItem,
+  type ScheduledItem,
   type TaskItem,
   type TodayDashboardData,
 } from "@/lib/dashboard";
@@ -207,7 +202,7 @@ function buildGanttRows(
 function buildDemoDashboardData(planDate: string): DemoDashboard {
   const base = dayjs(planDate);
   const at = (hour: number, minute: number) => base.hour(hour).minute(minute).second(0).millisecond(0).toISOString();
-  const events: CalendarEventItem[] = [
+  const events: ScheduledItem[] = [
     {
       id: "demo-event-1",
       title: "API自动化测试 安排 A",
@@ -290,7 +285,7 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     },
   ];
 
-  const planItems: DayPlanItem[] = [
+  const planItems: ScheduledItem[] = [
     {
       id: "demo-plan-1",
       day_plan_id: "demo-plan",
@@ -355,7 +350,7 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
       summary: "先把高优先级事项稳住，再推进写论文与评审准备。",
       status: "confirmed",
       items: planItems,
-    } as DayPlan,
+    } as ScheduledItem,
     events,
     tasks,
     conflicts,

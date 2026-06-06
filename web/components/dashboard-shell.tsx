@@ -43,7 +43,7 @@ const { Title, Text } = Typography;
 const navigation: NavigationItem[] = [
   { key: "/dashboard/today", label: "今日安排", href: "/dashboard/today", icon: <HomeOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/calendar", label: "日历视图", href: "/dashboard/calendar", icon: <CalendarOutlined />, roles: ["owner", "member"] },
-  { key: "/dashboard/tasks", label: "待办", href: "/dashboard/tasks", icon: <CheckSquareOutlined />, roles: ["owner", "member"] },
+  { key: "/dashboard/tasks", label: "任务", href: "/dashboard/tasks", icon: <CheckSquareOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/conflicts", label: "冲突事项", href: "/dashboard/conflicts", icon: <WarningOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/reminders", label: "提醒任务", href: "/dashboard/reminders", icon: <BellOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/agent-logs", label: "Agent 日志", href: "/dashboard/agent-logs", icon: <FileTextOutlined />, roles: ["owner", "member"] },
@@ -164,7 +164,7 @@ function DashboardShellContent({
 
         <div className="dashboard-sidebar__meta">
           <span className="hero-kicker">Dashboard</span>
-          <Text className="muted-text">安排、待办、冲突与提醒统一管理</Text>
+          <Text className="muted-text">安排、任务、冲突与提醒统一管理</Text>
         </div>
 
         <Menu
