@@ -589,8 +589,8 @@ function TodayPageView({
       </div>
 
       <div className="today-layout today-animate">
-        <div className="today-column">
-          <Card className="section-card today-panel today-panel--tall" bordered={false}>
+        <div className="today-main">
+          <Card className="section-card today-panel" bordered={false}>
             <div className="today-panel__header today-timeline__header">
               <div>
                 <Title level={4} className="today-panel__title">
@@ -615,38 +615,53 @@ function TodayPageView({
             </div>
             {combinedTimeline.length ? (
               timelineMode === "timeline" ? (
-                <div className="today-timeline">
-                  {combinedTimeline.map((entry) => (
-                    <div key={entry.id} className="today-timeline__item">
-                      <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
-                      <div
-                        className={[
-                          "today-timeline__dot",
-                          entry.kind === "plan_item" ? "today-timeline__dot--task" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      />
-                      <Card className="today-timeline__card" bordered={false}>
-                        <div className="today-timeline__head">
-                          <Text strong className="today-timeline__title">
-                            {entry.title}
-                          </Text>
-                          <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"}>
-                            {entry.kind === "plan_item"
-                              ? `${entry.item_type ?? "安排项"} · ${getTimelineStatusLabel(entry)}`
-                              : `日程 · ${getTimelineStatusLabel(entry)}`}
-                          </Tag>
+                <div className="today-timeline-horizontal">
+                  <div className="today-timeline-horizontal__axis">
+                    <span>00:00</span>
+                    <span>06:00</span>
+                    <span>12:00</span>
+                    <span>18:00</span>
+                    <span>24:00</span>
+                  </div>
+                  <div className="today-timeline-horizontal__track">
+                    {combinedTimeline.map((entry) => {
+                      const dayStart = selectedDate.startOf("day");
+                      const nextDayStart = dayStart.add(1, "day");
+                      const start = dayjs(entry.start_time);
+                      const rawEnd = dayjs(entry.end_time ?? entry.start_time);
+                      const fallback = entry.kind === "plan_item" ? 90 : 60;
+                      const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallback, "minute");
+                      const clampedStart = start.isBefore(dayStart) ? dayStart : start;
+                      const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
+                      const totalMinutes = 24 * 60;
+                      const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
+                      const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
+                      const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
+                      const barWidth = Math.min(100 - barLeft, Math.max(2.5, (durationMinutes / totalMinutes) * 100));
+                      return (
+                        <div
+                          key={entry.id}
+                          className="today-timeline-horizontal__item"
+                          data-kind={entry.kind}
+                          style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+                        >
+                          <div className="today-timeline-horizontal__time">
+                            {formatClock(entry.start_time, timezone)}
+                          </div>
+                          <div className="today-timeline-horizontal__body">
+                            <Text strong className="today-timeline-horizontal__title" ellipsis>
+                              {entry.title}
+                            </Text>
+                            <div className="today-timeline-horizontal__meta">
+                              <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
+                                {getTimelineStatusLabel(entry)}
+                              </Tag>
+                            </div>
+                          </div>
                         </div>
-                        <Text className="today-timeline__meta">
-                          {formatRange(entry.start_time, entry.end_time, timezone)}
-                        </Text>
-                        {entry.kind === "event" && entry.location ? (
-                          <Text className="today-timeline__meta">{entry.location}</Text>
-                        ) : null}
-                      </Card>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="today-gantt">
@@ -690,71 +705,71 @@ function TodayPageView({
               + 新增安排
             </Button>
           </Card>
+
+          <div className="today-sub-grid">
+            <Card className="section-card today-panel" bordered={false}>
+              <SectionHeader title={`冲突事项 (${conflictRows.length})`} extra={<Button type="text" onClick={onNavigateConflicts}>全部</Button>} />
+              {conflictRows.length ? (
+                <div className="today-conflict-list">
+                  {conflictRows.slice(0, 3).map((conflict) => (
+                    <div key={conflict.id} className="today-conflict-item">
+                      <span className="today-conflict-item__mark" />
+                      <div className="today-conflict-item__content">
+                        <div className="today-conflict-item__head">
+                          <Text strong className="today-conflict-item__title">
+                            {conflict.title}
+                          </Text>
+                          <Tag color={getConflictColor(conflict.severity)}>{conflict.severity}</Tag>
+                        </div>
+                        {conflict.description ? (
+                          <Text className="today-conflict-item__meta">{conflict.description}</Text>
+                        ) : null}
+                        {conflict.suggestion ? (
+                          <Text className="today-conflict-item__meta">建议：{conflict.suggestion}</Text>
+                        ) : null}
+                      </div>
+                      <Button size="small" onClick={() => onViewConflict(conflict)}>查看</Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="当前没有冲突事项" />
+              )}
+              <Button block className="today-ghost-button" type="default" onClick={onNavigateConflicts}>
+                处理冲突
+              </Button>
+            </Card>
+
+            <Card className="section-card today-panel" bordered={false}>
+              <SectionHeader title={`提醒任务 (${reminderRows.length})`} extra={<Button type="text" onClick={onNavigateReminders}>全部</Button>} />
+              {reminderRows.length ? (
+                <div className="today-reminder-list">
+                  {reminderRows.slice(0, 4).map((reminder) => (
+                    <div key={reminder.id} className="today-reminder-item">
+                      <span className="today-reminder-item__mark" />
+                      <div className="today-reminder-item__content">
+                        <div className="today-reminder-item__head">
+                          <Text strong className="today-reminder-item__title">
+                            {reminder.title}
+                          </Text>
+                          <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
+                        </div>
+                        <Text className="today-reminder-item__meta">{formatRange(reminder.trigger_time, undefined, timezone)}</Text>
+                        <Text className="today-reminder-item__meta">
+                          重试 {reminder.retry_count}/{reminder.max_retries}
+                        </Text>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="当前没有提醒任务" />
+              )}
+            </Card>
+          </div>
         </div>
 
-        <div className="today-column">
-          <Card className="section-card today-panel" bordered={false}>
-            <SectionHeader title={`冲突事项 (${conflictRows.length})`} extra={<Button type="text" onClick={onNavigateConflicts}>全部</Button>} />
-            {conflictRows.length ? (
-              <div className="today-conflict-list">
-                {conflictRows.slice(0, 3).map((conflict) => (
-                  <div key={conflict.id} className="today-conflict-item">
-                    <span className="today-conflict-item__mark" />
-                    <div className="today-conflict-item__content">
-                      <div className="today-conflict-item__head">
-                        <Text strong className="today-conflict-item__title">
-                          {conflict.title}
-                        </Text>
-                        <Tag color={getConflictColor(conflict.severity)}>{conflict.severity}</Tag>
-                      </div>
-                      {conflict.description ? (
-                        <Text className="today-conflict-item__meta">{conflict.description}</Text>
-                      ) : null}
-                      {conflict.suggestion ? (
-                        <Text className="today-conflict-item__meta">建议：{conflict.suggestion}</Text>
-                      ) : null}
-                    </div>
-                    <Button size="small" onClick={() => onViewConflict(conflict)}>查看</Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="当前没有冲突事项" />
-            )}
-            <Button block className="today-ghost-button" type="default" onClick={onNavigateConflicts}>
-              处理冲突
-            </Button>
-          </Card>
-
-          <Card className="section-card today-panel" bordered={false}>
-            <SectionHeader title={`提醒任务 (${reminderRows.length})`} extra={<Button type="text" onClick={onNavigateReminders}>全部</Button>} />
-            {reminderRows.length ? (
-              <div className="today-reminder-list">
-                {reminderRows.slice(0, 4).map((reminder) => (
-                  <div key={reminder.id} className="today-reminder-item">
-                    <span className="today-reminder-item__mark" />
-                    <div className="today-reminder-item__content">
-                      <div className="today-reminder-item__head">
-                        <Text strong className="today-reminder-item__title">
-                          {reminder.title}
-                        </Text>
-                        <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
-                      </div>
-                      <Text className="today-reminder-item__meta">{formatRange(reminder.trigger_time, undefined, timezone)}</Text>
-                      <Text className="today-reminder-item__meta">
-                        重试 {reminder.retry_count}/{reminder.max_retries}
-                      </Text>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="当前没有提醒任务" />
-            )}
-          </Card>
-        </div>
-
-        <div className="today-column">
+        <div className="today-sidebar">
           <Card className="section-card today-panel today-assistant-card" bordered={false}>
             <div className="today-assistant__header">
               <div>
@@ -838,7 +853,6 @@ function TodayPageView({
               </div>
             </div>
           </Card>
-
         </div>
       </div>
     </div>
