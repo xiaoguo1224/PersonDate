@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import secrets
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -109,18 +107,40 @@ def send_message(
                 detail="微信账号不存在或未绑定",
             )
         _ensure_active_account(account)
+    if account is None:
+        account = service.resolve_send_account(
+            conversation_id=payload.conversation_id,
+            to_user_id=payload.to_user_id,
+        )
+        if account is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="当前没有可用的微信账号",
+            )
+        _ensure_active_account(account)
 
-    message_id = f"wx_out_{int(datetime.now(UTC).timestamp() * 1000)}_{secrets.token_hex(4)}"
-    if payload.conversation_id is None:
-        conversation_id = payload.to_user_id
-    else:
-        conversation_id = payload.conversation_id
+    conversation_id = payload.conversation_id or payload.to_user_id
+    outbound = service.create_outbound_message(
+        account=account,
+        to_user_id=payload.to_user_id,
+        conversation_id=conversation_id,
+        content=payload.content,
+        context_token=payload.context_token,
+        raw_payload={
+            "to_user_id": payload.to_user_id,
+            "conversation_id": conversation_id,
+            "content": payload.content,
+            "context_token": payload.context_token,
+        },
+        status="sent",
+    )
+    db.commit()
 
     return WechatSendTextResponse(
         success=True,
         ret=0,
-        message_id=message_id,
-        detail=f"消息已接收并准备发送到 {conversation_id}",
+        message_id=outbound.message_id,
+        detail=f"消息已发送到 {conversation_id}",
     )
 
 

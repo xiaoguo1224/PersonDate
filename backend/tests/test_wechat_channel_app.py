@@ -3,13 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import User, WechatAccount, WechatChannelInboundMessage
+from app.models import ChannelIdentity, User, WechatAccount, WechatChannelInboundMessage
 from app.schemas.wechat_channel import WechatGetUpdatesResponse
 from app.services.wechat_channel_service import WechatChannelService
 
@@ -64,6 +64,16 @@ def test_wechat_channel_app_exposes_protocol_routes(monkeypatch) -> None:
         status="active",
     )
     _session.add(account)
+    _session.add(
+        ChannelIdentity(
+            user_id=owner.id,
+            channel="wechat",
+            channel_user_id="wx_1",
+            conversation_id="wx_1",
+            display_name="Owner",
+            status="active",
+        )
+    )
     _session.commit()
     client = TestClient(app)
 
@@ -219,3 +229,63 @@ def test_wechat_channel_app_ingest_message_makes_it_visible_to_getupdates(monkey
     )
     assert dedupe_response.status_code == 200
     assert dedupe_response.json()["deduplicated"] is True
+
+
+def test_wechat_channel_app_sendmessage_persists_outbound_record(monkeypatch) -> None:
+    from app import wechat_channel_routes as routes_module
+
+    monkeypatch.setattr(
+        routes_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_channel_token=None),
+    )
+    app, session = _build_client()
+    owner = User(
+        username="owner_1",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    session.add(owner)
+    session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    session.add(account)
+    session.add(
+        ChannelIdentity(
+            user_id=owner.id,
+            channel="wechat",
+            channel_user_id="wx_user_001",
+            conversation_id="wx_user_001",
+            display_name="Owner",
+            status="active",
+        )
+    )
+    session.commit()
+    client = TestClient(app)
+
+    response = client.post(
+        "/sendmessage",
+        json={
+            "to_user_id": "wx_user_001",
+            "conversation_id": "wx_user_001",
+            "content": "提醒：15:00 开会",
+            "context_token": "ctx_out_001",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["message_id"] is not None
+
+    outbound_count = session.execute(
+        text("select count(*) from wechat_channel_outbound_messages")
+    ).scalar_one()
+    assert outbound_count == 1

@@ -47,6 +47,7 @@ LangGraph SchedulePlanningGraph
 - wechat_accounts
 - channel_identities
 - channel_message_logs
+- wechat_channel_outbound_messages
 - wechat_login_sessions
 
 日程业务域：
@@ -554,6 +555,41 @@ INDEX(channel_user_id)
 INDEX(direction)
 INDEX(created_at)
 UNIQUE(channel, account_id, message_id) WHERE message_id IS NOT NULL
+```
+
+## 6.5 wechat_channel_outbound_messages
+
+微信通道出站消息表，用于记录通道侧接收并准备发送的消息。
+
+### 字段设计
+
+```text
+id UUID PK
+account_id VARCHAR(255) NOT NULL
+message_id VARCHAR(255) NOT NULL
+to_user_id VARCHAR(255) NOT NULL
+conversation_id VARCHAR(255) NOT NULL
+content TEXT NOT NULL
+context_token TEXT
+raw_payload JSONB
+status VARCHAR(32) NOT NULL DEFAULT 'sent'
+retry_count INTEGER NOT NULL DEFAULT 0
+error_code VARCHAR(64)
+error_message TEXT
+sent_at TIMESTAMPTZ
+created_at TIMESTAMPTZ NOT NULL
+updated_at TIMESTAMPTZ NOT NULL
+```
+
+### 索引
+
+```text
+INDEX(account_id)
+INDEX(to_user_id)
+INDEX(conversation_id)
+INDEX(status)
+INDEX(sent_at)
+UNIQUE(account_id, message_id)
 ```
 
 ## 7. 日程业务域

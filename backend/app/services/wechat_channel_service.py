@@ -16,6 +16,7 @@ from app.models import (
     MessageDirection,
     WechatAccount,
     WechatChannelInboundMessage,
+    WechatChannelOutboundMessage,
     WechatLoginSession,
 )
 from app.schemas.wechat_channel import (
@@ -135,6 +136,52 @@ class WechatChannelService:
         bot_token: str | None = None,
     ) -> WechatAccount | None:
         return self._resolve_account(account_id=account_id, bot_token=bot_token)
+
+    def resolve_send_account(
+        self,
+        *,
+        account_id: str | None = None,
+        conversation_id: str | None = None,
+        to_user_id: str | None = None,
+    ) -> WechatAccount | None:
+        if account_id is not None:
+            account = self.get_account_by_account_id(account_id)
+            if account is not None and account.status == "active":
+                return account
+            return None
+
+        candidate_identity = None
+        if conversation_id is not None:
+            candidate_identity = self.db.scalar(
+                select(ChannelIdentity).where(
+                    ChannelIdentity.channel == "wechat",
+                    ChannelIdentity.status == "active",
+                    ChannelIdentity.conversation_id == conversation_id,
+                )
+            )
+        if candidate_identity is None and to_user_id is not None:
+            candidate_identity = self.db.scalar(
+                select(ChannelIdentity).where(
+                    ChannelIdentity.channel == "wechat",
+                    ChannelIdentity.status == "active",
+                    ChannelIdentity.channel_user_id == to_user_id,
+                )
+            )
+        if candidate_identity is None:
+            return None
+
+        stmt = (
+            select(WechatAccount)
+            .where(
+                WechatAccount.owner_user_id == candidate_identity.user_id,
+                WechatAccount.status == "active",
+            )
+            .order_by(
+                WechatAccount.last_active_time.desc().nullslast(),
+                WechatAccount.created_at.desc(),
+            )
+        )
+        return self.db.scalar(stmt)
 
     def confirm_login_session(
         self,
@@ -610,6 +657,42 @@ class WechatChannelService:
             error_code=error_code,
             error_message=error_message,
         )
+
+    def create_outbound_message(
+        self,
+        *,
+        account: WechatAccount,
+        to_user_id: str,
+        conversation_id: str,
+        content: str,
+        context_token: str | None = None,
+        raw_payload: dict[str, object] | None = None,
+        message_id: str | None = None,
+        status: str = "sent",
+        retry_count: int = 0,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> WechatChannelOutboundMessage:
+        outbound = WechatChannelOutboundMessage(
+            account_id=account.account_id,
+            message_id=(
+                message_id
+                or f"wx_out_{int(datetime.now(UTC).timestamp() * 1000)}_{secrets.token_hex(4)}"
+            ),
+            to_user_id=to_user_id,
+            conversation_id=conversation_id,
+            content=content,
+            context_token=context_token,
+            raw_payload=raw_payload or {},
+            status=status,
+            retry_count=retry_count,
+            error_code=error_code,
+            error_message=error_message,
+            sent_at=datetime.now(UTC) if status == "sent" else None,
+        )
+        self.db.add(outbound)
+        self.db.flush()
+        return outbound
 
     def get_status_summary(self, *, recent_limit: int = 10) -> WechatStatusSummary:
         settings = get_settings()

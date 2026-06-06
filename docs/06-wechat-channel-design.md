@@ -622,8 +622,8 @@ channel_identities
 wechat_message_logs
   - 入站、出站消息、context_token、retry_count、error_code、处理状态
 
-wechat_send_logs
-  - 发送结果与错误信息
+wechat_channel_outbound_messages
+  - 通道侧出站消息、发送状态、错误信息
 
 wechat_allowed_users
   - 通道白名单
