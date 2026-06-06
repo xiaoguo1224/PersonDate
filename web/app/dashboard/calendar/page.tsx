@@ -41,12 +41,8 @@ import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { requestJson } from "@/lib/api";
 import {
   completeScheduledItem,
-  confirmDayDrafts,
-  createScheduledItem,
   createScheduledItem,
   deleteScheduledItem,
-  generateDayDrafts,
-  confirmDayDrafts,
   formatRange,
   formatClock,
   getDateKey,
