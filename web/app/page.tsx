@@ -219,24 +219,19 @@ function RobotWritingCalendar() {
       >
         {/* 机器人身体 */}
         <g className="robot-bg__body">
-          {/* 头部 */}
           <rect x="220" y="40" width="120" height="100" rx="24" fill="url(#robotGrad)" opacity="0.18" />
           <rect x="220" y="40" width="120" height="100" rx="24" stroke="url(#robotStroke)" strokeWidth="0.6" opacity="0.15" />
-          {/* 眼睛 */}
           <circle cx="260" cy="82" r="6" fill="#2563eb" opacity="0.2" />
           <circle cx="300" cy="82" r="6" fill="#2563eb" opacity="0.2" />
-          {/* 天线 */}
           <line x1="280" y1="40" x2="280" y2="20" stroke="#2563eb" strokeWidth="0.5" opacity="0.15" />
           <circle cx="280" cy="18" r="4" fill="#2563eb" opacity="0.15" />
 
-          {/* 身体 */}
           <rect x="238" y="155" width="84" height="110" rx="16" fill="url(#robotGrad)" opacity="0.15" />
           <rect x="238" y="155" width="84" height="110" rx="16" stroke="url(#robotStroke)" strokeWidth="0.6" opacity="0.12" />
-          {/* 胸口屏幕 */}
           <rect x="254" y="175" width="52" height="28" rx="6" fill="#2563eb" opacity="0.08" />
           <text x="267" y="193" fontSize="8" fill="#2563eb" opacity="0.2" fontFamily="monospace">AI</text>
 
-          {/* 左臂（数据线风格，指向左上方） */}
+          {/* 左臂 */}
           <path
             d="M238 180 C200 160, 160 140, 130 120"
             stroke="#2563eb"
@@ -246,53 +241,61 @@ function RobotWritingCalendar() {
             strokeDasharray="3 3"
           />
 
-          {/* 右臂（握笔写日程 - 主视觉） */}
-          <g className="robot-bg__arm">
-            <path
-              d="M322 180 C360 200, 400 230, 430 270"
-              stroke="#2563eb"
-              strokeWidth="0.5"
-              opacity="0.12"
-              fill="none"
-            />
-            {/* 手/笔尖 */}
-            <g className="robot-bg__pen">
-              <line x1="430" y1="270" x2="445" y2="290" stroke="#2563eb" strokeWidth="0.6" opacity="0.15" />
-              <circle cx="448" cy="294" r="2" fill="#2563eb" opacity="0.2" />
-            </g>
-          </g>
-
           {/* 底座 */}
           <rect x="254" y="270" width="52" height="12" rx="6" fill="#2563eb" opacity="0.1" />
         </g>
 
-        {/* 日历/日程表 */}
-        <g className="robot-bg__calendar" opacity="0.13">
-          {/* 日历本 */}
-          <rect x="410" y="230" width="140" height="170" rx="10" fill="white" stroke="#2563eb" strokeWidth="0.4" />
-          {/* 日历顶部 */}
-          <rect x="410" y="230" width="140" height="30" rx="10" fill="#2563eb" opacity="0.08" />
-          <rect x="410" y="246" width="140" height="14" fill="#2563eb" opacity="0.08" />
-          {/* 日历标题 */}
-          <text x="455" y="249" fontSize="10" fill="#2563eb" opacity="0.25" textAnchor="middle" fontFamily="sans-serif" fontWeight="600">6 月</text>
-          {/* 日程条目 */}
-          <line x1="424" y1="278" x2="518" y2="278" stroke="#2563eb" strokeWidth="0.3" opacity="0.08" />
-          <circle cx="430" cy="286" r="2" fill="#2563eb" opacity="0.08" />
-          <text x="438" y="289" fontSize="7" fill="#2563eb" opacity="0.12">09:00 项目晨会</text>
-
-          <line x1="424" y1="304" x2="518" y2="304" stroke="#2563eb" strokeWidth="0.3" opacity="0.08" />
-          <circle cx="430" cy="312" r="2" fill="#2563eb" opacity="0.08" />
-          <text x="438" y="315" fontSize="7" fill="#2563eb" opacity="0.12">10:30 客户沟通</text>
-
-          <line x1="424" y1="330" x2="518" y2="330" stroke="#2563eb" strokeWidth="0.3" opacity="0.08" />
-          <circle cx="430" cy="338" r="2" fill="#2563eb" opacity="0.08" />
-          <text x="438" y="341" fontSize="7" fill="#2563eb" opacity="0.12">14:00 产品评审</text>
-
-          {/* 当前写入动画（闪烁竖线） */}
-          <line x1="424" y1="350" x2="424" y2="364" stroke="#2563eb" strokeWidth="0.5" opacity="0.15" className="robot-bg__cursor" />
+        {/* 右臂（GSAP 动效目标） */}
+        <g className="robot-arm">
+          {/* 手臂路径 - GSAP 用 stroke-dashoffset 做"画出"效果 */}
+          <path
+            className="robot-arm__draw"
+            d="M322 180 C360 200, 400 230, 430 270"
+            stroke="#2563eb"
+            strokeWidth="0.5"
+            opacity="0.12"
+            fill="none"
+            strokeDasharray="140"
+            strokeDashoffset="140"
+          />
+          {/* 笔 + 笔尖 */}
+          <g className="robot-arm__pen">
+            <line x1="430" y1="270" x2="445" y2="290" stroke="#2563eb" strokeWidth="0.6" opacity="0.15" />
+            <circle cx="448" cy="294" r="2.5" fill="#2563eb" opacity="0.08" className="robot-arm__tip" />
+          </g>
         </g>
 
-        {/* 连接线（机器人脑中的日程数据流向日历） */}
+        {/* 日历 */}
+        <g className="robot-bg__calendar" opacity="0.13">
+          <rect x="410" y="230" width="140" height="170" rx="10" fill="white" stroke="#2563eb" strokeWidth="0.4" />
+          <rect x="410" y="230" width="140" height="30" rx="10" fill="#2563eb" opacity="0.08" />
+          <rect x="410" y="246" width="140" height="14" fill="#2563eb" opacity="0.08" />
+          <text x="455" y="249" fontSize="10" fill="#2563eb" opacity="0.25" textAnchor="middle" fontFamily="sans-serif" fontWeight="600">6 月</text>
+
+          {/* 日程条目 — 逐条出现 */}
+          <g className="robot-row robot-row--1" opacity="0">
+            <line x1="424" y1="278" x2="518" y2="278" stroke="#2563eb" strokeWidth="0.3" />
+            <circle cx="430" cy="286" r="2" fill="#2563eb" />
+            <text x="438" y="289" fontSize="7" fill="#2563eb">09:00 项目晨会</text>
+          </g>
+
+          <g className="robot-row robot-row--2" opacity="0">
+            <line x1="424" y1="304" x2="518" y2="304" stroke="#2563eb" strokeWidth="0.3" />
+            <circle cx="430" cy="312" r="2" fill="#2563eb" />
+            <text x="438" y="315" fontSize="7" fill="#2563eb">10:30 客户沟通</text>
+          </g>
+
+          <g className="robot-row robot-row--3" opacity="0">
+            <line x1="424" y1="330" x2="518" y2="330" stroke="#2563eb" strokeWidth="0.3" />
+            <circle cx="430" cy="338" r="2" fill="#2563eb" />
+            <text x="438" y="341" fontSize="7" fill="#2563eb">14:00 产品评审</text>
+          </g>
+
+          {/* 写入光标 */}
+          <line x1="424" y1="352" x2="424" y2="368" stroke="#2563eb" strokeWidth="0.5" opacity="0.15" className="robot-bg__cursor" />
+        </g>
+
+        {/* 数据流向 */}
         <g opacity="0.08">
           <path
             d="M280 270 C300 310, 360 340, 420 350"
@@ -312,7 +315,6 @@ function RobotWritingCalendar() {
           />
         </g>
 
-        {/* 浮动小数据点 */}
         <circle cx="340" cy="300" r="1.5" fill="#2563eb" opacity="0.12" className="robot-bg__particle" />
         <circle cx="360" cy="340" r="1" fill="#2563eb" opacity="0.1" className="robot-bg__particle" />
         <circle cx="380" cy="290" r="1.5" fill="#2563eb" opacity="0.08" className="robot-bg__particle" />

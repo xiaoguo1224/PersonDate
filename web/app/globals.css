@@ -1207,6 +1207,21 @@ body {
   50% { transform: translateY(-12px); opacity: 0.18; }
 }
 
+/* 机器人手臂 GSAP 动效 */
+.robot-arm__draw {
+  stroke-linecap: round;
+}
+.robot-arm__tip {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.robot-arm__pen {
+  transform-origin: 430px 270px;
+}
+.robot-row {
+  pointer-events: none;
+}
+
 /* 导航 */
 .landing-nav {
   position: fixed;
