@@ -521,6 +521,26 @@ class WechatChannelService:
         stmt = stmt.order_by(ChannelMessageLog.created_at.desc()).limit(limit)
         return list(self.db.scalars(stmt))
 
+    def list_outbound_messages(
+        self,
+        *,
+        account_id: str | None = None,
+        conversation_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[WechatChannelOutboundMessage]:
+        stmt = select(WechatChannelOutboundMessage)
+        if account_id is not None:
+            stmt = stmt.where(WechatChannelOutboundMessage.account_id == account_id)
+        if conversation_id is not None:
+            stmt = stmt.where(
+                WechatChannelOutboundMessage.conversation_id == conversation_id,
+            )
+        if status is not None:
+            stmt = stmt.where(WechatChannelOutboundMessage.status == status)
+        stmt = stmt.order_by(WechatChannelOutboundMessage.created_at.desc()).limit(limit)
+        return list(self.db.scalars(stmt))
+
     def create_message_log(
         self,
         *,

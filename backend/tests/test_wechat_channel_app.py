@@ -367,3 +367,64 @@ def test_wechat_channel_app_dispatches_queued_outbound_messages(monkeypatch) -> 
     assert outbound_row.status == "sent"
     assert outbound_row.retry_count == 0
     assert outbound_row.sent_at is not None
+
+
+def test_wechat_channel_app_lists_outbound_messages(monkeypatch) -> None:
+    from app import wechat_channel_routes as routes_module
+
+    monkeypatch.setattr(
+        routes_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_channel_token=None),
+    )
+    app, session = _build_client()
+    owner = User(
+        username="owner_1",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    session.add(owner)
+    session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    session.add(account)
+    session.add(
+        ChannelIdentity(
+            user_id=owner.id,
+            channel="wechat",
+            channel_user_id="wx_user_001",
+            conversation_id="wx_user_001",
+            display_name="Owner",
+            status="active",
+        )
+    )
+    session.commit()
+    client = TestClient(app)
+
+    send_response = client.post(
+        "/sendmessage",
+        json={
+            "to_user_id": "wx_user_001",
+            "conversation_id": "wx_user_001",
+            "content": "提醒：15:00 开会",
+            "context_token": "ctx_out_001",
+        },
+    )
+    assert send_response.status_code == 200
+
+    list_response = client.get("/outbound", params={"status": "queued"})
+
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert len(payload["items"]) == 1
+    item = payload["items"][0]
+    assert item["status"] == "queued"
+    assert item["conversation_id"] == "wx_user_001"
+    assert item["content"] == "提醒：15:00 开会"

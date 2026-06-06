@@ -392,7 +392,48 @@ error_code
 error_message
 ```
 
-## 13. 去重机制
+## 14. 出站队列查询
+
+`wechat-channel` 提供一个内部排障接口，用于查询当前出站队列与最终发送状态。
+
+推荐接口：
+
+```http
+GET /outbound
+```
+
+可选查询参数：
+
+```text
+account_id
+conversation_id
+status
+limit
+```
+
+返回项建议包含：
+
+```text
+message_id
+to_user_id
+conversation_id
+content
+status
+retry_count
+error_code
+error_message
+sent_at
+created_at
+updated_at
+```
+
+用途：
+
+1. 验证 queued 消息是否被调度派发。
+2. 排查 failed 消息的错误信息。
+3. 为 Web Dashboard 或运维脚本提供通道侧状态查询能力。
+
+## 15. 去重机制
 
 必须基于以下组合去重：
 
@@ -420,9 +461,9 @@ account_id + message_id
 
 建议使用 Redis 或数据库唯一约束实现。
 
-## 14. 异常处理
+## 16. 异常处理
 
-### 14.1 token 失效
+### 16.1 token 失效
 
 表现：
 
@@ -438,7 +479,7 @@ getupdates 返回 session timeout 或鉴权失败
 通知管理员重新扫码绑定
 ```
 
-### 14.2 二维码过期
+### 16.2 二维码过期
 
 表现：
 
@@ -454,7 +495,7 @@ getupdates 返回 session timeout 或鉴权失败
 或者让用户手动刷新
 ```
 
-### 14.3 Agent 超时
+### 16.3 Agent 超时
 
 处理：
 
@@ -464,7 +505,7 @@ getupdates 返回 session timeout 或鉴权失败
 完成后再补发结果
 ```
 
-### 14.4 sendmessage 失败
+### 16.4 sendmessage 失败
 
 处理：
 
