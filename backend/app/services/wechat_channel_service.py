@@ -726,6 +726,14 @@ class WechatChannelService:
                 message.status = "failed"
                 message.error_code = "ACCOUNT_NOT_AVAILABLE"
                 message.error_message = "微信账号当前不可用"
+                self._sync_outbound_message_log(
+                    account_id=message.account_id,
+                    message_id=message.message_id,
+                    status="failed",
+                    retry_count=message.retry_count,
+                    error_code=message.error_code,
+                    error_message=message.error_message,
+                )
                 continue
 
             message.status = "sent"
@@ -733,6 +741,14 @@ class WechatChannelService:
             message.error_code = None
             message.error_message = None
             account.last_active_time = now
+            self._sync_outbound_message_log(
+                account_id=message.account_id,
+                message_id=message.message_id,
+                status="sent",
+                retry_count=message.retry_count,
+                error_code=None,
+                error_message=None,
+            )
             dispatched_count += 1
 
         self.db.flush()
@@ -872,6 +888,31 @@ class WechatChannelService:
             .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def _sync_outbound_message_log(
+        self,
+        *,
+        account_id: str,
+        message_id: str,
+        status: str,
+        retry_count: int,
+        error_code: str | None,
+        error_message: str | None,
+    ) -> None:
+        log = self.db.scalar(
+            select(ChannelMessageLog).where(
+                ChannelMessageLog.channel == "wechat",
+                ChannelMessageLog.account_id == account_id,
+                ChannelMessageLog.message_id == message_id,
+                ChannelMessageLog.direction == MessageDirection.OUTBOUND.value,
+            )
+        )
+        if log is None:
+            return
+        log.status = status
+        log.retry_count = retry_count
+        log.error_code = error_code
+        log.error_message = error_message
 
     def _is_retryable_send_failure(self, error_code: str | None, error_message: str | None) -> bool:
         if error_code is not None and error_code.upper() in self.SEND_TEXT_RETRYABLE_ERROR_CODES:

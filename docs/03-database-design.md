@@ -604,6 +604,7 @@ failed
 
 `sendmessage` 先把消息写入 `wechat_channel_outbound_messages`，状态为 `queued`。  
 `wechat-channel` 进程中的调度任务会周期性扫描 queued 消息，派发成功后改为 `sent`，派发失败则改为 `failed` 并记录错误信息。  
+同一条出站消息的最终状态会同步回写到 `channel_message_logs`，方便 Web Dashboard 和审计日志查看。  
 这样可以把“协议接收”与“实际发送执行”拆开，避免通道接口和发送状态强耦合。
 
 ## 7. 日程业务域

@@ -9,7 +9,7 @@ from app.api.deps import get_db
 from app.core.config import get_settings
 from app.db.base import Base
 from app.main import create_app
-from app.models import ChannelMessageLog
+from app.models import ChannelMessageLog, User, WechatAccount, WechatChannelOutboundMessage
 from app.schemas.auth import LoginRequest
 from app.schemas.setup import OwnerInitRequest
 from app.services.auth_service import AuthService
@@ -209,6 +209,88 @@ def test_wechat_channel_service_send_text_records_queued_outbound_log() -> None:
     assert log.retry_count == 0
     assert log.error_code is None
     assert log.error_message is None
+
+
+def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+
+    owner = User(
+        username="owner_001",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    session.add(owner)
+    session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    session.add(account)
+    session.add(
+        ChannelMessageLog(
+            user_id=owner.id,
+            channel="wechat",
+            account_id=account.account_id,
+            message_id="wx_out_001",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="outbound",
+            content_type="text",
+            content="提醒：15:00 开会",
+            context_token="ctx_001",
+            raw_payload={"message_id": "wx_out_001"},
+            status="queued",
+            retry_count=0,
+        )
+    )
+    session.add(
+        WechatChannelOutboundMessage(
+            account_id=account.account_id,
+            message_id="wx_out_001",
+            to_user_id="wx_user_001",
+            conversation_id="wx_user_001",
+            content="提醒：15:00 开会",
+            context_token="ctx_001",
+            raw_payload={"message_id": "wx_out_001"},
+            status="queued",
+            retry_count=0,
+        )
+    )
+    session.commit()
+
+    service = WechatChannelService(session)
+    processed = service.dispatch_outbound_messages_once()
+    session.commit()
+
+    assert processed == 1
+    outbound_row = session.scalar(
+        session.query(WechatChannelOutboundMessage).filter_by(message_id="wx_out_001").statement
+    )
+    assert outbound_row is not None
+    assert outbound_row.status == "sent"
+    assert outbound_row.sent_at is not None
+
+    outbound_log = session.scalar(
+        session.query(ChannelMessageLog).filter_by(message_id="wx_out_001").statement
+    )
+    assert outbound_log is not None
+    assert outbound_log.status == "sent"
+    assert outbound_log.retry_count == 0
+    assert outbound_log.error_code is None
+    assert outbound_log.error_message is None
 
 
 def test_wechat_channel_service_send_text_retries_transient_errors() -> None:

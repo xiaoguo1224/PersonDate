@@ -9,7 +9,12 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import ChannelIdentity, User, WechatAccount, WechatChannelInboundMessage
+from app.models import (
+    ChannelIdentity,
+    User,
+    WechatAccount,
+    WechatChannelInboundMessage,
+)
 from app.schemas.wechat_channel import WechatGetUpdatesResponse
 from app.services.wechat_channel_service import WechatChannelService
 
@@ -348,6 +353,7 @@ def test_wechat_channel_app_dispatches_queued_outbound_messages(monkeypatch) -> 
 
     assert response.status_code == 200
     assert response.json()["success"] is True
+    assert response.json()["message_id"] is not None
 
     processed = run_wechat_outbound_dispatch_scan(session_factory=lambda: session)
     session.commit()
