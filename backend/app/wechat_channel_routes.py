@@ -15,6 +15,8 @@ from app.schemas.wechat_channel import (
     WechatGetConfigResponse,
     WechatGetUpdatesRequest,
     WechatGetUpdatesResponse,
+    WechatIngestMessageRequest,
+    WechatIngestMessageResponse,
     WechatSendMessageRequest,
     WechatSendTextResponse,
     WechatSendTypingRequest,
@@ -62,6 +64,32 @@ def get_updates(
         bot_token=payload.bot_token,
         account_id=payload.account_id,
         get_updates_buf=payload.get_updates_buf,
+    )
+
+
+@router.post("/ingest", response_model=WechatIngestMessageResponse)
+def ingest_message(
+    payload: WechatIngestMessageRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[None, Depends(_require_channel_token)],
+) -> WechatIngestMessageResponse:
+    service = WechatChannelService(db)
+    try:
+        message, deduplicated = service.ingest_message(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    db.commit()
+    return WechatIngestMessageResponse(
+        success=True,
+        ret=0,
+        account_id=message.account_id,
+        message_id=message.message_id,
+        cursor_token=message.cursor_token,
+        status=message.status,
+        deduplicated=deduplicated,
     )
 
 

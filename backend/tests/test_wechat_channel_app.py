@@ -47,6 +47,24 @@ def test_wechat_channel_app_exposes_protocol_routes(monkeypatch) -> None:
         lambda: SimpleNamespace(wechat_channel_token=None),
     )
     app, _session = _build_client()
+    owner = User(
+        username="owner_1",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    _session.add(owner)
+    _session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    _session.add(account)
+    _session.commit()
     client = TestClient(app)
 
     assert client.post("/getupdates", json={"get_updates_buf": ""}).status_code == 200
@@ -111,3 +129,77 @@ def test_wechat_channel_app_getupdates_returns_seeded_messages(monkeypatch) -> N
     assert payload.messages[0].message_id == "wx_msg_001"
     assert payload.messages[0].content == "明天下午 3 点开会"
     assert payload.next_cursor is not None
+
+
+def test_wechat_channel_app_ingest_message_makes_it_visible_to_getupdates(monkeypatch) -> None:
+    from app import wechat_channel_routes as routes_module
+
+    monkeypatch.setattr(
+        routes_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_channel_token=None),
+    )
+    app, _session = _build_client()
+    owner = User(
+        username="owner_1",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    _session.add(owner)
+    _session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    _session.add(account)
+    _session.commit()
+    client = TestClient(app)
+
+    ingest_response = client.post(
+        "/ingest",
+        json={
+            "account_id": "wx_account_001",
+            "message_id": "wx_msg_002",
+            "conversation_id": "wx_conv_001",
+            "channel_user_id": "wx_user_001",
+            "display_name": "张三",
+            "content_type": "text",
+            "content": "明天有什么安排？",
+            "raw_payload": {"message_id": "wx_msg_002"},
+        },
+    )
+    assert ingest_response.status_code == 200
+    ingest_payload = ingest_response.json()
+    assert ingest_payload["account_id"] == "wx_account_001"
+    assert ingest_payload["message_id"] == "wx_msg_002"
+
+    updates_response = client.post(
+        "/getupdates",
+        json={"account_id": "wx_account_001", "get_updates_buf": ""},
+    )
+
+    assert updates_response.status_code == 200
+    payload = WechatGetUpdatesResponse.model_validate(updates_response.json())
+    assert payload.messages[0].message_id == "wx_msg_002"
+    assert payload.messages[0].content == "明天有什么安排？"
+
+    dedupe_response = client.post(
+        "/ingest",
+        json={
+            "account_id": "wx_account_001",
+            "message_id": "wx_msg_002",
+            "conversation_id": "wx_conv_001",
+            "channel_user_id": "wx_user_001",
+            "display_name": "张三",
+            "content_type": "text",
+            "content": "明天有什么安排？",
+            "raw_payload": {"message_id": "wx_msg_002"},
+        },
+    )
+    assert dedupe_response.status_code == 200
+    assert dedupe_response.json()["deduplicated"] is True

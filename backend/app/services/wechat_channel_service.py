@@ -21,6 +21,7 @@ from app.schemas.wechat_channel import (
     WechatChannelMessageItem,
     WechatGetConfigResponse,
     WechatGetUpdatesResponse,
+    WechatIngestMessageRequest,
     WechatSendTypingResponse,
 )
 
@@ -294,6 +295,37 @@ class WechatChannelService:
         self.db.add(message)
         self.db.flush()
         return message
+
+    def ingest_message(
+        self,
+        payload: WechatIngestMessageRequest,
+    ) -> tuple[WechatChannelInboundMessage, bool]:
+        account = self.get_account_by_account_id(payload.account_id)
+        if account is None:
+            raise ValueError("微信账号不存在或未绑定")
+
+        existing = self.db.scalar(
+            select(WechatChannelInboundMessage).where(
+                WechatChannelInboundMessage.account_id == payload.account_id,
+                WechatChannelInboundMessage.message_id == payload.message_id,
+            )
+        )
+        if existing is not None:
+            return existing, True
+
+        message = self.enqueue_inbound_message(
+            account_id=payload.account_id,
+            message_id=payload.message_id,
+            conversation_id=payload.conversation_id,
+            channel_user_id=payload.channel_user_id,
+            display_name=payload.display_name,
+            content_type=payload.content_type,
+            content=payload.content,
+            context_token=payload.context_token,
+            raw_payload=payload.raw_payload,
+        )
+        account.last_active_time = datetime.now(UTC)
+        return message, False
 
     def get_updates(
         self,

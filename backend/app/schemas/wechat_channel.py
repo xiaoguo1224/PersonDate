@@ -92,6 +92,30 @@ class WechatSendTypingResponse(BaseModel):
     error_message: str | None = None
 
 
+class WechatIngestMessageRequest(BaseModel):
+    account_id: str
+    message_id: str | None = None
+    conversation_id: str
+    channel_user_id: str
+    display_name: str | None = None
+    content_type: str = "text"
+    content: str
+    context_token: str | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class WechatIngestMessageResponse(BaseModel):
+    success: bool = True
+    ret: int = 0
+    account_id: str
+    message_id: str
+    cursor_token: str
+    status: str = "queued"
+    deduplicated: bool = False
+    error_code: str | None = None
+    error_message: str | None = None
+
+
 class WechatChannelInboundMessageItem(BaseModel):
     id: str
     account_id: str

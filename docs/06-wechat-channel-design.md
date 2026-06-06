@@ -266,7 +266,53 @@ raw_payload
 调用 sendmessage
 ```
 
-## 10. 调用 Agent
+## 10. 消息接入接口
+
+自研 `wechat-channel` 需要提供一个消息接入入口，用于把外部来源的微信原始消息写入轮询队列。
+
+推荐接口：
+
+```http
+POST /ingest
+```
+
+请求：
+
+```json
+{
+  "account_id": "wx_account_001",
+  "message_id": "wx_msg_001",
+  "conversation_id": "wx_user_001",
+  "channel_user_id": "wx_user_001",
+  "display_name": "用户昵称",
+  "content_type": "text",
+  "content": "明天下午 3 点开会",
+  "context_token": "ctx_001",
+  "raw_payload": {}
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "ret": 0,
+  "account_id": "wx_account_001",
+  "message_id": "wx_msg_001",
+  "cursor_token": "1730000000000_xxxxxxxx",
+  "status": "queued",
+  "deduplicated": false
+}
+```
+
+要求：
+
+1. 同一 `account_id + message_id` 重复写入时必须幂等返回。
+2. 成功写入后，`getupdates` 应能按游标顺序拉到该消息。
+3. 该接口是通道内部能力，不直接进入业务 Agent。
+
+## 11. 调用 Agent
 
 Agent 统一暴露一个调用入口。
 
@@ -293,7 +339,7 @@ status
 
 Agent 不应返回微信专用结构，只返回“说什么”和“做了什么”。
 
-## 11. 会话 ID 设计
+## 12. 会话 ID 设计
 
 建议按账号和发送者隔离会话：
 
@@ -307,7 +353,7 @@ wechat:{account_id}:{group_id}:{from_user_id}:{session_id}
 
 如果后续支持多个通道账号，必须把 `account_id` 加入会话键，避免不同账号之间串会话。
 
-## 12. 回复消息
+## 13. 回复消息
 
 回复消息时必须保留原始消息里的 `context_token`。
 
