@@ -1,7 +1,7 @@
 "use client";
 
 import { CopyOutlined, LoadingOutlined, QrcodeOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Empty, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Empty, Modal, QRCode, Space, Spin, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -32,6 +32,7 @@ export default function WechatBindingPage() {
   const [accounts, setAccounts] = useState<WechatAccountItem[]>([]);
   const [loginSession, setLoginSession] = useState<WechatLoginSessionCreateResponse | null>(null);
   const [loginSessionDetail, setLoginSessionDetail] = useState<WechatLoginSessionItem | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -118,6 +119,7 @@ export default function WechatBindingPage() {
     if (loginSessionDetail?.status !== "confirmed") {
       return;
     }
+    setQrModalOpen(false);
     void loadIdentities();
     void loadAccounts();
   }, [loadAccounts, loadIdentities, loginSessionDetail?.status]);
@@ -144,6 +146,7 @@ export default function WechatBindingPage() {
         accessToken,
       );
       setLoginSession(result);
+      setQrModalOpen(true);
       await loadLoginSession(result.login_session_id);
       message.success("二维码登录会话已创建");
       await loadIdentities();
@@ -168,6 +171,10 @@ export default function WechatBindingPage() {
       return;
     }
     await loadLoginSession(loginSession.login_session_id);
+  };
+
+  const handleCloseQrModal = () => {
+    setQrModalOpen(false);
   };
 
   const handleUnbind = async (identityId: string) => {
@@ -232,11 +239,14 @@ export default function WechatBindingPage() {
           type="success"
           showIcon
           message={`请使用微信扫码完成登录：${loginSession.login_session_id}`}
-          description={`二维码载荷：${loginSession.qr_payload}，会话将在 ${formatDateTime(loginSession.expires_at)} 过期。`}
+          description={`会话将在 ${formatDateTime(loginSession.expires_at)} 过期。扫码后请保持当前页面打开，系统会自动轮询确认状态。`}
           action={
             <Space>
               <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopySessionId()}>
                 复制会话 ID
+              </Button>
+              <Button size="small" icon={<QrcodeOutlined />} onClick={() => setQrModalOpen(true)}>
+                查看二维码
               </Button>
               <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRefreshSession()}>
                 刷新会话
@@ -245,6 +255,27 @@ export default function WechatBindingPage() {
           }
         />
       ) : null}
+
+      <Modal
+        open={qrModalOpen && Boolean(loginSession)}
+        title="微信二维码登录"
+        onCancel={handleCloseQrModal}
+        footer={null}
+        centered
+        destroyOnClose
+      >
+        <Space direction="vertical" size={16} style={{ width: "100%", alignItems: "center", textAlign: "center" }}>
+          <QRCode value={loginSession?.qr_payload ?? ""} size={240} bordered />
+          <Space direction="vertical" size={4}>
+            <Text strong>请使用微信扫码完成登录</Text>
+            <Text className="muted-text">会话 ID：{loginSession?.login_session_id}</Text>
+            <Text className="muted-text">
+              过期时间：{loginSession ? formatDateTime(loginSession.expires_at) : "未知"}
+            </Text>
+            <Text className="muted-text">扫码后页面会自动刷新会话状态。</Text>
+          </Space>
+        </Space>
+      </Modal>
 
       {loginSessionDetail ? (
         <Alert
