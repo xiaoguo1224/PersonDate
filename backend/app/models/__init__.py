@@ -30,9 +30,6 @@ from app.models.enums import (
     UserStatus,
 )
 from app.models.schedule import (
-    CalendarEvent,
-    DayPlan,
-    PlanItem,
     ReminderJob,
     ScheduleConflict,
     TaskItem,
@@ -44,7 +41,6 @@ from app.models.user import InviteCode, InviteCodeUsage, User, UserSettings
 __all__ = [
     "AgentPendingState",
     "AgentRunLog",
-    "CalendarEvent",
     "ChannelIdentity",
     "ChannelMessageLog",
     "WechatChannelInboundMessage",
@@ -55,7 +51,6 @@ __all__ = [
     "ConflictStatus",
     "ConflictType",
     "ContentType",
-    "DayPlan",
     "DayPlanStatus",
     "EventStatus",
     "InviteCode",
@@ -66,7 +61,6 @@ __all__ = [
     "PendingStateType",
     "PlanItemStatus",
     "PlanItemType",
-    "PlanItem",
     "ReminderJob",
     "ReminderStatus",
     "ReminderTargetType",
@@ -75,8 +69,8 @@ __all__ = [
     "ScheduledItemStatus",
     "ScheduledItemSource",
     "ScheduleSource",
-    "SystemSetting",
     "TaskItem",
+    "SystemSetting",
     "TaskPriority",
     "TaskStatus",
     "User",
