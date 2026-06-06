@@ -2961,19 +2961,6 @@ body {
   line-height: 1.65;
 }
 
-.today-page--refined .today-board {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr) minmax(320px, 0.9fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.today-page--refined .today-column {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
 @media (max-width: 1280px) {
   .today-page--refined .today-hero,
   .today-page--refined .today-board {
@@ -3271,22 +3258,34 @@ body {
 
 .today-page--refined .today-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.96fr);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr);
   gap: 18px;
   align-items: start;
 }
 
-.today-page--refined .today-column {
+.today-page--refined .today-main {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.today-page--refined .today-panel {
+.today-page--refined .today-sidebar {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+}
+
+.today-page--refined .today-sidebar .today-assistant-card {
+  flex: 1;
+  min-height: 600px;
+}
+
+.today-panel {
   padding: 22px;
 }
 
-.today-page--refined .today-panel--tall {
+.today-panel--tall {
   min-height: 100%;
 }
 
@@ -3308,48 +3307,112 @@ body {
   align-items: flex-start;
 }
 
-.today-page--refined .today-timeline {
+/* ── 水平时间轴 ── */
+.today-page--refined .today-timeline-horizontal {
+  position: relative;
+  padding-top: 28px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.today-page--refined .today-timeline-horizontal__axis {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.today-page--refined .today-timeline-horizontal__track {
+  position: relative;
+  height: 90px;
+  border-radius: 14px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.06) 0,
+      rgba(148, 163, 184, 0.06) 1px,
+      transparent 1px,
+      transparent 4.166%
+    ),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.6), rgba(255, 255, 255, 0.8));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  min-width: 720px;
+}
+
+.today-page--refined .today-timeline-horizontal__item {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  min-width: 48px;
+  border-radius: 10px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.today-page--refined .today-timeline__item {
-  display: grid;
-  grid-template-columns: 52px 12px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.today-page--refined .today-timeline__time {
-  padding-top: 16px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  text-align: right;
-}
-
-.today-page--refined .today-timeline__dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 18px;
-  border-radius: 999px;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s;
   background: linear-gradient(135deg, #3b82f6, #60a5fa);
-  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.08);
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.18);
 }
-
-.today-page--refined .today-timeline__dot--task {
+.today-page--refined .today-timeline-horizontal__item:hover {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.28);
+  transform: translateY(-1px);
+}
+.today-page--refined .today-timeline-horizontal__item[data-kind="plan_item"] {
   background: linear-gradient(135deg, #10b981, #34d399);
-  box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.18);
+}
+.today-page--refined .today-timeline-horizontal__item[data-kind="plan_item"]:hover {
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.28);
 }
 
-.today-page--refined .today-timeline__card {
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.94)),
-    rgba(255, 255, 255, 0.92);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+.today-page--refined .today-timeline-horizontal__time {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.today-page--refined .today-timeline-horizontal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.today-page--refined .today-timeline-horizontal__title {
+  color: #fff !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-page--refined .today-timeline-horizontal__meta {
+  display: flex;
+  align-items: center;
+}
+
+/* ── 冲突+提醒 并排子网格 ── */
+.today-page--refined .today-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.today-page--refined .today-sub-grid .today-panel {
+  padding: 18px;
 }
 
 .today-page--refined .today-timeline__head,
@@ -3647,6 +3710,10 @@ body {
   .today-page--refined .today-layout {
     grid-template-columns: 1fr;
   }
+
+  .today-page--refined .today-sub-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 992px) {
@@ -3661,16 +3728,16 @@ body {
   .today-page--refined .today-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .today-page--refined .today-sub-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
   .today-page--refined .today-hero__mini-lines,
   .today-page--refined .today-summary-grid {
     grid-template-columns: 1fr;
-  }
-
-  .today-page--refined .today-timeline__item {
-    grid-template-columns: 42px 10px minmax(0, 1fr);
   }
 
   .today-page--refined .today-task-item,
