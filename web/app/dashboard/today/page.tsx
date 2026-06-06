@@ -103,6 +103,34 @@ function sortTimelineEntries<T extends { start_time: string; title: string }>(it
   });
 }
 
+type TrackEntry = {
+  id: string;
+  startMs: number;
+  endMs: number;
+};
+
+function assignTracks(entries: TrackEntry[]): number[] {
+  const tracks: number[] = [];
+  const occupied: Array<{ startMs: number; endMs: number }>[] = [];
+
+  for (const entry of entries) {
+    let trackIdx = 0;
+    for (; trackIdx < occupied.length; trackIdx++) {
+      const hasOverlap = occupied[trackIdx].some(
+        (slot) => entry.startMs < slot.endMs && entry.endMs > slot.startMs,
+      );
+      if (!hasOverlap) break;
+    }
+    if (trackIdx >= occupied.length) {
+      occupied.push([]);
+    }
+    occupied[trackIdx].push({ startMs: entry.startMs, endMs: entry.endMs });
+    tracks.push(trackIdx);
+  }
+
+  return tracks;
+}
+
 function isPastTime(value: string, referenceTime = Date.now()) {
   return new Date(value).getTime() < referenceTime;
 }
@@ -570,45 +598,67 @@ function TodayPageView({
                     <span>18:00</span>
                     <span>24:00</span>
                   </div>
-                  <div className="today-timeline-horizontal__track">
-                    {combinedTimeline.map((entry) => {
-                      const dayStart = selectedDate.startOf("day");
-                      const nextDayStart = dayStart.add(1, "day");
+                  {(() => {
+                    const TRACK_HEIGHT = 56;
+                    const TRACK_GAP = 4;
+                    const dayStart = selectedDate.startOf("day");
+                    const nextDayStart = dayStart.add(1, "day");
+                    const totalMinutes = 24 * 60;
+
+                    const entries = combinedTimeline.map((entry) => {
                       const start = dayjs(entry.start_time);
                       const rawEnd = dayjs(entry.end_time ?? entry.start_time);
                       const fallback = entry.kind === "plan_item" ? 90 : 60;
                       const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallback, "minute");
                       const clampedStart = start.isBefore(dayStart) ? dayStart : start;
                       const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
-                      const totalMinutes = 24 * 60;
                       const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
                       const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
                       const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
-                      const barWidth = Math.min(100 - barLeft, Math.max(2.5, (durationMinutes / totalMinutes) * 100));
-                      return (
-                        <div
-                          key={entry.id}
-                          className="today-timeline-horizontal__item"
-                          data-kind={entry.kind}
-                          style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
-                        >
-                          <div className="today-timeline-horizontal__time">
-                            {formatClock(entry.start_time, timezone)}
-                          </div>
-                          <div className="today-timeline-horizontal__body">
-                            <Text strong className="today-timeline-horizontal__title" ellipsis>
-                              {entry.title}
-                            </Text>
-                            <div className="today-timeline-horizontal__meta">
-                              <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
-                                {getTimelineStatusLabel(entry)}
-                              </Tag>
+                      const barWidth = Math.min(100 - barLeft, Math.max(3, (durationMinutes / totalMinutes) * 100));
+                      return { ...entry, _left: barLeft, _width: barWidth, _startMs: clampedStart.valueOf(), _endMs: clampedEnd.valueOf() };
+                    });
+
+                    const tracks = assignTracks(entries.map((e) => ({ id: e.id, startMs: e._startMs, endMs: e._endMs })));
+                    const trackCount = Math.max(1, ...tracks) + 1;
+                    const trackHeight = TRACK_HEIGHT * trackCount + TRACK_GAP * (trackCount - 1) + 20;
+
+                    return (
+                      <div
+                        className="today-timeline-horizontal__track"
+                        style={{ height: trackHeight }}
+                      >
+                        {entries.map((entry, idx) => {
+                          const track = tracks[idx];
+                          return (
+                            <div
+                              key={entry.id}
+                              className="today-timeline-horizontal__item"
+                              data-kind={entry.kind}
+                              style={{
+                                left: `${entry._left}%`,
+                                width: `${entry._width}%`,
+                                top: 10 + track * (TRACK_HEIGHT + TRACK_GAP),
+                                height: TRACK_HEIGHT,
+                              }}
+                            >
+                              <div className="today-timeline-horizontal__time">
+                                {formatClock(entry.start_time, timezone)}
+                              </div>
+                              <div className="today-timeline-horizontal__title" title={entry.title}>
+                                {entry.title}
+                              </div>
+                              <div className="today-timeline-horizontal__meta">
+                                <Tag color={entry.kind === "plan_item" ? "green" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 6px" }}>
+                                  {getTimelineStatusLabel(entry)}
+                                </Tag>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="today-gantt">
