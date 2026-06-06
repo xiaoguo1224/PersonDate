@@ -16,6 +16,26 @@ from app.services.setup_service import SetupService
 from app.services.user_service import UserService
 
 
+class _FakeChannelClient:
+    def __init__(self) -> None:
+        self.qr_img_content = "base64_fake_qr_image_data"
+        self.qrcode_id = "qr_test_001"
+
+    def get_channel_qr_code(self) -> dict[str, str]:
+        return {
+            "qr_img_content": self.qr_img_content,
+            "qrcode_id": self.qrcode_id,
+        }
+
+    def get_channel_qr_code_status(self, qrcode_id: str) -> dict[str, object]:
+        return {
+            "status": "created",
+            "bot_token": None,
+            "base_url": None,
+            "wechat_user_id": None,
+        }
+
+
 def _build_client():
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -68,7 +88,11 @@ def _seed_users(session):  # noqa: ANN001
     return owner, member, owner_token, member_token
 
 
-def test_create_and_fetch_wechat_login_session() -> None:
+def test_create_and_fetch_wechat_login_session(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.wechat.build_wechat_channel_client",
+        lambda: _FakeChannelClient(),
+    )
     app, session = _build_client()
     _, member, _, member_token = _seed_users(session)
 
@@ -83,6 +107,7 @@ def test_create_and_fetch_wechat_login_session() -> None:
     assert create_body["success"] is True
     assert create_body["data"]["login_session_id"].startswith("login_")
     assert create_body["data"]["qr_payload"].startswith("wechat-qr:")
+    assert create_body["data"]["qr_img_content"] == "base64_fake_qr_image_data"
     assert create_body["data"]["status"] == "qr_created"
     assert "请使用微信扫码" in create_body["message"]
 
@@ -100,7 +125,11 @@ def test_create_and_fetch_wechat_login_session() -> None:
     assert fetch_body["data"]["owner_user_id"] == member.id
 
 
-def test_confirm_wechat_login_session_creates_account() -> None:
+def test_confirm_wechat_login_session_creates_account(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.wechat.build_wechat_channel_client",
+        lambda: _FakeChannelClient(),
+    )
     app, session = _build_client()
     _, member, _, member_token = _seed_users(session)
 
@@ -143,7 +172,11 @@ def test_confirm_wechat_login_session_creates_account() -> None:
     assert account["status"] == "active"
 
 
-def test_confirm_wechat_login_session_binds_channel_identity() -> None:
+def test_confirm_wechat_login_session_binds_channel_identity(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.wechat.build_wechat_channel_client",
+        lambda: _FakeChannelClient(),
+    )
     app, session = _build_client()
     _, member, _, member_token = _seed_users(session)
 

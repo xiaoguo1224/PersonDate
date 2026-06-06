@@ -71,6 +71,8 @@ class WechatLoginSession(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=False, index=True
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    qr_img_content: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    qrcode_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
 
 
 class WechatChannelInboundMessage(UUIDMixin, TimestampMixin, Base):

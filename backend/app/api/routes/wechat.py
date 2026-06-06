@@ -30,6 +30,7 @@ from app.schemas.wechat import (
     WechatSendTextResponse,
     WechatStatusResponse,
 )
+from app.core.wechat_channel import build_wechat_channel_client
 from app.services.wechat_channel_adapter import WechatChannelAdapter
 from app.services.wechat_channel_service import WechatChannelService
 
@@ -130,12 +131,27 @@ def create_wechat_login_session(
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse[WechatLoginSessionCreateResponse]:
     service = WechatChannelService(db)
+
+    # 调 wechat-channel 获取真实二维码
+    channel_client = build_wechat_channel_client()
+    if channel_client is None:
+        raise HTTPException(status_code=503, detail="微信通道服务不可用")
+    try:
+        qr = channel_client.get_channel_qr_code()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"获取二维码失败: {exc}")
+
+    # 创建 session，写入真实二维码数据
     session = service.create_login_session(current_user.id)
+    session.qr_img_content = qr["qr_img_content"]
+    session.qrcode_id = qr["qrcode_id"]
     db.commit()
+
     return ApiResponse(
         data=WechatLoginSessionCreateResponse(
             login_session_id=session.login_session_id,
             qr_payload=session.qr_payload,
+            qr_img_content=session.qr_img_content,
             expires_at=session.expires_at,
             status=session.status,
         ),
@@ -156,6 +172,36 @@ def get_my_wechat_login_session(
     )
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="登录会话不存在")
+
+    # 如果已有真实二维码且未确认，轮询 iLink 扫码状态
+    if session.qrcode_id and session.status in ("qr_created", "scanned"):
+        channel_client = build_wechat_channel_client()
+        if channel_client is not None:
+            try:
+                status = channel_client.get_channel_qr_code_status(session.qrcode_id)
+                remote_state = status["status"]
+                if remote_state == "scanned":
+                    session.status = "scanned"
+                    db.commit()
+                elif remote_state == "confirmed":
+                    bot_token = status["bot_token"]
+                    base_url = status["base_url"]
+                    wechat_user_id = status.get("wechat_user_id") or session.qrcode_id
+                    service.confirm_login_session(
+                        owner_user_id=current_user.id,
+                        login_session_id=login_session_id,
+                        account_id=session.qrcode_id,
+                        wechat_user_id=wechat_user_id,
+                        bot_token=bot_token,
+                        base_url=base_url,
+                    )
+                    db.commit()
+                elif remote_state == "expired":
+                    session.status = "expired"
+                    db.commit()
+            except Exception:
+                pass  # 轮询失败不阻塞
+
     return ApiResponse(data=_to_login_session_item(session))
 
 

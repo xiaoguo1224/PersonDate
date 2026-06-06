@@ -40,6 +40,19 @@ def test_wechat_channel_http_client_posts_sendmessage_and_getupdates() -> None:
             )
         if request.url.path == "/sendtyping":
             return httpx.Response(200, json={"success": True, "typing": True})
+        if request.url.path == "/channel/qr-code":
+            return httpx.Response(
+                200,
+                json={
+                    "qrcode_id": "qr_bot_abc",
+                    "qr_img_content": "base64imagedata",
+                },
+            )
+        if request.url.path == "/channel/qr-code-status":
+            return httpx.Response(
+                200,
+                json={"status": "scanned"},
+            )
         return httpx.Response(200, json={"msgs": [], "get_updates_buf": "cursor_1"})
 
     transport = httpx.MockTransport(handler)
@@ -87,6 +100,13 @@ def test_wechat_channel_http_client_posts_sendmessage_and_getupdates() -> None:
     assert requests[3][2]["filekey"] == "file_001"
     assert requests[4][0] == "/sendtyping"
     assert requests[4][2]["typing_ticket"] == "ticket_001"
+
+    qr_result = client.get_channel_qr_code()
+    assert qr_result["qrcode_id"] == "qr_bot_abc"
+    assert qr_result["qr_img_content"] == "base64imagedata"
+
+    qr_status = client.get_channel_qr_code_status("qr_bot_abc")
+    assert qr_status["status"] == "scanned"
 
 
 def test_require_wechat_channel_client_raises_without_base_url(monkeypatch) -> None:

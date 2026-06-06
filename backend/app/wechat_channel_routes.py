@@ -24,6 +24,7 @@ from app.schemas.wechat_channel import (
     WechatSendTypingRequest,
     WechatSendTypingResponse,
 )
+from wechat_channel.ilink_client import ILinkError
 from app.services.wechat_channel_service import WechatChannelService
 
 router = APIRouter(tags=["wechat-channel"])
@@ -250,3 +251,43 @@ def send_typing(
         bot_token=payload.bot_token,
         typing_ticket=payload.typing_ticket,
     )
+
+
+@router.get("/channel/qr-code")
+def generate_qr_code(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[None, Depends(_require_channel_token)],
+) -> dict[str, str]:
+    """生成真实的 iLink 登录二维码，返回 base64 图片数据。"""
+    from wechat_channel.ilink_client import ILinkClient
+
+    try:
+        client = ILinkClient()
+        result = client.get_qr_code()
+    except ILinkError as exc:
+        raise HTTPException(status_code=502, detail=f"获取 iLink 二维码失败: {exc.message}")
+    return {
+        "qrcode_id": result.qrcode_id,
+        "qr_img_content": result.qr_img_content,
+    }
+
+
+@router.get("/channel/qr-code-status")
+def get_qr_code_status(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[None, Depends(_require_channel_token)],
+    qrcode_id: str = Query(),
+) -> dict[str, object]:
+    """轮询二维码扫码状态。"""
+    from wechat_channel.ilink_client import ILinkClient
+
+    try:
+        client = ILinkClient()
+        status = client.poll_qr_status(qrcode_id)
+    except ILinkError as exc:
+        raise HTTPException(status_code=502, detail=f"轮询 iLink 状态失败: {exc.message}")
+    return {
+        "status": status.state,
+        "bot_token": status.token,
+        "base_url": status.base_url,
+    }

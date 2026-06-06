@@ -133,6 +133,21 @@ class WechatChannelHttpClient:
             self._request_json("/sendtyping", payload)
         )
 
+    def get_channel_qr_code(self) -> dict[str, str]:
+        response = self._client.get(
+            "/channel/qr-code",
+            headers=self._headers(),
+        )
+        return self._response_json(response)
+
+    def get_channel_qr_code_status(self, qrcode_id: str) -> dict[str, object]:
+        response = self._client.get(
+            "/channel/qr-code-status",
+            params={"qrcode_id": qrcode_id},
+            headers=self._headers(),
+        )
+        return self._response_json(response)
+
     def _headers(self) -> dict[str, str]:
         if not self.channel_token:
             return {}

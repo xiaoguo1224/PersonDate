@@ -19,6 +19,7 @@ class WechatLoginSessionItem(BaseModel):
 class WechatLoginSessionCreateResponse(BaseModel):
     login_session_id: str
     qr_payload: str
+    qr_img_content: str | None = None  # 新增
     expires_at: datetime
     status: str
 
