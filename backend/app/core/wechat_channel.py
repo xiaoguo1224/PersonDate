@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.schemas.wechat_channel import (
     WechatGetConfigResponse,
     WechatGetUpdatesResponse,
+    WechatGetUploadUrlResponse,
     WechatSendTextResponse,
     WechatSendTypingResponse,
 )
@@ -76,6 +77,37 @@ class WechatChannelHttpClient:
             payload["bot_token"] = bot_token
         return WechatGetConfigResponse.model_validate(
             self._request_json("/getconfig", payload)
+        )
+
+    def get_upload_url(
+        self,
+        *,
+        filekey: str,
+        media_type: int,
+        to_user_id: str,
+        rawsize: int,
+        rawfilemd5: str,
+        filesize: int,
+        thumb_rawsize: int | None = None,
+        thumb_rawfilemd5: str | None = None,
+        thumb_filesize: int | None = None,
+    ) -> WechatGetUploadUrlResponse:
+        payload: dict[str, object] = {
+            "filekey": filekey,
+            "media_type": media_type,
+            "to_user_id": to_user_id,
+            "rawsize": rawsize,
+            "rawfilemd5": rawfilemd5,
+            "filesize": filesize,
+        }
+        if thumb_rawsize is not None:
+            payload["thumb_rawsize"] = thumb_rawsize
+        if thumb_rawfilemd5 is not None:
+            payload["thumb_rawfilemd5"] = thumb_rawfilemd5
+        if thumb_filesize is not None:
+            payload["thumb_filesize"] = thumb_filesize
+        return WechatGetUploadUrlResponse.model_validate(
+            self._request_json("/getuploadurl", payload)
         )
 
     def send_typing(

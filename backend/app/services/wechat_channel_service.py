@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
+import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import httpx
 from sqlalchemy import func, select
@@ -23,6 +26,7 @@ from app.schemas.wechat_channel import (
     WechatChannelMessageItem,
     WechatGetConfigResponse,
     WechatGetUpdatesResponse,
+    WechatGetUploadUrlResponse,
     WechatIngestMessageRequest,
     WechatSendTypingResponse,
 )
@@ -470,6 +474,66 @@ class WechatChannelService:
             typing_ticket=self._build_typing_ticket(account),
         )
 
+    def get_upload_url(
+        self,
+        *,
+        filekey: str,
+        media_type: int,
+        to_user_id: str,
+        rawsize: int,
+        rawfilemd5: str,
+        filesize: int,
+        thumb_rawsize: int | None = None,
+        thumb_rawfilemd5: str | None = None,
+        thumb_filesize: int | None = None,
+    ) -> WechatGetUploadUrlResponse:
+        account = self.resolve_send_account(
+            conversation_id=to_user_id,
+            to_user_id=to_user_id,
+        )
+        if account is None:
+            return WechatGetUploadUrlResponse(
+                success=False,
+                ret=-1,
+                error_code="ACCOUNT_NOT_AVAILABLE",
+                error_message="当前没有可用的微信账号",
+            )
+
+        upload_param = self._build_upload_param(
+            account=account,
+            filekey=filekey,
+            media_type=media_type,
+            to_user_id=to_user_id,
+            rawsize=rawsize,
+            rawfilemd5=rawfilemd5,
+            filesize=filesize,
+        )
+        thumb_upload_param = None
+        if media_type in (1, 2) and all(
+            value is not None
+            for value in (thumb_rawsize, thumb_rawfilemd5, thumb_filesize)
+        ):
+            thumb_rawsize_value = cast(int, thumb_rawsize)
+            thumb_rawfilemd5_value = cast(str, thumb_rawfilemd5)
+            thumb_filesize_value = cast(int, thumb_filesize)
+            thumb_upload_param = self._build_upload_param(
+                account=account,
+                filekey=f"{filekey}:thumb",
+                media_type=media_type,
+                to_user_id=to_user_id,
+                rawsize=thumb_rawsize_value,
+                rawfilemd5=thumb_rawfilemd5_value,
+                filesize=thumb_filesize_value,
+                thumb=True,
+            )
+
+        return WechatGetUploadUrlResponse(
+            success=True,
+            ret=0,
+            upload_param=upload_param,
+            thumb_upload_param=thumb_upload_param,
+        )
+
     def send_typing(
         self,
         *,
@@ -881,6 +945,42 @@ class WechatChannelService:
             f"{account.account_id}:{account.bot_token}".encode()
         ).hexdigest()
         return f"typing_{digest[:32]}"
+
+    def _build_upload_param(
+        self,
+        *,
+        account: WechatAccount,
+        filekey: str,
+        media_type: int,
+        to_user_id: str,
+        rawsize: int,
+        rawfilemd5: str,
+        filesize: int,
+        thumb: bool = False,
+    ) -> str:
+        now = int(datetime.now(UTC).timestamp())
+        payload = {
+            "account_id": account.account_id,
+            "filekey": filekey,
+            "media_type": media_type,
+            "to_user_id": to_user_id,
+            "rawsize": rawsize,
+            "rawfilemd5": rawfilemd5,
+            "filesize": filesize,
+            "thumb": thumb,
+            "issued_at": now,
+            "expires_at": now + 1800,
+        }
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+        secret = account.bot_token or account.account_id
+        signature = hmac.new(
+            secret.encode("utf-8"),
+            encoded.encode("ascii"),
+            hashlib.sha256,
+        ).hexdigest()[:32]
+        return f"{encoded}.{signature}"
 
     def _to_inbound_item(
         self,

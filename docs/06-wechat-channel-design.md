@@ -266,7 +266,43 @@ raw_payload
 调用 sendmessage
 ```
 
-## 10. 消息接入接口
+## 10. getUploadUrl 上传参数
+
+媒体消息在发送前需要先调用 `getuploadurl` 获取上传前置参数。
+
+推荐请求：
+
+```http
+POST /getuploadurl
+```
+
+请求示例：
+
+```json
+{
+  "filekey": "file_001",
+  "media_type": 3,
+  "to_user_id": "wx_user_001",
+  "rawsize": 12345,
+  "rawfilemd5": "0123456789abcdef0123456789abcdef",
+  "filesize": 12352
+}
+```
+
+响应建议包含：
+
+```text
+upload_param
+thumb_upload_param
+```
+
+如果是图片或视频：
+
+1. 必须同时提供缩略图参数。
+2. `thumb_upload_param` 也需要返回。
+3. 当前实现先保留上传前置协议，后续扩展媒体消息发送时再携带媒体引用。
+
+## 11. 消息接入接口
 
 自研 `wechat-channel` 需要提供一个消息接入入口，用于把外部来源的微信原始消息写入轮询队列。
 
@@ -312,7 +348,7 @@ POST /ingest
 2. 成功写入后，`getupdates` 应能按游标顺序拉到该消息。
 3. 该接口是通道内部能力，不直接进入业务 Agent。
 
-## 11. 调用 Agent
+## 12. 调用 Agent
 
 Agent 统一暴露一个调用入口。
 
@@ -339,7 +375,7 @@ status
 
 Agent 不应返回微信专用结构，只返回“说什么”和“做了什么”。
 
-## 12. 会话 ID 设计
+## 13. 会话 ID 设计
 
 建议按账号和发送者隔离会话：
 
@@ -353,7 +389,7 @@ wechat:{account_id}:{group_id}:{from_user_id}:{session_id}
 
 如果后续支持多个通道账号，必须把 `account_id` 加入会话键，避免不同账号之间串会话。
 
-## 13. 回复消息
+## 14. 回复消息
 
 回复消息时必须保留原始消息里的 `context_token`。
 
@@ -392,7 +428,7 @@ error_code
 error_message
 ```
 
-## 14. 出站队列查询
+## 15. 出站队列查询
 
 `wechat-channel` 提供一个内部排障接口，用于查询当前出站队列与最终发送状态。
 
@@ -433,7 +469,7 @@ updated_at
 2. 排查 failed 消息的错误信息。
 3. 为 Web Dashboard 或运维脚本提供通道侧状态查询能力。
 
-## 15. 去重机制
+## 16. 去重机制
 
 必须基于以下组合去重：
 
@@ -461,9 +497,9 @@ account_id + message_id
 
 建议使用 Redis 或数据库唯一约束实现。
 
-## 16. 异常处理
+## 17. 异常处理
 
-### 16.1 token 失效
+### 17.1 token 失效
 
 表现：
 
@@ -479,7 +515,7 @@ getupdates 返回 session timeout 或鉴权失败
 通知管理员重新扫码绑定
 ```
 
-### 16.2 二维码过期
+### 17.2 二维码过期
 
 表现：
 
@@ -495,7 +531,7 @@ getupdates 返回 session timeout 或鉴权失败
 或者让用户手动刷新
 ```
 
-### 16.3 Agent 超时
+### 17.3 Agent 超时
 
 处理：
 
@@ -505,7 +541,7 @@ getupdates 返回 session timeout 或鉴权失败
 完成后再补发结果
 ```
 
-### 16.4 sendmessage 失败
+### 17.4 sendmessage 失败
 
 处理：
 

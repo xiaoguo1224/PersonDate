@@ -272,6 +272,15 @@ def test_wechat_channel_app_sendmessage_persists_outbound_record(monkeypatch) ->
             status="active",
         )
     )
+    session.add(
+        WechatAccount(
+            owner_user_id=owner.id,
+            account_id="wx_account_owner",
+            bot_token="bot_owner",
+            base_url="http://wechat-channel:18789",
+            status="active",
+        )
+    )
     session.commit()
     client = TestClient(app)
 
@@ -428,3 +437,62 @@ def test_wechat_channel_app_lists_outbound_messages(monkeypatch) -> None:
     assert item["status"] == "queued"
     assert item["conversation_id"] == "wx_user_001"
     assert item["content"] == "提醒：15:00 开会"
+
+
+def test_wechat_channel_app_getuploadurl(monkeypatch) -> None:
+    from app import wechat_channel_routes as routes_module
+
+    monkeypatch.setattr(
+        routes_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_channel_token=None),
+    )
+    app, session = _build_client()
+    owner = User(
+        username="owner_2",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    session.add(owner)
+    session.flush()
+    session.add(
+        ChannelIdentity(
+            user_id=owner.id,
+            channel="wechat",
+            channel_user_id="wx_user_owner",
+            conversation_id="wx_user_owner",
+            display_name="Owner",
+            status="active",
+        )
+    )
+    session.add(
+        WechatAccount(
+            owner_user_id=owner.id,
+            account_id="wx_account_owner",
+            bot_token="bot_owner",
+            base_url="http://wechat-channel:18789",
+            status="active",
+        )
+    )
+    session.commit()
+    client = TestClient(app)
+
+    response = client.post(
+        "/getuploadurl",
+        json={
+            "filekey": "file_001",
+            "media_type": 3,
+            "to_user_id": "wx_user_owner",
+            "rawsize": 12345,
+            "rawfilemd5": "0123456789abcdef0123456789abcdef",
+            "filesize": 12352,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["ret"] == 0
+    assert body["upload_param"]

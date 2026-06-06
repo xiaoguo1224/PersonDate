@@ -15,6 +15,8 @@ from app.schemas.wechat_channel import (
     WechatGetConfigResponse,
     WechatGetUpdatesRequest,
     WechatGetUpdatesResponse,
+    WechatGetUploadUrlRequest,
+    WechatGetUploadUrlResponse,
     WechatIngestMessageRequest,
     WechatIngestMessageResponse,
     WechatSendMessageRequest,
@@ -163,6 +165,26 @@ def send_message(
         status="queued",
         message_id=outbound.message_id,
         detail=f"消息已入队到 {conversation_id}",
+    )
+
+
+@router.post("/getuploadurl", response_model=WechatGetUploadUrlResponse)
+def get_upload_url(
+    payload: WechatGetUploadUrlRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[None, Depends(_require_channel_token)],
+) -> WechatGetUploadUrlResponse:
+    service = WechatChannelService(db)
+    return service.get_upload_url(
+        filekey=payload.filekey,
+        media_type=payload.media_type,
+        to_user_id=payload.to_user_id,
+        rawsize=payload.rawsize,
+        rawfilemd5=payload.rawfilemd5,
+        filesize=payload.filesize,
+        thumb_rawsize=payload.thumb_rawsize,
+        thumb_rawfilemd5=payload.thumb_rawfilemd5,
+        thumb_filesize=payload.thumb_filesize,
     )
 
 

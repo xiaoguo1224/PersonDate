@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 
 class WechatGetUpdatesRequest(BaseModel):
@@ -89,6 +89,38 @@ class WechatSendTypingResponse(BaseModel):
     success: bool = True
     ret: int = 0
     typing: bool = True
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+class WechatGetUploadUrlRequest(BaseModel):
+    filekey: str
+    media_type: int
+    to_user_id: str
+    rawsize: int
+    rawfilemd5: str
+    filesize: int
+    thumb_rawsize: int | None = None
+    thumb_rawfilemd5: str | None = None
+    thumb_filesize: int | None = None
+
+    @model_validator(mode="after")
+    def validate_thumb_fields(self) -> WechatGetUploadUrlRequest:
+        if self.media_type in (1, 2):
+            if (
+                self.thumb_rawsize is None
+                or self.thumb_rawfilemd5 is None
+                or self.thumb_filesize is None
+            ):
+                raise ValueError("图片和视频上传必须提供缩略图参数")
+        return self
+
+
+class WechatGetUploadUrlResponse(BaseModel):
+    success: bool = True
+    ret: int = 0
+    upload_param: str | None = None
+    thumb_upload_param: str | None = None
     error_code: str | None = None
     error_message: str | None = None
 
