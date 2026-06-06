@@ -126,6 +126,6 @@ def test_agent_create_event(db_session, graph) -> None:
     db_session.commit()
 
     assert state.success is True
-    assert "已为你创建日程" in (state.final_response or "")
+    assert "已为你创建安排" in (state.final_response or "")
     assert state.intent == "create_event"
     assert state.tool_calls

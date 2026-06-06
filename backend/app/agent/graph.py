@@ -64,7 +64,7 @@ class SchedulePlanningGraph:
     def _classify_intent(self, state: AgentState) -> IntentDecision:
         return self.llm.chat_json(
             system_prompt=(
-                "你是微信智能日程规划 Agent 的意图分类器。"
+                "你是微信智能安排规划 Agent 的意图分类器。"
                 "只输出 JSON，不要输出多余文本。"
                 "请根据用户输入判断 intent。"
                 "可选值：create_event, query_events, create_task, plan_day, "
@@ -85,7 +85,7 @@ class SchedulePlanningGraph:
         payload["intent"] = intent
         return self.llm.chat_json(
             system_prompt=(
-                "你是微信智能日程规划 Agent 的结构化信息抽取器。"
+                "你是微信智能安排规划 Agent 的结构化信息抽取器。"
                 "只输出 JSON，不要输出多余文本。"
                 "请把用户输入中的相对时间解析成当前时区下的绝对日期或时间。"
                 "所有时间字段请使用 ISO 8601。"
@@ -222,7 +222,7 @@ class SchedulePlanningGraph:
             self._handle_create_event(state)
             return
         if intent == "confirm_plan":
-            state.final_response = "请在待确认的计划草案上下文中回复“确认”或“取消”。"
+            state.final_response = "请在待确认的安排草案上下文中回复“确认”或“取消”。"
             return
         state.final_response = "我没能理解这条消息，请补充时间、事项或目标。"
 
@@ -257,7 +257,7 @@ class SchedulePlanningGraph:
             self._handle_reminder_time_reply(state)
             return
         if state_type == PendingStateType.WAITING_PLAN_CONFIRMATION.value:
-            state.final_response = "请回复“确认”继续，或回复“取消”放弃这份计划草案。"
+            state.final_response = "请回复“确认”继续，或回复“取消”放弃这份安排草案。"
             return
         if state_type == PendingStateType.WAITING_CONFLICT_RESOLUTION.value:
             state.final_response = "请回复 1、2 或 3 处理冲突，或回复“取消”放弃当前处理。"
@@ -337,7 +337,7 @@ class SchedulePlanningGraph:
 
     def _handle_create_event(self, state: AgentState) -> None:
         extracted = state.extracted or {}
-        title = extracted.get("event_title") or "日程"
+        title = extracted.get("event_title") or "安排"
         start_time = extracted.get("event_start_time")
         end_time = extracted.get("event_end_time")
         remind_before = extracted.get("remind_before_minutes")
@@ -380,7 +380,7 @@ class SchedulePlanningGraph:
             {"tool_name": "create_event", "result": result.model_dump(mode="json")}
         )
         if not result.success:
-            state.final_response = result.error or "创建日程失败。"
+            state.final_response = result.error or "创建安排失败。"
             return
         result_data: dict[str, object] = result.data or {}
         event_id = str(result_data["id"])
@@ -413,15 +413,15 @@ class SchedulePlanningGraph:
                 "state_type": pending.state_type,
                 "status": pending.status,
             }
-            lines = [f"已创建日程：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"]
+            lines = [f"已创建安排：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"]
             lines.append("但检测到冲突，请回复 1、2 或 3 选择处理方式。")
-            lines.append("1. 保留当前日程并忽略冲突")
-            lines.append("2. 将当前日程顺延 1 小时")
-            lines.append("3. 删除当前日程")
+            lines.append("1. 保留当前安排并忽略冲突")
+            lines.append("2. 将当前安排顺延 1 小时")
+            lines.append("3. 删除当前安排")
             state.final_response = "\n".join(lines)
             return
         state.final_response = (
-            f"已为你创建日程：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"
+            f"已为你创建安排：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"
         )
 
     def _handle_query_events(self, state: AgentState) -> None:
@@ -525,7 +525,7 @@ class SchedulePlanningGraph:
                 state.draft_plan = plan_result.data
                 state.final_response = (
                     f"已创建任务：{title}，预计 {minutes} 分钟。\n"
-                    f"已生成 {target_date.isoformat()} 的计划草案，请回复“确认”或“取消”。"
+                    f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
                 )
                 return
         state.final_response = f"已创建任务：{title}，预计 {minutes} 分钟。"
@@ -592,7 +592,7 @@ class SchedulePlanningGraph:
         }
         state.draft_plan = result.data
         state.final_response = (
-            f"已生成 {target_date.isoformat()} 的计划草案，请回复“确认”或“取消”。"
+            f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
         )
 
     def _handle_update_event(self, state: AgentState) -> None:
@@ -610,7 +610,7 @@ class SchedulePlanningGraph:
         )
         state.candidate_events = candidates
         if not candidates:
-            state.final_response = "没有找到可修改的日程。"
+            state.final_response = "没有找到可修改的安排。"
             return
         if len(candidates) > 1:
             pending = self.pending_states.save(
@@ -627,7 +627,7 @@ class SchedulePlanningGraph:
                 "state_type": pending.state_type,
                 "status": pending.status,
             }
-            lines = ["找到多个候选日程，请回复序号选择："]
+            lines = ["找到多个候选安排，请回复序号选择："]
             for index, candidate in enumerate(candidates[:3], start=1):
                 lines.append(_candidate_line(candidate, index))
             state.final_response = "\n".join(lines)
@@ -664,10 +664,10 @@ class SchedulePlanningGraph:
             {"tool_name": "update_event", "result": update_result.model_dump(mode="json")}
         )
         if not update_result.success:
-            state.final_response = update_result.error or "修改日程失败。"
+            state.final_response = update_result.error or "修改安排失败。"
             return
         state.final_response = (
-            f"已将日程“{candidate['title']}”调整到 {new_start:%Y-%m-%d} "
+            f"已将安排“{candidate['title']}”调整到 {new_start:%Y-%m-%d} "
             f"{_format_clock_time(new_start)}。"
         )
 
@@ -686,7 +686,7 @@ class SchedulePlanningGraph:
         )
         state.candidate_events = candidates
         if not candidates:
-            state.final_response = "没有找到可删除的日程。"
+            state.final_response = "没有找到可删除的安排。"
             return
         if len(candidates) > 1:
             pending = self.pending_states.save(
@@ -703,7 +703,7 @@ class SchedulePlanningGraph:
                 "state_type": pending.state_type,
                 "status": pending.status,
             }
-            lines = ["找到多个候选日程，请回复序号选择："]
+            lines = ["找到多个候选安排，请回复序号选择："]
             for index, candidate in enumerate(candidates[:3], start=1):
                 lines.append(_candidate_line(candidate, index))
             state.final_response = "\n".join(lines)
@@ -721,7 +721,7 @@ class SchedulePlanningGraph:
         state.tool_results.append(
             {"tool_name": "delete_event", "result": delete_result.model_dump(mode="json")}
         )
-        state.final_response = f"已删除日程“{candidate['title']}”。"
+        state.final_response = f"已删除安排“{candidate['title']}”。"
 
     def _confirm_plan_from_pending(self, state: AgentState) -> None:
         payload = state.pending_state or {}
@@ -731,7 +731,7 @@ class SchedulePlanningGraph:
             else payload.get("draft_plan_id")
         )
         if not draft_plan_id:
-            state.final_response = "没有可确认的计划草案。"
+            state.final_response = "没有可确认的安排草案。"
             return
         result = self.tools.execute(
             "confirm_plan",
@@ -755,7 +755,7 @@ class SchedulePlanningGraph:
         payload = state.pending_state or {}
         state_payload = payload.get("state_payload", {}) if "state_payload" in payload else payload
         event_id = state_payload.get("event_id")
-        event_title = state_payload.get("event_title") or "日程"
+        event_title = state_payload.get("event_title") or "安排"
         start_raw = state_payload.get("event_start_time")
         end_raw = state_payload.get("event_end_time")
         timezone = state_payload.get("event_timezone") or state.timezone
@@ -777,7 +777,7 @@ class SchedulePlanningGraph:
         if choice == 1:
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
             state.pending_state = None
-            state.final_response = "已保留当前日程，并忽略冲突。"
+            state.final_response = "已保留当前安排，并忽略冲突。"
             return
         if choice == 2 and event_id and original_start is not None:
             new_start = original_start + timedelta(hours=1)
@@ -816,10 +816,10 @@ class SchedulePlanningGraph:
                 self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
                 state.pending_state = None
                 state.final_response = (
-                    f"已将当前冲突日程顺延到 {new_start:%Y-%m-%d} {_format_clock_time(new_start)}。"
+                    f"已将当前冲突安排顺延到 {new_start:%Y-%m-%d} {_format_clock_time(new_start)}。"
                 )
                 return
-            state.final_response = result.error or "顺延日程失败。"
+            state.final_response = result.error or "顺延安排失败。"
             return
         if choice == 2 and event_id:
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
@@ -835,7 +835,7 @@ class SchedulePlanningGraph:
             )
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
             state.pending_state = None
-            state.final_response = "已删除当前冲突日程。"
+            state.final_response = "已删除当前冲突安排。"
             return
         state.final_response = "请回复 1、2 或 3 处理冲突。"
 
@@ -862,9 +862,9 @@ class SchedulePlanningGraph:
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )
-            state.final_response = f"已删除日程“{candidate['title']}”。"
+            state.final_response = f"已删除安排“{candidate['title']}”。"
         elif action == "update_event":
-            state.final_response = f"已选中日程“{candidate['title']}”，请继续补充修改内容。"
+            state.final_response = f"已选中安排“{candidate['title']}”，请继续补充修改内容。"
         self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
         state.pending_state = None
 

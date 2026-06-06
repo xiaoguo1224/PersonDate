@@ -89,7 +89,7 @@ class FakeGraph:
         assert message == "明天下午 3 点开会"
         return SimpleNamespace(
             success=True,
-            final_response="已为你创建日程：开会。",
+            final_response="已为你创建安排：开会。",
             intent="create_event",
             tool_calls=[{"tool_name": "create_event"}],
             tool_results=[{"tool_name": "create_event"}],
@@ -129,8 +129,8 @@ def test_wechat_channel_adapter_handles_inbound_message() -> None:
     )
 
     assert result.response.handled is True
-    assert result.response.reply == "已为你创建日程：开会。"
-    assert result.message == "已为你创建日程：开会。"
+    assert result.response.reply == "已为你创建安排：开会。"
+    assert result.message == "已为你创建安排：开会。"
 
     stored_log = session.scalar(
         session.query(ChannelMessageLog).filter_by(message_id="wx_msg_001").statement

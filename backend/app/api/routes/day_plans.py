@@ -57,7 +57,7 @@ def generate_day_plan(
     service = DayPlanService(db)
     plan = service.generate_draft(current_user.id, plan_date)
     db.commit()
-    return ApiResponse(data=_to_day_plan(plan), message="计划草案已生成")
+    return ApiResponse(data=_to_day_plan(plan), message="安排草案已生成")
 
 
 @router.post("/{plan_id}/confirm")
@@ -69,10 +69,10 @@ def confirm_day_plan(
     service = DayPlanService(db)
     plan = service.get_day_plan(current_user.id, plan_id)
     if plan is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排不存在")
     service.confirm_plan(plan)
     db.commit()
     return ApiResponse(
         data=DayPlanConfirmResponse(id=plan.id, plan_date=plan.plan_date, status=plan.status),
-        message="计划已确认",
+        message="安排已确认",
     )

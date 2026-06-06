@@ -94,7 +94,7 @@ class FakeGraph:
         assert message == "明天下午 3 点开会"
         return SimpleNamespace(
             success=True,
-            final_response="已为你创建日程：开会。",
+            final_response="已为你创建安排：开会。",
             intent="create_event",
             tool_calls=[{"tool_name": "create_event"}],
             tool_results=[{"tool_name": "create_event"}],
@@ -162,7 +162,7 @@ def test_wechat_inbound_binding_success(monkeypatch) -> None:
     assert inbound_response.status_code == 200
     body = inbound_response.json()
     assert body["success"] is True
-    assert body["data"]["reply"].startswith("已为你创建日程：开会")
+    assert body["data"]["reply"].startswith("已为你创建安排：开会")
 
     identity_response = client.get(
         "/api/me/channel-identities",
@@ -233,4 +233,4 @@ def test_wechat_inbound_routes_to_agent_graph(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["reply"] == "已为你创建日程：开会。"
+    assert body["data"]["reply"] == "已为你创建安排：开会。"

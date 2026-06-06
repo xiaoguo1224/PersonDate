@@ -51,7 +51,7 @@ def create_plan_item(
         ref_id=payload.ref_id,
     )
     db.commit()
-    return ApiResponse(data=_to_item(item), message="计划项已创建")
+    return ApiResponse(data=_to_item(item), message="安排项已创建")
 
 
 @router.patch("/{plan_item_id}")
@@ -64,7 +64,7 @@ def update_plan_item(
     service = PlanItemService(db)
     item = service.get_plan_item(current_user.id, plan_item_id)
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划项不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排项不存在")
     item = service.update_plan_item(
         item,
         title=payload.title,
@@ -77,7 +77,7 @@ def update_plan_item(
         ref_id=payload.ref_id,
     )
     db.commit()
-    return ApiResponse(data=_to_item(item), message="计划项已更新")
+    return ApiResponse(data=_to_item(item), message="安排项已更新")
 
 
 @router.patch("/{plan_item_id}/complete")
@@ -89,10 +89,10 @@ def complete_plan_item(
     service = PlanItemService(db)
     item = service.get_plan_item(current_user.id, plan_item_id)
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划项不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排项不存在")
     item = service.complete_plan_item(item)
     db.commit()
-    return ApiResponse(data=_to_item(item), message="计划项已完成")
+    return ApiResponse(data=_to_item(item), message="安排项已完成")
 
 
 @router.delete("/{plan_item_id}")
@@ -104,7 +104,7 @@ def delete_plan_item(
     service = PlanItemService(db)
     item = service.get_plan_item(current_user.id, plan_item_id)
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划项不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排项不存在")
     item = service.delete_plan_item(item)
     db.commit()
-    return ApiResponse(data=_to_item(item), message="计划项已删除")
+    return ApiResponse(data=_to_item(item), message="安排项已删除")

@@ -107,7 +107,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             source=ScheduleSource.AGENT.value,
             created_by_channel="debug",
         )
-        return ToolResult(data=_event_to_dict(event), message="日程已创建")
+        return ToolResult(data=_event_to_dict(event), message="安排已创建")
 
     def query_events(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -123,7 +123,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
                 timezone_name=payload.timezone,
             )
         ]
-        return ToolResult(data=events, message="日程查询完成")
+        return ToolResult(data=events, message="安排查询完成")
 
     def update_event(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -132,7 +132,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         service = CalendarEventService(session)
         event = service.get_event(user_id, payload.event_id)
         if event is None:
-            return ToolResult(success=False, error="日程不存在")
+            return ToolResult(success=False, error="安排不存在")
         event = service.update_event(
             event,
             title=payload.title,
@@ -143,7 +143,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             location=payload.location,
             remind_before_minutes=payload.remind_before_minutes,
         )
-        return ToolResult(data=_event_to_dict(event), message="日程已更新")
+        return ToolResult(data=_event_to_dict(event), message="安排已更新")
 
     def delete_event(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -152,9 +152,9 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         service = CalendarEventService(session)
         event = service.get_event(user_id, payload.event_id)
         if event is None:
-            return ToolResult(success=False, error="日程不存在")
+            return ToolResult(success=False, error="安排不存在")
         service.delete_event(event)
-        return ToolResult(data={"id": event.id}, message="日程已删除")
+        return ToolResult(data={"id": event.id}, message="安排已删除")
 
     def search_event_candidates(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -173,7 +173,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
                 user_id, payload.keyword, payload.on_date, payload.timezone
             )
         ]
-        return ToolResult(data=events, message="已找到候选日程")
+        return ToolResult(data=events, message="已找到候选安排")
 
     def create_task(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -242,7 +242,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             ],
             "tasks": [_task_to_dict(task) for task in task_service.list_tasks(user_id)],
         }
-        return ToolResult(data=data, message="日程分析完成")
+        return ToolResult(data=data, message="安排分析完成")
 
     def find_free_slots(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -255,7 +255,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     ) -> ToolResult:
         payload = PlanTasksIntoDayArgs.model_validate(args)
         plan = DayPlanService(session).generate_draft(user_id, payload.plan_date)
-        return ToolResult(data={"day_plan_id": plan.id}, message="已生成计划草案")
+        return ToolResult(data={"day_plan_id": plan.id}, message="已生成安排草案")
 
     def confirm_plan(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -264,10 +264,10 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         service = DayPlanService(session)
         plan = service.get_day_plan(user_id, payload.plan_id)
         if plan is None:
-            return ToolResult(success=False, error="计划不存在")
+            return ToolResult(success=False, error="安排不存在")
         service.confirm_plan(plan)
         return ToolResult(
-            data={"day_plan_id": plan.id, "status": plan.status}, message="计划已确认"
+            data={"day_plan_id": plan.id, "status": plan.status}, message="安排已确认"
         )
 
     def regenerate_plan(
@@ -281,7 +281,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         if payload.plan_date is None:
             return ToolResult(success=False, error="缺少计划日期")
         plan = DayPlanService(session).generate_draft(user_id, payload.plan_date)
-        return ToolResult(data={"day_plan_id": plan.id}, message="已重新生成计划草案")
+        return ToolResult(data={"day_plan_id": plan.id}, message="已重新生成安排草案")
 
     def detect_conflicts(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session

@@ -35,7 +35,7 @@ class FakeGraph:
         assert current_user.username == "admin"
         return SimpleNamespace(
             success=True,
-            final_response="已为你创建日程：开会。",
+            final_response="已为你创建安排：开会。",
             intent="create_event",
             tool_calls=[{"tool_name": "create_event"}],
             tool_results=[{"tool_name": "create_event"}],
