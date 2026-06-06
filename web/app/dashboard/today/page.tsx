@@ -101,34 +101,6 @@ function sortTimelineEntries<T extends { start_time: string; title: string }>(it
   });
 }
 
-type TrackEntry = {
-  id: string;
-  startMs: number;
-  endMs: number;
-};
-
-function assignTracks(entries: TrackEntry[]): number[] {
-  const tracks: number[] = [];
-  const occupied: Array<{ startMs: number; endMs: number }>[] = [];
-
-  for (const entry of entries) {
-    let trackIdx = 0;
-    for (; trackIdx < occupied.length; trackIdx++) {
-      const hasOverlap = occupied[trackIdx].some(
-        (slot) => entry.startMs < slot.endMs && entry.endMs > slot.startMs,
-      );
-      if (!hasOverlap) break;
-    }
-    if (trackIdx >= occupied.length) {
-      occupied.push([]);
-    }
-    occupied[trackIdx].push({ startMs: entry.startMs, endMs: entry.endMs });
-    tracks.push(trackIdx);
-  }
-
-  return tracks;
-}
-
 function isPastTime(value: string, referenceTime = Date.now()) {
   return new Date(value).getTime() < referenceTime;
 }
@@ -563,6 +535,7 @@ function TodayPageView({
               </div>
             </Card>
           </div>
+
           <Card className="section-card today-panel" bordered={false}>
             <div className="today-panel__header today-timeline__header">
               <div>
@@ -581,79 +554,47 @@ function TodayPageView({
               </Space>
             </div>
             {combinedTimeline.length ? (
-              <div className="today-timeline-horizontal">
-                <div className="today-timeline-horizontal__axis">
-                  <span>00:00</span>
-                  <span>06:00</span>
-                  <span>12:00</span>
-                  <span>18:00</span>
-                  <span>24:00</span>
-                </div>
-                {(() => {
-                  const TRACK_HEIGHT = 56;
-                  const TRACK_GAP = 4;
-                  const dayStart = selectedDate.startOf("day");
-                  const nextDayStart = dayStart.add(1, "day");
-                  const totalMinutes = 24 * 60;
-
-                  const entries = combinedTimeline.map((entry) => {
-                    const start = dayjs(entry.start_time);
-                    const rawEnd = dayjs(entry.end_time ?? entry.start_time);
-                    const fallback = entry.kind === "plan_item" ? 90 : 60;
-                    const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallback, "minute");
-                    const clampedStart = start.isBefore(dayStart) ? dayStart : start;
-                    const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
-                    const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
-                    const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
-                    const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
-                    const barWidth = Math.min(100 - barLeft, Math.max(3, (durationMinutes / totalMinutes) * 100));
-                    return { ...entry, _left: barLeft, _width: barWidth, _startMs: clampedStart.valueOf(), _endMs: clampedEnd.valueOf() };
-                  });
-
-                  const tracks = assignTracks(entries.map((e) => ({ id: e.id, startMs: e._startMs, endMs: e._endMs })));
-                  const trackCount = Math.max(1, ...tracks) + 1;
-                  const trackHeight = TRACK_HEIGHT * trackCount + TRACK_GAP * (trackCount - 1) + 20;
-
-                  return (
-                    <div
-                      className="today-timeline-horizontal__track"
-                      style={{ height: trackHeight }}
-                    >
-                      {entries.map((entry, idx) => {
-                        const track = tracks[idx];
-                        return (
-                          <div
-                            key={entry.id}
-                            className="today-timeline-horizontal__item"
-                            data-kind={entry.kind}
-                            style={{
-                              left: `${entry._left}%`,
-                              width: `${entry._width}%`,
-                              top: 10 + track * (TRACK_HEIGHT + TRACK_GAP),
-                              height: TRACK_HEIGHT,
-                            }}
-                          >
-                            <div className="today-timeline-horizontal__time">
-                              {formatClock(entry.start_time, timezone)}
-                            </div>
-                            <div className="today-timeline-horizontal__title" title={entry.title}>
-                              {entry.title}
-                            </div>
-                            <div className="today-timeline-horizontal__meta">
-                              <Tag color={entry.kind === "plan_item" ? "green" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 6px" }}>
-                                {getTimelineStatusLabel(entry)}
-                              </Tag>
-                            </div>
-                          </div>
-                        );
-                      })}
+              <div className="today-timeline-scroll">
+                <div className="today-timeline">
+                  {combinedTimeline.map((entry) => (
+                    <div key={entry.id} className="today-timeline__item">
+                      <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
+                      <div
+                        className={[
+                          "today-timeline__dot",
+                          entry.kind === "plan_item" ? "today-timeline__dot--task" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      />
+                      <Card className="today-timeline__card" bordered={false}>
+                        <div className="today-timeline__head">
+                          <Text strong className="today-timeline__title">
+                            {entry.title}
+                          </Text>
+                          <Tag color={entry.kind === "plan_item" ? "cyan" : "blue"}>
+                            {entry.kind === "plan_item"
+                              ? `${entry.item_type ?? "安排项"} · ${getTimelineStatusLabel(entry)}`
+                              : `日程 · ${getTimelineStatusLabel(entry)}`}
+                          </Tag>
+                        </div>
+                        <Text className="today-timeline__meta">
+                          {formatRange(entry.start_time, entry.end_time, timezone)}
+                        </Text>
+                        {entry.kind === "event" && entry.location ? (
+                          <Text className="today-timeline__meta">{entry.location}</Text>
+                        ) : null}
+                      </Card>
                     </div>
-                  );
-                })()}
+                  ))}
+                </div>
               </div>
             ) : (
               <EmptyState title="今天还没有正式安排" />
             )}
+            <Button block className="today-ghost-button" type="default" onClick={onOpenEventModal}>
+              + 新增安排
+            </Button>
 
             <Modal
               title="甘特图 · 今日时间概览"
@@ -697,12 +638,97 @@ function TodayPageView({
                 </div>
               </div>
             </Modal>
-            <Button block className="today-ghost-button" type="default" onClick={onOpenEventModal}>
-              + 新增安排
-            </Button>
           </Card>
+        </div>
 
-          <div className="today-sub-grid">
+        <div className="today-sidebar">
+          <div className="today-sidebar__main">
+            <Card className="section-card today-panel today-assistant-card" bordered={false}>
+              <div className="today-assistant__header">
+                <div>
+                  <Title level={4} className="today-panel__title today-assistant__title">
+                    智能助手
+                  </Title>
+                  <Space size={8} align="center">
+                    <span className="today-assistant__status-indicator" />
+                    <Text className="muted-text">在线</Text>
+                  </Space>
+                </div>
+                <Space size={8}>
+                  <Button icon={<ReloadOutlined />} type="text" onClick={onRefresh} aria-label="刷新今日数据" />
+                  <Button icon={<ExpandOutlined />} type="text" onClick={onNavigateAgentLogs} aria-label="查看 Agent 日志" />
+                </Space>
+              </div>
+
+              <div className="agent-chat-panel">
+                <div className="agent-chat-stream">
+                  {agentMessages.map((messageItem) => {
+                    const isUser = messageItem.role === "user";
+                    const isSystem = messageItem.role === "system";
+                    return (
+                      <div
+                        key={messageItem.id}
+                        className={[
+                          "agent-chat-row",
+                          isUser ? "agent-chat-row--user" : "agent-chat-row--assistant",
+                          isSystem ? "agent-chat-row--system" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <div className="agent-chat-avatar">{isUser ? <UserOutlined /> : <RobotOutlined />}</div>
+                        <div
+                          className={[
+                            "agent-chat-bubble",
+                            isUser ? "agent-chat-bubble--user" : "agent-chat-bubble--assistant",
+                            isSystem ? "agent-chat-bubble--system" : "",
+                            messageItem.pending ? "agent-chat-bubble--pending" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <div className="agent-chat-bubble__content">{messageItem.content}</div>
+                          {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
+                          <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {agentSubmitting ? (
+                    <div className="agent-chat-row agent-chat-row--assistant">
+                      <div className="agent-chat-avatar">
+                        <RobotOutlined />
+                      </div>
+                      <div className="agent-chat-bubble agent-chat-bubble--assistant agent-chat-bubble--pending">
+                        <div className="agent-chat-bubble__content">Agent 正在思考...</div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="agent-chat-composer">
+                  <Input.TextArea
+                    value={agentMessage}
+                    onChange={(event) => setAgentMessage(event.target.value)}
+                    rows={3}
+                    autoSize={{ minRows: 3, maxRows: 5 }}
+                    placeholder="例如：明天下午 3 点开会，提醒我提前 10 分钟"
+                  />
+                  <Space wrap className="agent-chat-actions">
+                    <Button icon={<ThunderboltOutlined />} onClick={resetChat}>
+                      重新开始
+                    </Button>
+                    <Button type="primary" icon={<SendOutlined />} loading={agentSubmitting} onClick={() => void handleAgentSubmit()}>
+                      发送给 Agent
+                    </Button>
+                  </Space>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="today-sidebar__foot">
             <Card className="section-card today-panel" bordered={false}>
               <SectionHeader title={`冲突事项 (${conflictRows.length})`} extra={<Button type="text" onClick={onNavigateConflicts}>全部</Button>} />
               {conflictRows.length ? (
@@ -763,92 +789,6 @@ function TodayPageView({
               )}
             </Card>
           </div>
-        </div>
-
-        <div className="today-sidebar">
-          <Card className="section-card today-panel today-assistant-card" bordered={false}>
-            <div className="today-assistant__header">
-              <div>
-                <Title level={4} className="today-panel__title today-assistant__title">
-                  智能助手
-                </Title>
-                <Space size={8} align="center">
-                  <span className="today-assistant__status-indicator" />
-                  <Text className="muted-text">在线</Text>
-                </Space>
-              </div>
-              <Space size={8}>
-                <Button icon={<ReloadOutlined />} type="text" onClick={onRefresh} aria-label="刷新今日数据" />
-                <Button icon={<ExpandOutlined />} type="text" onClick={onNavigateAgentLogs} aria-label="查看 Agent 日志" />
-              </Space>
-            </div>
-
-            <div className="agent-chat-panel">
-              <div className="agent-chat-stream">
-                {agentMessages.map((messageItem) => {
-                  const isUser = messageItem.role === "user";
-                  const isSystem = messageItem.role === "system";
-                  return (
-                    <div
-                      key={messageItem.id}
-                      className={[
-                        "agent-chat-row",
-                        isUser ? "agent-chat-row--user" : "agent-chat-row--assistant",
-                        isSystem ? "agent-chat-row--system" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <div className="agent-chat-avatar">{isUser ? <UserOutlined /> : <RobotOutlined />}</div>
-                      <div
-                        className={[
-                          "agent-chat-bubble",
-                          isUser ? "agent-chat-bubble--user" : "agent-chat-bubble--assistant",
-                          isSystem ? "agent-chat-bubble--system" : "",
-                          messageItem.pending ? "agent-chat-bubble--pending" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <div className="agent-chat-bubble__content">{messageItem.content}</div>
-                        {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
-                        <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
-                      </div>
-                    </div>
-                  );
-                })}
-                {agentSubmitting ? (
-                  <div className="agent-chat-row agent-chat-row--assistant">
-                    <div className="agent-chat-avatar">
-                      <RobotOutlined />
-                    </div>
-                    <div className="agent-chat-bubble agent-chat-bubble--assistant agent-chat-bubble--pending">
-                      <div className="agent-chat-bubble__content">Agent 正在思考...</div>
-                    </div>
-                  </div>
-                ) : null}
-                <div ref={chatEndRef} />
-              </div>
-
-              <div className="agent-chat-composer">
-                <Input.TextArea
-                  value={agentMessage}
-                  onChange={(event) => setAgentMessage(event.target.value)}
-                  rows={3}
-                  autoSize={{ minRows: 3, maxRows: 5 }}
-                  placeholder="例如：明天下午 3 点开会，提醒我提前 10 分钟"
-                />
-                <Space wrap className="agent-chat-actions">
-                  <Button icon={<ThunderboltOutlined />} onClick={resetChat}>
-                    重新开始
-                  </Button>
-                  <Button type="primary" icon={<SendOutlined />} loading={agentSubmitting} onClick={() => void handleAgentSubmit()}>
-                    发送给 Agent
-                  </Button>
-                </Space>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
     </div>
