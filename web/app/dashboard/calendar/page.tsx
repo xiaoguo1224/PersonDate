@@ -69,7 +69,7 @@ type ScheduledItemFormValues = {
   remind_before_minutes?: number | null;
 };
 
-type ScheduledItem = {
+type PlanItemFormValues = {
   title: string;
   item_type: string;
   start_time: Dayjs;
@@ -95,9 +95,7 @@ type WeekTimelineDay = {
   segments: WeekTimelineEventSegment[];
 };
 
-type DayTimelineEntry =
-  | ({ kind: "event" } & ScheduledItem)
-  | ({ kind: "plan_item" } & ScheduledItem);
+type DayTimelineEntry = ScheduledItem;
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 const WEEK_TIMELINE_HOUR_HEIGHT = 64;
@@ -340,7 +338,7 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<ScheduledItem[]>([]);
-  const [dayPlan, setScheduledItem] = useState<ScheduledItem | null>(null);
+  const [dayPlan, setDayPlan] = useState<ScheduledItem | null>(null);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -365,31 +363,22 @@ export default function CalendarPage() {
     setEventsLoading(true);
     setEventsError(null);
     try {
-      const result = await loadCalendarEvents(accessToken);
-      setEvents(sortEvents(result.items));
+      const range = getViewRange(viewMode, focusDate);
+      const result = await loadScheduledItems({
+        start_time: range.start.toISOString(),
+        end_time: range.end.toISOString(),
+      });
+      setEvents(sortEvents(result));
     } catch (caughtError: unknown) {
       setEventsError(caughtError instanceof Error ? caughtError.message : "未知错误");
     } finally {
       setEventsLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, viewMode, focusDate]);
 
-  const fetchScheduledItem = useCallback(async () => {
-    if (!accessToken) {
-      setPlanLoading(false);
-      return;
-    }
-    setPlanLoading(true);
-    setPlanError(null);
-    try {
-      const result = await loadScheduledItem(accessToken, toDateKey(focusDate));
-      setScheduledItem(result);
-    } catch (caughtError: unknown) {
-      setPlanError(caughtError instanceof Error ? caughtError.message : "未知错误");
-    } finally {
-      setPlanLoading(false);
-    }
-  }, [accessToken, focusDate, timezoneLoading]);
+  const fetchDayPlan = useCallback(async () => {
+    setPlanLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!accessToken) {
@@ -411,8 +400,8 @@ export default function CalendarPage() {
     if (timezoneLoading) {
       return;
     }
-    void fetchScheduledItem();
-  }, [accessToken, fetchScheduledItem, timezoneLoading]);
+    void fetchDayPlan();
+  }, [accessToken, fetchDayPlan, timezoneLoading]);
 
   const viewRange = useMemo(() => getViewRange(viewMode, focusDate), [focusDate, viewMode]);
   const visibleEvents = useMemo(
@@ -437,22 +426,10 @@ export default function CalendarPage() {
     [events, timezone, weekDays],
   );
   const monthGridDays = useMemo(() => buildMonthGridDays(focusDate), [focusDate]);
-  const selectedScheduledItems = useMemo(
-    () =>
-      sortEvents(
-        (dayPlan?.items ?? []).filter(
-          (item) => item.status !== "cancelled" && item.status !== "skipped",
-        ),
-      ),
-    [dayPlan?.items],
-  );
   const selectedDayTimelineEntries = useMemo(() => {
-    const entries: DayTimelineEntry[] = [
-      ...selectedDayEvents.map((event) => ({ kind: "event" as const, ...event })),
-      ...selectedScheduledItems.map((item) => ({ kind: "plan_item" as const, ...item })),
-    ];
+    const entries = [...selectedDayEvents];
     return sortEvents(entries);
-  }, [selectedDayEvents, selectedScheduledItems]);
+  }, [selectedDayEvents]);
   const monthEventsByDate = useMemo(() => {
     const map = new Map<string, ScheduledItem[]>();
     events
@@ -469,18 +446,13 @@ export default function CalendarPage() {
   const todayKey = getTodayDateKey(timezone);
 
   const summary = useMemo(() => {
-    const plannedItems = (dayPlan?.items ?? []).filter(
-      (item) => item.status !== "cancelled" && item.status !== "skipped",
-    );
     const activeEvents = events.filter((event) => event.status !== "deleted");
     return {
       totalEvents: activeEvents.length,
       visibleEvents: visibleEvents.length,
       selectedEvents: selectedDayEvents.length,
-      planItems: plannedItems.length,
-      planStatus: dayPlan?.status ?? "none",
     };
-  }, [dayPlan, events, selectedDayEvents.length, visibleEvents.length]);
+  }, [events, selectedDayEvents.length, visibleEvents.length]);
 
   const openCreateModal = useCallback(
     (initialDate?: Dayjs) => {
@@ -565,8 +537,8 @@ export default function CalendarPage() {
   }, [planItemForm]);
 
   const refreshData = useCallback(async () => {
-    await Promise.all([fetchEvents(), fetchScheduledItem()]);
-  }, [fetchScheduledItem, fetchEvents]);
+    await Promise.all([fetchEvents(), fetchDayPlan()]);
+  }, [fetchDayPlan, fetchEvents]);
 
   const handlePlanItemSubmit = useCallback(
     async (values: ScheduledItem) => {
@@ -675,17 +647,10 @@ export default function CalendarPage() {
       setSubmitting(true);
       try {
         if (editingEvent) {
-          await requestJson(
-            `/api/calendar-events/${editingEvent.id}`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(payload),
-            },
-            accessToken,
-          );
+          await updateScheduledItem(editingEvent.id, payload);
           messageApi.success("安排已更新");
         } else {
-          await createCalendarEvent(accessToken, payload);
+          await createScheduledItem(payload);
           messageApi.success("安排已创建");
         }
         closeModal();
@@ -712,7 +677,7 @@ export default function CalendarPage() {
         cancelText: "取消",
         centered: true,
         onOk: async () => {
-          await deleteCalendarEvent(accessToken, event.id);
+          await deleteScheduledItem(event.id);
           messageApi.success("安排已删除");
           await refreshData();
         },
@@ -727,16 +692,16 @@ export default function CalendarPage() {
     }
     setPlanSubmitting(true);
     try {
-      const result = await generateScheduledItem(accessToken, toDateKey(focusDate));
+      const result = await generateDayDrafts(accessToken, toDateKey(focusDate));
       setScheduledItem(result);
       messageApi.success("安排草案已生成");
     } catch (caughtError: unknown) {
       messageApi.error(caughtError instanceof Error ? caughtError.message : "生成失败");
     } finally {
       setPlanSubmitting(false);
-      await fetchScheduledItem();
+      await fetchDayPlan();
     }
-  }, [accessToken, fetchScheduledItem, focusDate, messageApi]);
+  }, [accessToken, fetchDayPlan, focusDate, messageApi]);
 
   const handleConfirmPlan = useCallback(async () => {
     if (!accessToken || !dayPlan) {
@@ -744,21 +709,21 @@ export default function CalendarPage() {
     }
     setPlanSubmitting(true);
     try {
-      await confirmScheduledItem(accessToken, dayPlan.id);
+      await confirmDayDrafts(accessToken, dayPlan.id);
       messageApi.success("计划已确认");
-      await fetchScheduledItem();
+      await fetchDayPlan();
     } catch (caughtError: unknown) {
       messageApi.error(caughtError instanceof Error ? caughtError.message : "确认失败");
     } finally {
       setPlanSubmitting(false);
     }
-  }, [accessToken, dayPlan, fetchScheduledItem, messageApi]);
+  }, [accessToken, dayPlan, fetchDayPlan, messageApi]);
 
   const heroTags = [
     { color: "cyan", label: `${summary.totalEvents} 条安排` },
     { color: "orange", label: `${summary.visibleEvents} 条当前视图` },
-    { color: "gold", label: `${summary.planItems} 条安排项` },
-    { color: "green", label: summary.planStatus === "none" ? "未生成安排" : summary.planStatus },
+    { color: "gold", label: `${summary.totalEvents} 条安排` },
+    { color: "green", label: "已加载" },
   ];
 
   return (
