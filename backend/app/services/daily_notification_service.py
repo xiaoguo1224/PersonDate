@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import EventStatus, TaskStatus
-from app.models.schedule import CalendarEvent, TaskItem
+from app.models.enums import ScheduledItemStatus, TaskStatus
+from app.models.schedule import TaskItem
+from app.models.scheduled_item import ScheduledItem
 from app.models.user import User, UserSettings
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class DailyNotificationService:
         stmt = (
             select(User)
             .join(UserSettings)
-            .where(UserSettings.daily_plan_push_enabled == True)
+            .where(UserSettings.daily_plan_push_enabled.is_(True))
         )
         users = list(self.db.scalars(stmt))
         current_time_utc = datetime.now(UTC)
@@ -181,21 +182,21 @@ class DailyNotificationService:
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_day = start_of_day + timedelta(days=1)
         stmt = (
-            select(CalendarEvent)
+            select(ScheduledItem)
             .where(
-                CalendarEvent.user_id == user_id,
-                CalendarEvent.start_time >= start_of_day,
-                CalendarEvent.start_time < end_of_day,
-                CalendarEvent.status == EventStatus.ACTIVE.value,
+                ScheduledItem.user_id == user_id,
+                ScheduledItem.start_time >= start_of_day,
+                ScheduledItem.start_time < end_of_day,
+                ScheduledItem.status == ScheduledItemStatus.ACTIVE.value,
             )
-            .order_by(CalendarEvent.start_time.asc())
+            .order_by(ScheduledItem.start_time.asc())
         )
         results = []
-        for event in self.db.scalars(stmt):
+        for item in self.db.scalars(stmt):
             results.append({
-                "time": event.start_time.strftime("%H:%M") if event.start_time else "",
-                "title": event.title,
-                "location": event.location or "",
+                "time": item.start_time.strftime("%H:%M"),
+                "title": item.title,
+                "location": item.location or "",
             })
         return results
 

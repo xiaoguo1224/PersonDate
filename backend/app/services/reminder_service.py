@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ReminderJob, ReminderStatus
+from app.models.enums import ReminderTargetType
 from app.services.channel_identity_service import ChannelIdentityService
 
 
@@ -34,6 +35,28 @@ class ReminderService:
         self.db.add(job)
         self.db.flush()
         return job
+
+    def create_from_scheduled_item(
+        self,
+        user_id: str,
+        scheduled_item_id: str,
+        title: str,
+        trigger_time: datetime,
+        remind_before_minutes: int,
+        conversation_id: str | None = None,
+    ) -> ReminderJob:
+        reminder = ReminderJob(
+            user_id=user_id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+            target_id=scheduled_item_id,
+            title=title,
+            trigger_time=trigger_time,
+            conversation_id=conversation_id or self.channel_identities.get_conversation_id(user_id),
+            status=ReminderStatus.PENDING.value,
+        )
+        self.db.add(reminder)
+        self.db.flush()
+        return reminder
 
     def cancel_by_target(self, *, user_id: str, target_id: str) -> None:
         stmt = select(ReminderJob).where(

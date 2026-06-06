@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="微信智能日程规划 Agent", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="微信智能安排规划 Agent", version="0.1.0", lifespan=lifespan)
     settings = get_settings()
     allow_origins = [
         origin.strip()

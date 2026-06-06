@@ -96,7 +96,7 @@ def infer_event_title(text: str) -> str:
     for keyword, title in aliases:
         if keyword in text:
             return title
-    return extract_keyword_after_time(text) or "日程"
+    return extract_keyword_after_time(text) or "安排"
 
 
 def infer_task_title(text: str) -> str:

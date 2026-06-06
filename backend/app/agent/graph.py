@@ -13,7 +13,6 @@ from app.core.config import get_settings
 from app.models import ConflictStatus, PendingStateType, User
 from app.services.agent_log_service import AgentLogService
 from app.services.conflict_service import ConflictService
-from app.services.day_plan_service import DayPlanService
 from app.services.pending_state_service import PendingStateService
 from app.tools.executor import ToolExecutor
 
@@ -46,7 +45,6 @@ class SchedulePlanningGraph:
         self.tools = ToolExecutor(db)
         self.pending_states = PendingStateService(db)
         self.conflicts = ConflictService(db)
-        self.day_plans = DayPlanService(db)
         self.logs = AgentLogService(db)
         self.settings = get_settings()
         self.llm = llm_client or LLMClient()
@@ -67,8 +65,9 @@ class SchedulePlanningGraph:
                 "你是微信智能安排规划 Agent 的意图分类器。"
                 "只输出 JSON，不要输出多余文本。"
                 "请根据用户输入判断 intent。"
-                "可选值：create_event, query_events, create_task, plan_day, "
-                "update_event, delete_event, confirm_plan, ask_user_clarification, unknown。"
+                "可选值：create_scheduled_item, query_scheduled_items, create_task, plan_day, "
+                "update_scheduled_item, delete_scheduled_item, confirm_plan, "
+                "ask_user_clarification, unknown。"
                 "如果用户说“帮我安排一下”“安排一下”“生成计划”“计划一下”，"
                 "必须返回 plan_day。"
                 "如果消息同时包含任务时长或任务事项，但明确要求安排计划，"
@@ -203,14 +202,14 @@ class SchedulePlanningGraph:
         if intent == "ask_user_clarification":
             state.final_response = self._ask_user_clarification(state)
             return
-        if intent == "query_events":
-            self._handle_query_events(state)
+        if intent == "query_scheduled_items":
+            self._handle_query_scheduled_items(state)
             return
-        if intent == "delete_event":
-            self._handle_delete_event(state)
+        if intent == "delete_scheduled_item":
+            self._handle_delete_scheduled_item(state)
             return
-        if intent == "update_event":
-            self._handle_update_event(state)
+        if intent == "update_scheduled_item":
+            self._handle_update_scheduled_item(state)
             return
         if intent == "create_task":
             self._handle_create_task(state)
@@ -218,8 +217,8 @@ class SchedulePlanningGraph:
         if intent == "plan_day":
             self._handle_plan_day(state)
             return
-        if intent == "create_event":
-            self._handle_create_event(state)
+        if intent == "create_scheduled_item":
+            self._handle_create_scheduled_item(state)
             return
         if intent == "confirm_plan":
             state.final_response = "请在待确认的安排草案上下文中回复“确认”或“取消”。"
@@ -270,7 +269,7 @@ class SchedulePlanningGraph:
             return
         state.final_response = "我正在等待你的确认或选择，请回复“确认”“取消”或序号。"
 
-    def _find_event_candidates(
+    def _find_scheduled_item_candidates(
         self,
         state: AgentState,
         *,
@@ -278,41 +277,41 @@ class SchedulePlanningGraph:
         target_date: date | None,
         target_time: datetime | None,
     ) -> list[dict[str, object]]:
-        if keyword and keyword != "日程":
+        if keyword and keyword != "安排":
             result = self.tools.execute(
-                "search_event_candidates",
+                "query_scheduled_items",
                 {"keyword": keyword, "on_date": target_date},
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )
             state.tool_calls.append(
                 {
-                    "tool_name": "search_event_candidates",
+                    "tool_name": "query_scheduled_items",
                     "args": {"keyword": keyword, "on_date": target_date},
                 }
             )
             state.tool_results.append(
                 {
-                    "tool_name": "search_event_candidates",
+                    "tool_name": "query_scheduled_items",
                     "result": result.model_dump(mode="json"),
                 }
             )
             return result.data or []
 
         result = self.tools.execute(
-            "query_events",
+            "query_scheduled_items",
             {"start_date": target_date, "end_date": target_date},
             user_id=state.user_id,
             conversation_id=state.conversation_id,
         )
         state.tool_calls.append(
             {
-                "tool_name": "query_events",
+                "tool_name": "query_scheduled_items",
                 "args": {"start_date": target_date, "end_date": target_date},
             }
         )
         state.tool_results.append(
-            {"tool_name": "query_events", "result": result.model_dump(mode="json")}
+            {"tool_name": "query_scheduled_items", "result": result.model_dump(mode="json")}
         )
         candidates = result.data or []
         if target_time is None:
@@ -357,7 +356,7 @@ class SchedulePlanningGraph:
                 else 0
             )
         result = self.tools.execute(
-            "create_event",
+            "create_scheduled_item",
             {
                 "title": title,
                 "description": None,
@@ -372,12 +371,12 @@ class SchedulePlanningGraph:
         )
         state.tool_calls.append(
             {
-                "tool_name": "create_event",
+                "tool_name": "create_scheduled_item",
                 "args": {"title": title, "start_time": start_time, "end_time": end_time},
             }
         )
         state.tool_results.append(
-            {"tool_name": "create_event", "result": result.model_dump(mode="json")}
+            {"tool_name": "create_scheduled_item", "result": result.model_dump(mode="json")}
         )
         if not result.success:
             state.final_response = result.error or "创建安排失败。"
@@ -430,22 +429,22 @@ class SchedulePlanningGraph:
         if target_date is None:
             target_date = state.current_time.date()
         result = self.tools.execute(
-            "query_events",
+            "query_scheduled_items",
             {"start_date": target_date, "end_date": target_date},
             user_id=state.user_id,
             conversation_id=state.conversation_id,
         )
         state.tool_calls.append(
             {
-                "tool_name": "query_events",
+                "tool_name": "query_scheduled_items",
                 "args": {"start_date": target_date, "end_date": target_date},
             }
         )
         state.tool_results.append(
-            {"tool_name": "query_events", "result": result.model_dump(mode="json")}
+            {"tool_name": "query_scheduled_items", "result": result.model_dump(mode="json")}
         )
         events = result.data or []
-        state.events = events
+        state.scheduled_items = events
         if not events:
             state.final_response = f"{target_date.isoformat()} 没有安排。"
             return
@@ -507,22 +506,17 @@ class SchedulePlanningGraph:
                 {"tool_name": "plan_tasks_into_day", "result": plan_result.model_dump(mode="json")}
             )
             if plan_result.success:
-                plan_result_data: dict[str, object] = plan_result.data or {}
                 pending = self.pending_states.save(
                     user_id=state.user_id,
                     conversation_id=state.conversation_id,
                     state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
-                    state_payload={
-                        "draft_plan_id": str(plan_result_data["day_plan_id"]),
-                        "date": target_date.isoformat(),
-                    },
+                    state_payload={"date": target_date.isoformat()},
                 )
                 state.pending_state = pending.state_payload | {
                     "id": pending.id,
                     "state_type": pending.state_type,
                     "status": pending.status,
                 }
-                state.draft_plan = plan_result.data
                 state.final_response = (
                     f"已创建任务：{title}，预计 {minutes} 分钟。\n"
                     f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
@@ -575,22 +569,17 @@ class SchedulePlanningGraph:
         if not result.success:
             state.final_response = result.error or "生成计划失败。"
             return
-        result_data: dict[str, object] = result.data or {}
         pending = self.pending_states.save(
             user_id=state.user_id,
             conversation_id=state.conversation_id,
             state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
-            state_payload={
-                "draft_plan_id": str(result_data["day_plan_id"]),
-                "date": target_date.isoformat(),
-            },
+            state_payload={"date": target_date.isoformat()},
         )
         state.pending_state = pending.state_payload | {
             "id": pending.id,
             "state_type": pending.state_type,
             "status": pending.status,
         }
-        state.draft_plan = result.data
         state.final_response = (
             f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
         )
@@ -608,7 +597,7 @@ class SchedulePlanningGraph:
             target_date=target_date,
             target_time=target_time if isinstance(target_time, datetime) else None,
         )
-        state.candidate_events = candidates
+        state.candidate_scheduled_items = candidates
         if not candidates:
             state.final_response = "没有找到可修改的安排。"
             return
@@ -618,8 +607,8 @@ class SchedulePlanningGraph:
                 conversation_id=state.conversation_id,
                 state_type=PendingStateType.WAITING_EVENT_SELECTION.value,
                 state_payload={
-                    "action": "update_event",
-                    "candidate_events": candidates[:3],
+                    "action": "update_scheduled_item",
+                    "candidates": candidates[:3],
                 },
             )
             state.pending_state = pending.state_payload | {
@@ -643,7 +632,7 @@ class SchedulePlanningGraph:
         if new_end is None:
             new_end = new_start + timedelta(hours=1)
         update_result = self.tools.execute(
-            "update_event",
+            "update_scheduled_item",
             {
                 "event_id": candidate["id"],
                 "title": candidate["title"],
@@ -656,12 +645,12 @@ class SchedulePlanningGraph:
         )
         state.tool_calls.append(
             {
-                "tool_name": "update_event",
+                "tool_name": "update_scheduled_item",
                 "args": {"event_id": candidate["id"], "start_time": new_start, "end_time": new_end},
             }
         )
         state.tool_results.append(
-            {"tool_name": "update_event", "result": update_result.model_dump(mode="json")}
+            {"tool_name": "update_scheduled_item", "result": update_result.model_dump(mode="json")}
         )
         if not update_result.success:
             state.final_response = update_result.error or "修改安排失败。"
@@ -684,7 +673,7 @@ class SchedulePlanningGraph:
             target_date=target_date,
             target_time=target_time if isinstance(target_time, datetime) else None,
         )
-        state.candidate_events = candidates
+        state.candidate_scheduled_items = candidates
         if not candidates:
             state.final_response = "没有找到可删除的安排。"
             return
@@ -694,8 +683,8 @@ class SchedulePlanningGraph:
                 conversation_id=state.conversation_id,
                 state_type=PendingStateType.WAITING_EVENT_SELECTION.value,
                 state_payload={
-                    "action": "delete_event",
-                    "candidate_events": candidates[:3],
+                    "action": "delete_scheduled_item",
+                    "candidates": candidates[:3],
                 },
             )
             state.pending_state = pending.state_payload | {
@@ -710,36 +699,35 @@ class SchedulePlanningGraph:
             return
         candidate = candidates[0]
         delete_result = self.tools.execute(
-            "delete_event",
+            "delete_scheduled_item",
             {"event_id": candidate["id"]},
             user_id=state.user_id,
             conversation_id=state.conversation_id,
         )
         state.tool_calls.append(
-            {"tool_name": "delete_event", "args": {"event_id": candidate["id"]}}
+            {"tool_name": "delete_scheduled_item", "args": {"event_id": candidate["id"]}}
         )
         state.tool_results.append(
-            {"tool_name": "delete_event", "result": delete_result.model_dump(mode="json")}
+            {"tool_name": "delete_scheduled_item", "result": delete_result.model_dump(mode="json")}
         )
         state.final_response = f"已删除安排“{candidate['title']}”。"
 
     def _confirm_plan_from_pending(self, state: AgentState) -> None:
         payload = state.pending_state or {}
-        draft_plan_id = (
-            payload.get("state_payload", {}).get("draft_plan_id")
-            if "state_payload" in payload
-            else payload.get("draft_plan_id")
-        )
-        if not draft_plan_id:
+        state_payload = payload.get("state_payload", {}) if "state_payload" in payload else payload
+        plan_date_str = state_payload.get("date")
+        if not plan_date_str:
             state.final_response = "没有可确认的安排草案。"
             return
+        from datetime import date as date_type
+        plan_date = date_type.fromisoformat(plan_date_str)
         result = self.tools.execute(
             "confirm_plan",
-            {"plan_id": draft_plan_id},
+            {"plan_date": plan_date},
             user_id=state.user_id,
             conversation_id=state.conversation_id,
         )
-        state.tool_calls.append({"tool_name": "confirm_plan", "args": {"plan_id": draft_plan_id}})
+        state.tool_calls.append({"tool_name": "confirm_plan", "args": {"plan_date": plan_date}})
         state.tool_results.append(
             {"tool_name": "confirm_plan", "result": result.model_dump(mode="json")}
         )
@@ -787,7 +775,7 @@ class SchedulePlanningGraph:
                 else new_start + timedelta(hours=1)
             )
             result = self.tools.execute(
-                "update_event",
+                "update_scheduled_item",
                 {
                     "event_id": event_id,
                     "title": event_title,
@@ -801,7 +789,7 @@ class SchedulePlanningGraph:
             )
             state.tool_calls.append(
                 {
-                    "tool_name": "update_event",
+                    "tool_name": "update_scheduled_item",
                     "args": {
                         "event_id": event_id,
                         "start_time": new_start,
@@ -810,7 +798,7 @@ class SchedulePlanningGraph:
                 }
             )
             state.tool_results.append(
-                {"tool_name": "update_event", "result": result.model_dump(mode="json")}
+                {"tool_name": "update_scheduled_item", "result": result.model_dump(mode="json")}
             )
             if result.success:
                 self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
@@ -828,7 +816,7 @@ class SchedulePlanningGraph:
             return
         if choice == 3 and event_id:
             self.tools.execute(
-                "delete_event",
+                "delete_scheduled_item",
                 {"event_id": event_id},
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
@@ -842,9 +830,9 @@ class SchedulePlanningGraph:
     def _handle_event_selection_choice(self, state: AgentState, choice: int) -> None:
         payload = state.pending_state or {}
         candidates = (
-            payload.get("state_payload", {}).get("candidate_events", [])
+            payload.get("state_payload", {}).get("candidates", [])
             if "state_payload" in payload
-            else payload.get("candidate_events", [])
+            else payload.get("candidates", [])
         )
         action = (
             payload.get("state_payload", {}).get("action")
@@ -855,15 +843,15 @@ class SchedulePlanningGraph:
             state.final_response = "请选择有效的候选编号。"
             return
         candidate = candidates[choice - 1]
-        if action == "delete_event":
+        if action == "delete_scheduled_item":
             self.tools.execute(
-                "delete_event",
+                "delete_scheduled_item",
                 {"event_id": candidate["id"]},
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )
             state.final_response = f"已删除安排“{candidate['title']}”。"
-        elif action == "update_event":
+        elif action == "update_scheduled_item":
             state.final_response = f"已选中安排“{candidate['title']}”，请继续补充修改内容。"
         self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
         state.pending_state = None

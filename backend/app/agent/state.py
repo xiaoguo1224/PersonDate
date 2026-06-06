@@ -18,12 +18,11 @@ class AgentState(BaseModel):
     pending_state: dict[str, Any] | None = None
     intent: str | None = None
     extracted: dict[str, Any] | None = None
-    candidate_events: list[dict[str, Any]] = Field(default_factory=list)
-    events: list[dict[str, Any]] = Field(default_factory=list)
+    candidate_scheduled_items: list[dict[str, Any]] = Field(default_factory=list)
+    scheduled_items: list[dict[str, Any]] = Field(default_factory=list)
     tasks: list[dict[str, Any]] = Field(default_factory=list)
     free_slots: list[dict[str, Any]] = Field(default_factory=list)
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
-    draft_plan: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     graph_trace: list[str] = Field(default_factory=list)

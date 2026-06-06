@@ -13,7 +13,7 @@ class ToolResult(BaseModel):
     error: str | None = None
 
 
-class CreateEventArgs(BaseModel):
+class CreateScheduledItemArgs(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     start_time: datetime
@@ -23,14 +23,14 @@ class CreateEventArgs(BaseModel):
     remind_before_minutes: int | None = Field(default=0, ge=0)
 
 
-class QueryEventsArgs(BaseModel):
+class QueryScheduledItemsArgs(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     timezone: str = "Asia/Shanghai"
 
 
-class UpdateEventArgs(BaseModel):
-    event_id: str
+class UpdateScheduledItemArgs(BaseModel):
+    item_id: str
     title: str | None = None
     description: str | None = None
     start_time: datetime | None = None
@@ -40,14 +40,8 @@ class UpdateEventArgs(BaseModel):
     remind_before_minutes: int | None = None
 
 
-class DeleteEventArgs(BaseModel):
-    event_id: str
-
-
-class SearchEventCandidatesArgs(BaseModel):
-    keyword: str
-    on_date: date | None = None
-    timezone: str = "Asia/Shanghai"
+class DeleteScheduledItemArgs(BaseModel):
+    item_id: str
 
 
 class CreateTaskArgs(BaseModel):
@@ -88,7 +82,7 @@ class PlanTasksIntoDayArgs(BaseModel):
 
 
 class ConfirmPlanArgs(BaseModel):
-    plan_id: str
+    plan_date: date
 
 
 class RegeneratePlanArgs(BaseModel):
