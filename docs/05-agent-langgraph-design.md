@@ -12,13 +12,23 @@ SchedulePlanningGraph
 
 Agent 目标：
 
-1. 理解用户日程、任务、计划相关自然语言。
+1. 理解用户安排、待办、计划相关自然语言。
 2. 判断用户意图。
 3. 提取结构化信息。
-4. 调用日程、任务、计划、冲突检测、提醒等工具。
+4. 调用安排、待办、计划、冲突检测、提醒等工具。
 5. 支持多轮对话和 pending state。
 6. 对复杂规划先生成草案，再等待用户确认。
 7. 生成适合微信发送的自然语言回复。
+
+## 1.1 对外术语约定
+
+Agent 对用户侧优先使用更少的概念：
+
+- `安排`：固定时间内容和已经排进时间轴的内容。
+- `待办`：尚未排入具体时间的事项。
+- `安排草案`：等待用户确认的初版每日安排。
+
+内部节点、工具名、数据库模型名仍可沿用原有命名，但回复与页面文案优先使用上述术语。
 
 ## 2. Agent 边界
 
@@ -28,7 +38,7 @@ Agent 负责：
 自然语言理解
 意图识别
 工具调用决策
-计划草案生成
+安排草案生成
 用户确认流程
 微信回复生成
 ```
@@ -142,7 +152,7 @@ unknown
 
 职责：根据 intent 提取结构化信息。
 
-创建日程示例：
+创建安排示例：
 
 ```json
 {
@@ -197,7 +207,7 @@ unknown -> handle_unknown
 1. 提取查询日期范围。
 2. 调用 query_events。
 3. 调用 detect_conflicts 可选。
-4. 生成日程列表回复。
+4. 生成安排列表回复。
 
 ### 5.8 handle_create_task
 
@@ -208,7 +218,7 @@ unknown -> handle_unknown
 3. 调用 find_free_slots。
 4. 调用 plan_tasks_into_day。
 5. 调用 detect_conflicts。
-6. 生成草案。
+6. 生成安排草案。
 7. 保存 pending_state 等待确认。
 
 ### 5.9 handle_plan_day
@@ -221,7 +231,7 @@ unknown -> handle_unknown
 4. find_free_slots。
 5. plan_tasks_into_day。
 6. detect_conflicts。
-7. 生成 day_plan draft。
+7. 生成安排草案。
 8. 保存 pending_state。
 9. 请求用户确认。
 
@@ -274,7 +284,7 @@ waiting_missing_info -> merge missing info and continue
 
 ### 5.13 generate_response
 
-职责：根据工具结果、冲突、计划草案生成简洁微信回复。
+职责：根据工具结果、冲突、安排草案生成简洁微信回复。
 
 要求：
 
@@ -471,8 +481,8 @@ save_agent_log
 ### 8.1 系统 Prompt
 
 ```text
-你是一个个人日程规划 Agent。
-你通过工具帮助用户管理日程、任务和每日计划。
+你是一个个人安排规划 Agent。
+你通过工具帮助用户管理安排、待办和每日计划。
 你不能直接操作数据库，必须通过工具完成创建、查询、修改、删除、规划和确认。
 你需要结合当前时间、用户时区、用户设置和 pending state 理解用户意图。
 如果信息不足，必须追问。

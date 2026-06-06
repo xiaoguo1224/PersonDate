@@ -25,7 +25,7 @@ Next.js Web Dashboard
 ```text
 基于 FastAPI + LangGraph 的微信智能日程规划 Agent 系统，
 使用自研微信通道服务作为微信消息通道，
-由自研 Schedule Agent Service 负责用户、权限、Agent、日程、任务、计划、冲突检测、提醒和 Web API。
+由自研 Schedule Agent Service 负责用户、权限、Agent、安排、待办、计划、冲突检测、提醒和 Web API。
 ```
 
 ## 2. 核心架构图
@@ -158,7 +158,7 @@ LangGraph 只负责 Agent 状态流编排。
 1. 多轮对话状态流。
 2. 用户确认流程。
 3. 不同意图的流程分支。
-4. 创建日程、创建任务、规划一天、确认草案、修改、删除等流程的节点编排。
+4. 创建安排、创建待办、规划一天、确认草案、修改、删除等流程的节点编排。
 5. Agent 执行路径清晰化。
 
 它不负责：
@@ -176,7 +176,7 @@ LLM 负责自然语言理解和回复生成。
 LLM 负责：
 
 1. 理解用户自然语言。
-2. 提取日程、任务、时间、地点、约束。
+2. 提取安排、待办、时间、地点、约束。
 3. 判断用户意图。
 4. 给出规划建议。
 5. 生成适合微信发送的自然语言回复。
@@ -363,7 +363,7 @@ app/
   "channel": "wechat",
   "conversation_id": "wx_user_001",
   "content_type": "text",
-  "content": "已为你创建日程：开会，时间为明天下午 3 点。"
+  "content": "已为你创建安排：开会，时间为明天下午 3 点。"
 }
 ```
 
@@ -463,7 +463,7 @@ WechatChannelService 负责调用微信通道服务的发送能力。
 
 1. APScheduler 定时扫描 `reminder_jobs`。
 2. 找到 `status = pending` 且 `trigger_time <= now()` 的提醒。
-3. 读取目标日程、任务或计划项。
+3. 读取目标安排、待办或安排项。
 4. 生成提醒文本。
 5. 调用 WeChat Channel Adapter 发送微信消息。
 6. 成功后更新 `status = fired`。
@@ -501,7 +501,7 @@ save_agent_log
 返回回复
 ```
 
-### 7.2 创建固定日程流程
+### 7.2 创建固定安排流程
 
 ```text
 handle_create_event
@@ -565,9 +565,9 @@ owner
 member
 ```
 
-owner 可访问系统设置、模型配置、微信通道状态、全局日志、用户管理、邀请码管理、自己的日程 Agent 功能。
+owner 可访问系统设置、模型配置、微信通道状态、全局日志、用户管理、邀请码管理、自己的安排 Agent 功能。
 
-member 只能访问自己的日程、任务、每日计划、冲突事项、提醒、Agent 日志和个人设置。
+member 只能访问自己的安排、待办、每日安排、冲突事项、提醒、Agent 日志和个人设置。
 
 Agent 工具调用必须自动注入当前 `user_id`。所有工具必须限制：
 
@@ -698,7 +698,7 @@ owner 可查看全局业务日志，member 只能查看自己的日志。
 5. 微信通道只作为消息通道。
 6. Agent、业务、权限、数据库、Web API 全部由自研 FastAPI 后端实现。
 7. LLM 调用使用 OpenAI-compatible SDK。
-8. 日程冲突检测使用确定性程序算法。
+8. 安排冲突检测使用确定性程序算法。
 9. 提醒使用 APScheduler，不经过 LLM。
 10. Web Dashboard 使用 Next.js + Ant Design。
 11. 系统采用单体后端 + 多模块架构，不拆微服务。

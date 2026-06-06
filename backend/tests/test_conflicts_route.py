@@ -248,3 +248,73 @@ def test_deleting_event_resolves_related_conflicts() -> None:
     assert resolved_response.status_code == 200
     assert after_delete.json()["data"]["items"] == []
     assert len(resolved_response.json()["data"]["items"]) == 1
+
+
+def test_list_conflicts_auto_resolves_finished_pairs() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+    app = create_app()
+
+    def override_get_db():
+        try:
+            yield session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    setup = SetupService(session)
+    setup.create_owner(
+        OwnerInitRequest(
+            display_name="主用户",
+            email="owner@example.com",
+        )
+    )
+    session.commit()
+
+    auth = AuthService(session)
+    settings = get_settings()
+    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
+    session.commit()
+
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {token}"}
+    for payload in (
+        {
+            "title": "已结束会议A",
+            "description": "历史冲突",
+            "start_time": "2025-06-06T15:00:00+08:00",
+            "end_time": "2025-06-06T16:00:00+08:00",
+            "timezone": "Asia/Shanghai",
+            "location": "会议室A",
+            "remind_before_minutes": 10,
+        },
+        {
+            "title": "已结束会议B",
+            "description": "历史冲突",
+            "start_time": "2025-06-06T15:30:00+08:00",
+            "end_time": "2025-06-06T16:30:00+08:00",
+            "timezone": "Asia/Shanghai",
+            "location": "会议室B",
+            "remind_before_minutes": 10,
+        },
+    ):
+        response = client.post("/api/calendar-events", headers=headers, json=payload)
+        assert response.status_code == 200
+
+    open_response = client.get("/api/conflicts?status=open", headers=headers)
+    resolved_response = client.get("/api/conflicts?status=resolved", headers=headers)
+
+    assert open_response.status_code == 200
+    assert resolved_response.status_code == 200
+    assert open_response.json()["data"]["items"] == []
+    resolved_items = resolved_response.json()["data"]["items"]
+    assert len(resolved_items) == 1
+    assert resolved_items[0]["status"] == "resolved"

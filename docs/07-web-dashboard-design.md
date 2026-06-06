@@ -2,13 +2,13 @@
 
 ## 1. Web 定位
 
-Web Dashboard 是系统的日程驾驶舱，不是主业务入口。
+Web Dashboard 是系统的安排驾驶舱，不是主业务入口。
 
 Web 负责：
 
-1. 展示每日计划。
+1. 展示今日安排。
 2. 展示日历视图。
-3. 管理任务池。
+3. 管理待办。
 4. 展示冲突事项。
 5. 展示提醒任务。
 6. 展示 Agent 日志。
@@ -31,9 +31,9 @@ FullCalendar 或自定义时间轴
 ### 3.1 owner 菜单
 
 ```text
-今日计划
+今日安排
 日历视图
-任务池
+待办
 冲突事项
 提醒任务
 Agent 日志
@@ -49,9 +49,9 @@ Agent 日志
 ### 3.2 member 菜单
 
 ```text
-今日计划
+今日安排
 日历视图
-任务池
+待办
 冲突事项
 提醒任务
 我的 Agent 记录
@@ -116,7 +116,7 @@ POST /api/auth/login
 POST /api/auth/register-with-invite
 ```
 
-### 4.3 今日计划页
+### 4.3 今日安排页
 
 路径：
 
@@ -135,7 +135,7 @@ POST /api/auth/register-with-invite
 展示 Agent 建议
 支持标记完成
 支持重新规划
-支持直接新增和编辑计划项
+支持直接新增和编辑安排项
 ```
 
 调用 API：
@@ -167,13 +167,13 @@ DELETE /api/plan-items/{id}
 展示 calendar_events
 展示 plan_items
 点击查看详情
-手动创建日程
-编辑日程
-删除日程
-手动新增计划项
-编辑计划项
-完成计划项
-删除计划项
+手动创建安排
+编辑安排
+删除安排
+手动新增安排项
+编辑安排项
+完成安排项
+删除安排项
 自然语言 Agent 添加
 ```
 
@@ -191,7 +191,7 @@ DELETE /api/plan-items/{id}
 POST /api/me/agent/message
 ```
 
-### 4.5 任务池页
+### 4.5 待办页
 
 路径：
 

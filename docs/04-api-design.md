@@ -389,7 +389,7 @@ POST /api/wechat/inbound
   "success": true,
   "data": {
     "handled": true,
-    "reply": "已为你创建日程：开会，时间为明天下午 3 点。"
+    "reply": "已为你创建安排：开会，时间为明天下午 3 点。"
   }
 }
 ```
@@ -434,9 +434,9 @@ recent_inbound_messages
 recent_outbound_messages
 ```
 
-## 10. 日程接口
+## 10. 安排接口
 
-### 10.1 创建固定日程
+### 10.1 创建固定安排
 
 ```http
 POST /api/calendar-events
@@ -471,31 +471,31 @@ POST /api/calendar-events
 }
 ```
 
-### 10.2 查询日程
+### 10.2 查询安排
 
 ```http
 GET /api/calendar-events?start_time=2026-06-05T00:00:00+08:00&end_time=2026-06-05T23:59:59+08:00
 ```
 
-权限：owner/member。member 只能返回自己的日程。
+权限：owner/member。member 只能返回自己的安排。
 
-### 10.3 修改日程
+### 10.3 修改安排
 
 ```http
 PATCH /api/calendar-events/{id}
 ```
 
-权限：owner/member，仅能修改自己的日程。
+权限：owner/member，仅能修改自己的安排。
 
-### 10.4 删除日程
+### 10.4 删除安排
 
 ```http
 DELETE /api/calendar-events/{id}
 ```
 
-权限：owner/member，仅能删除自己的日程。
+权限：owner/member，仅能删除自己的安排。
 
-### 10.5 搜索候选日程
+### 10.5 搜索候选安排
 
 ```http
 GET /api/calendar-events/search?keyword=会议&date=2026-06-05
@@ -561,7 +561,7 @@ GET /api/day-plans/{date}
 GET /api/day-plans/2026-06-05
 ```
 
-### 12.2 生成计划草案
+### 12.2 生成安排草案
 
 ```http
 POST /api/day-plans/{date}/generate
@@ -596,7 +596,7 @@ POST /api/day-plans/{id}/regenerate
 }
 ```
 
-### 12.5 新增计划项
+### 12.5 新增安排项
 
 ```http
 POST /api/plan-items
@@ -617,19 +617,19 @@ POST /api/plan-items
 }
 ```
 
-### 12.6 更新计划项
+### 12.6 更新安排项
 
 ```http
 PATCH /api/plan-items/{id}
 ```
 
-### 12.7 标记计划项完成
+### 12.7 标记安排项完成
 
 ```http
 PATCH /api/plan-items/{id}/complete
 ```
 
-### 12.8 删除计划项
+### 12.8 删除安排项
 
 ```http
 DELETE /api/plan-items/{id}
@@ -860,7 +860,7 @@ INTERNAL_ERROR
 
 1. Auth API：登录、注册、当前用户。
 2. Admin API：邀请码、用户管理、系统设置、全局日志。
-3. Personal API：日程、任务、计划、冲突、提醒、个人设置。
+3. Personal API：安排、待办、计划、冲突、提醒、个人设置。
 4. WeChat API：微信入站、绑定、发送。
 5. Agent API：调试与日志。
 

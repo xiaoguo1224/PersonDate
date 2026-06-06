@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -19,7 +19,21 @@ from app.services.calendar_event_service import CalendarEventService
 router = APIRouter(prefix="/calendar-events", tags=["calendar-events"])
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def _to_item(event: CalendarEvent) -> CalendarEventItem:
+    now = datetime.now(UTC)
+    status = event.status
+    if (
+        status == "active"
+        and event.end_time is not None
+        and _as_utc(event.end_time) <= now
+    ):
+        status = "completed"
     return CalendarEventItem(
         id=event.id,
         title=event.title,
@@ -28,7 +42,7 @@ def _to_item(event: CalendarEvent) -> CalendarEventItem:
         end_time=event.end_time,
         timezone=event.timezone,
         location=event.location,
-        status=event.status,
+        status=status,
         remind_before_minutes=event.remind_before_minutes,
     )
 
@@ -74,7 +88,7 @@ def create_calendar_event(
         created_by_channel="web",
     )
     db.commit()
-    return ApiResponse(data=_to_item(event), message="日程已创建")
+    return ApiResponse(data=_to_item(event), message="安排已创建")
 
 
 @router.patch("/{event_id}")
@@ -87,7 +101,7 @@ def update_calendar_event(
     service = CalendarEventService(db)
     event = service.get_event(current_user.id, event_id)
     if event is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排不存在")
     event = service.update_event(
         event,
         title=payload.title,
@@ -99,7 +113,7 @@ def update_calendar_event(
         remind_before_minutes=payload.remind_before_minutes,
     )
     db.commit()
-    return ApiResponse(data=_to_item(event), message="日程已更新")
+    return ApiResponse(data=_to_item(event), message="安排已更新")
 
 
 @router.delete("/{event_id}")
@@ -111,10 +125,10 @@ def delete_calendar_event(
     service = CalendarEventService(db)
     event = service.get_event(current_user.id, event_id)
     if event is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排不存在")
     service.delete_event(event)
     db.commit()
-    return ApiResponse(data={"id": event.id}, message="日程已删除")
+    return ApiResponse(data={"id": event.id}, message="安排已删除")
 
 
 @router.get("/search")

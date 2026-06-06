@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -21,28 +22,38 @@ WEATHER_CACHE_TIMESTAMP: dict[str, float] = {}
 
 
 class DailyNotificationService:
-    """每日计划推送服务。在用户设置的推送时间，查询当天日程和天气，拼装消息并通过微信发送。"""
+    """每日安排推送服务。在用户设置的推送时间，查询当天安排和天气，拼装消息并通过微信发送。"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
     def get_due_users(self) -> list[User]:
         """查找当前时间点需要推送的用户。"""
-        current_time = self._current_time()
-        # daily_plan_push_time 可能包含秒数 ("08:00:00")，需兼容
-        trim_time = func.substr(UserSettings.daily_plan_push_time, 1, 5)
         stmt = (
             select(User)
             .join(UserSettings)
-            .where(
-                UserSettings.daily_plan_push_enabled == True,
-                trim_time == current_time,
-            )
+            .where(UserSettings.daily_plan_push_enabled == True)
         )
-        return list(self.db.scalars(stmt))
+        users = list(self.db.scalars(stmt))
+        current_time_utc = datetime.now(UTC)
+        due_users: list[User] = []
+        for user in users:
+            settings = user.settings
+            if settings is None:
+                continue
+            timezone_name = settings.default_timezone or "Asia/Shanghai"
+            try:
+                local_now = current_time_utc.astimezone(ZoneInfo(timezone_name))
+            except Exception:
+                local_now = current_time_utc.astimezone(ZoneInfo("Asia/Shanghai"))
+            current_time = local_now.strftime("%H:%M")
+            push_time = (settings.daily_plan_push_time or "08:00")[:5]
+            if push_time == current_time:
+                due_users.append(user)
+        return due_users
 
     def notify_user(self, user: User) -> bool:
-        """向单个用户推送今日日程 + 天气。"""
+        """向单个用户推送今日安排 + 天气。"""
         from app.models.channel import ChannelIdentity
         from app.services.wechat_channel_service import WechatChannelService
 
@@ -60,8 +71,15 @@ class DailyNotificationService:
             except Exception:
                 logger.exception("获取天气失败: city=%s", city)
 
+        timezone_name = settings.default_timezone if settings else "Asia/Shanghai"
+        try:
+            local_now = datetime.now(UTC).astimezone(ZoneInfo(timezone_name))
+        except Exception:
+            timezone_name = "Asia/Shanghai"
+            local_now = datetime.now(UTC).astimezone(ZoneInfo(timezone_name))
+
         message = self.build_message(
-            date=datetime.now(),
+            date=local_now,
             weather=weather,
             city=city,
             events=events,
@@ -128,13 +146,13 @@ class DailyNotificationService:
             lines.append(f"\U0001f4cd {city}")
             lines.append("")
 
-        lines.append("\U0001f4c5 今日日程：")
+        lines.append("\U0001f4c5 今日安排：")
         if events:
             for event in events:
                 loc = f"  \U0001f4cd {event['location']}" if event.get("location") else ""
                 lines.append(f"  • {event['time']} - {event['title']}{loc}")
         else:
-            lines.append("  （暂无日程安排）")
+            lines.append("  （暂无安排）")
         lines.append("")
 
         lines.append("✅ 待办任务：")
@@ -152,16 +170,22 @@ class DailyNotificationService:
 
     # --- Internal ---
 
-    def _current_time(self) -> str:
-        return datetime.now().strftime("%H:%M")
-
     def _get_today_events(self, user_id: str) -> list[dict[str, str]]:
-        today = datetime.now().date()
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
+        timezone_name = settings.default_timezone if settings else "Asia/Shanghai"
+        try:
+            local_tz = ZoneInfo(timezone_name)
+        except Exception:
+            local_tz = ZoneInfo("Asia/Shanghai")
+        now = datetime.now(UTC).astimezone(local_tz)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
         stmt = (
             select(CalendarEvent)
             .where(
                 CalendarEvent.user_id == user_id,
-                func.date(CalendarEvent.start_time) == today,
+                CalendarEvent.start_time >= start_of_day,
+                CalendarEvent.start_time < end_of_day,
                 CalendarEvent.status == EventStatus.ACTIVE.value,
             )
             .order_by(CalendarEvent.start_time.asc())
@@ -176,12 +200,21 @@ class DailyNotificationService:
         return results
 
     def _get_today_tasks(self, user_id: str) -> list[dict[str, str]]:
-        today = datetime.now().date()
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
+        timezone_name = settings.default_timezone if settings else "Asia/Shanghai"
+        try:
+            local_tz = ZoneInfo(timezone_name)
+        except Exception:
+            local_tz = ZoneInfo("Asia/Shanghai")
+        now = datetime.now(UTC).astimezone(local_tz)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
         stmt = (
             select(TaskItem)
             .where(
                 TaskItem.user_id == user_id,
-                func.date(TaskItem.deadline) == today,
+                TaskItem.deadline >= start_of_day,
+                TaskItem.deadline < end_of_day,
                 TaskItem.status == TaskStatus.PENDING.value,
             )
             .order_by(TaskItem.priority.desc(), TaskItem.created_at.asc())

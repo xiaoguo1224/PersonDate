@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -37,12 +37,15 @@ class TestGetDueUsers:
         settings = UserSettings(
             user_id=user.id,
             daily_plan_push_enabled=True,
-            daily_plan_push_time="08:00",
+            daily_plan_push_time="16:00",
+            default_timezone="Asia/Shanghai",
         )
         db_session.add(settings)
         db_session.commit()
 
-        with patch.object(service, '_current_time', return_value="08:00"):
+        fixed_now = datetime(2026, 6, 6, 8, 0, tzinfo=UTC)
+        with patch("app.services.daily_notification_service.datetime") as mock_datetime:
+            mock_datetime.now.return_value = fixed_now
             users = service.get_due_users()
             assert len(users) == 1
             assert users[0].id == user.id
@@ -55,12 +58,15 @@ class TestGetDueUsers:
         settings = UserSettings(
             user_id=user.id,
             daily_plan_push_enabled=False,
-            daily_plan_push_time="08:00",
+            daily_plan_push_time="16:00",
+            default_timezone="Asia/Shanghai",
         )
         db_session.add(settings)
         db_session.commit()
 
-        with patch.object(service, '_current_time', return_value="08:00"):
+        fixed_now = datetime(2026, 6, 6, 8, 0, tzinfo=UTC)
+        with patch("app.services.daily_notification_service.datetime") as mock_datetime:
+            mock_datetime.now.return_value = fixed_now
             users = service.get_due_users()
             assert len(users) == 0
 
@@ -90,7 +96,7 @@ class TestBuildMessage:
             events=[],
             tasks=[],
         )
-        assert "暂无日程安排" in msg
+        assert "暂无安排" in msg
         assert "暂无待办任务" in msg
 
 

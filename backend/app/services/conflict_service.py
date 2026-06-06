@@ -20,6 +20,15 @@ class ConflictService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _as_utc(self, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def _event_has_finished(self, event: CalendarEvent, now: datetime) -> bool:
+        event_end_time = event.end_time or event.start_time
+        return self._as_utc(event_end_time) <= now
+
     def _pair_key(self, related_item_ids: dict[str, Any] | None) -> tuple[str, str] | None:
         if not isinstance(related_item_ids, dict):
             return None
@@ -54,17 +63,40 @@ class ConflictService:
         self,
         user_id: str,
         related_item_ids: dict[str, Any] | None,
+        *,
+        now: datetime,
     ) -> bool:
         target_pair = self._pair_key(related_item_ids)
         if target_pair is None:
             return True
-        stmt = select(CalendarEvent.id).where(
+        stmt = select(CalendarEvent).where(
             CalendarEvent.user_id == user_id,
             CalendarEvent.status == EventStatus.ACTIVE.value,
             CalendarEvent.id.in_(target_pair),
         )
-        active_event_ids = set(self.db.scalars(stmt))
-        return len(active_event_ids) == len(target_pair)
+        related_events = list(self.db.scalars(stmt))
+        if len(related_events) != len(target_pair):
+            return False
+        return any(not self._event_has_finished(event, now) for event in related_events)
+
+    def _resolve_stale_open_conflicts(self, user_id: str, now: datetime) -> None:
+        stmt = select(ScheduleConflict).where(
+            ScheduleConflict.user_id == user_id,
+            ScheduleConflict.status == ConflictStatus.OPEN.value,
+        )
+        changed = False
+        for conflict in self.db.scalars(stmt):
+            if self._has_active_related_events(
+                user_id,
+                conflict.related_item_ids,
+                now=now,
+            ):
+                continue
+            conflict.status = ConflictStatus.RESOLVED.value
+            conflict.resolved_at = now
+            changed = True
+        if changed:
+            self.db.flush()
 
     def _event_sort_key(self, event: CalendarEvent) -> tuple[str, str, str]:
         return (
@@ -83,6 +115,8 @@ class ConflictService:
         return first, second
 
     def detect_event_conflicts(self, user_id: str, event: CalendarEvent) -> list[ScheduleConflict]:
+        now = datetime.now(UTC)
+        self._resolve_stale_open_conflicts(user_id, now)
         event_end_time = event.end_time
         if event_end_time is None:
             return []
@@ -129,6 +163,8 @@ class ConflictService:
         return conflicts
 
     def detect_day_conflicts(self, user_id: str) -> list[ScheduleConflict]:
+        now = datetime.now(UTC)
+        self._resolve_stale_open_conflicts(user_id, now)
         stmt = (
             select(CalendarEvent)
             .where(
@@ -167,7 +203,7 @@ class ConflictService:
                     related_item_ids=related_item_ids,
                     suggestion="请调整其中一个日程时间，或选择忽略冲突。",
                     status=ConflictStatus.OPEN.value,
-                    detected_at=datetime.now(UTC),
+                    detected_at=now,
                 )
                 self.db.add(conflict)
                 conflicts.append(conflict)
@@ -175,6 +211,8 @@ class ConflictService:
         return conflicts
 
     def list_conflicts(self, user_id: str, status: str | None = None) -> list[ScheduleConflict]:
+        now = datetime.now(UTC)
+        self._resolve_stale_open_conflicts(user_id, now)
         stmt = select(ScheduleConflict).where(ScheduleConflict.user_id == user_id)
         if status:
             stmt = stmt.where(ScheduleConflict.status == status)
@@ -185,6 +223,7 @@ class ConflictService:
             if conflict.status == ConflictStatus.OPEN.value and not self._has_active_related_events(
                 user_id,
                 conflict.related_item_ids,
+                now=now,
             ):
                 continue
             pair_key = self._pair_key(conflict.related_item_ids)
@@ -212,6 +251,7 @@ class ConflictService:
         return resolved_conflicts
 
     def get_conflict(self, user_id: str, conflict_id: str) -> ScheduleConflict | None:
+        self._resolve_stale_open_conflicts(user_id, datetime.now(UTC))
         stmt = select(ScheduleConflict).where(
             ScheduleConflict.user_id == user_id,
             ScheduleConflict.id == conflict_id,
