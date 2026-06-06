@@ -121,7 +121,11 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
     session = SessionLocal()
 
     class FailingWechatSender:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
         def send_text(self, conversation_id: str, content: str, context_token: str | None = None):  # noqa: ANN001
+            self.calls.append((conversation_id, content))
             return {"success": False, "error_code": "TIMEOUT", "error_message": "timeout"}
 
     session.add(
@@ -141,15 +145,69 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
     )
     session.commit()
 
-    service = WechatChannelService(session, sender=FailingWechatSender())
+    sender = FailingWechatSender()
+    service = WechatChannelService(session, sender=sender)
     log = service.send_text(conversation_id="wx_user_001", content="提醒：16:00 开会")
     session.commit()
 
     assert log.status == "failed"
-    assert log.retry_count == 1
+    assert log.retry_count == 2
     assert log.error_code == "TIMEOUT"
     assert log.error_message == "timeout"
     assert log.context_token == "ctx_002"
+    assert len(sender.calls) == 3
+
+
+def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+
+    class FlakyWechatSender:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+            self.attempts = 0
+
+        def send_text(self, conversation_id: str, content: str, context_token: str | None = None):  # noqa: ANN001
+            self.calls.append((conversation_id, content))
+            self.attempts += 1
+            if self.attempts < 3:
+                raise TimeoutError("timeout")
+            return {"success": True, "message_id": "wx_out_retry_001"}
+
+    session.add(
+        ChannelMessageLog(
+            user_id="owner-001",
+            channel="wechat",
+            message_id="wx_in_003",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="明天下午 5 点开会",
+            context_token="ctx_003",
+            raw_payload={"context_token": "ctx_003"},
+            status="received",
+        )
+    )
+    session.commit()
+
+    sender = FlakyWechatSender()
+    service = WechatChannelService(session, sender=sender)
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：17:00 开会")
+    session.commit()
+
+    assert sender.attempts == 3
+    assert len(sender.calls) == 3
+    assert log.status == "sent"
+    assert log.retry_count == 2
+    assert log.error_message is None
 
 
 def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:

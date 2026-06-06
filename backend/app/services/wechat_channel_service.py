@@ -5,6 +5,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -48,6 +49,15 @@ class WechatStatusSummary(TypedDict):
 class WechatChannelService:
     LOGIN_SESSION_TTL_MINUTES = 10
     LOG_LIST_LIMIT = 100
+    SEND_TEXT_MAX_ATTEMPTS = 3
+    SEND_TEXT_RETRYABLE_ERROR_CODES = {
+        "TIMEOUT",
+        "REQUEST_TIMEOUT",
+        "NETWORK_ERROR",
+        "CONNECTION_ERROR",
+        "TEMPORARY_ERROR",
+        "TRANSPORT_ERROR",
+    }
 
     def __init__(self, db: Session, sender: Any | None = None) -> None:
         self.db = db
@@ -527,39 +537,59 @@ class WechatChannelService:
         )
         resolved_context_token = context_token or self._resolve_context_token(conversation_id)
 
-        status = "sent"
+        outbound_message_id = message_id
+        status = "failed"
         error_message: str | None = None
         error_code: str | None = None
-        outbound_message_id = message_id
         outbound_retry_count = retry_count
-        try:
-            if self.sender is None:
-                raise RuntimeError("微信发送适配器未配置")
-            result = self._send_text_to_channel(
-                conversation_id=conversation_id,
-                content=content,
-                context_token=resolved_context_token,
-            )
-            if isinstance(result, dict):
-                success = bool(result.get("success", True))
-                outbound_message_id = result.get("message_id") or outbound_message_id
-                error_message = result.get("error_message") or result.get("detail")
-                error_code = result.get("error_code")
-            else:
-                success = bool(getattr(result, "success", True))
-                outbound_message_id = getattr(result, "message_id", None) or outbound_message_id
-                error_message = getattr(result, "error_message", None)
-                error_code = getattr(result, "error_code", None)
-            if not success:
-                status = "failed"
+        attempt_count = 0
+        while attempt_count < self.SEND_TEXT_MAX_ATTEMPTS:
+            attempt_count += 1
+            try:
+                if self.sender is None:
+                    raise RuntimeError("微信发送适配器未配置")
+                result = self._send_text_to_channel(
+                    conversation_id=conversation_id,
+                    content=content,
+                    context_token=resolved_context_token,
+                )
+                if isinstance(result, dict):
+                    success = bool(result.get("success", True))
+                    outbound_message_id = result.get("message_id") or outbound_message_id
+                    error_message = result.get("error_message") or result.get("detail")
+                    error_code = result.get("error_code")
+                else:
+                    success = bool(getattr(result, "success", True))
+                    outbound_message_id = (
+                        getattr(result, "message_id", None) or outbound_message_id
+                    )
+                    error_message = getattr(result, "error_message", None)
+                    error_code = getattr(result, "error_code", None)
+                if success:
+                    status = "sent"
+                    error_message = None
+                    error_code = None
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    break
                 error_message = error_message or "微信消息发送失败"
                 error_code = error_code or "SEND_FAILED"
-                outbound_retry_count = max(outbound_retry_count, 1)
-        except Exception as exc:  # noqa: BLE001
-            status = "failed"
-            error_message = str(exc)
-            error_code = exc.__class__.__name__.upper()
-            outbound_retry_count = max(outbound_retry_count, 1)
+                if (
+                    not self._is_retryable_send_failure(error_code, error_message)
+                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
+                ):
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    break
+            except Exception as exc:  # noqa: BLE001
+                error_message = str(exc)
+                error_code = exc.__class__.__name__.upper()
+                if (
+                    not self._is_retryable_send_exception(exc)
+                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
+                ):
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    break
+        else:
+            outbound_retry_count = retry_count + self.SEND_TEXT_MAX_ATTEMPTS - 1
 
         return self.create_message_log(
             user_id=resolved_user_id,
@@ -715,3 +745,25 @@ class WechatChannelService:
             .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def _is_retryable_send_failure(self, error_code: str | None, error_message: str | None) -> bool:
+        if error_code is not None and error_code.upper() in self.SEND_TEXT_RETRYABLE_ERROR_CODES:
+            return True
+        if error_message is None:
+            return False
+        lowered = error_message.lower()
+        return any(
+            keyword in lowered
+            for keyword in ("timeout", "timed out", "network", "temporary")
+        )
+
+    def _is_retryable_send_exception(self, exc: Exception) -> bool:
+        return isinstance(
+            exc,
+            (
+                TimeoutError,
+                ConnectionError,
+                httpx.TimeoutException,
+                httpx.TransportError,
+            ),
+        )
