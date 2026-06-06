@@ -23,12 +23,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import {
+  createScheduledItem,
   formatRange,
   formatClock,
   getTodayDateKey,
   loadTodayDashboard,
   sendAgentMessage,
   type ConflictItem,
+  type DashboardSummary,
   type ReminderItem,
   type ScheduledItem,
   type TaskItem,
@@ -181,7 +183,7 @@ function buildGanttRows(
 function buildDemoDashboardData(planDate: string): DemoDashboard {
   const base = dayjs(planDate);
   const at = (hour: number, minute: number) => base.hour(hour).minute(minute).second(0).millisecond(0).toISOString();
-  const events: ScheduledItem[] = [
+  const events = [
     {
       id: "demo-event-1",
       title: "API自动化测试 安排 A",
@@ -243,7 +245,7 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
       severity: "high",
       title: "安排冲突：API自动化测试 安排 A 与 API自动化测试 安排 B",
       description: "存在时间重叠，建议调整其中一个安排时间，或选择忽略冲突。",
-      related_item_ids: ["demo-event-1", "demo-event-2"],
+      related_item_ids: { current: "demo-event-1", other: "demo-event-2" },
       suggestion: "建议：调整其中一个安排时间，或选择忽略冲突。",
       status: "open",
       detected_at: at(8, 52),
@@ -264,77 +266,50 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     },
   ];
 
-  const planItems: ScheduledItem[] = [
+  const planItems: Array<Record<string, unknown>> = [
     {
       id: "demo-plan-1",
-      day_plan_id: "demo-plan",
       title: "API自动化测试 安排 A",
-      item_type: "event",
       start_time: at(15, 0),
       end_time: at(16, 0),
       status: "completed",
-      is_flexible: false,
-      sort_order: 1,
     },
     {
       id: "demo-plan-2",
-      day_plan_id: "demo-plan",
       title: "API自动化测试 安排 B",
-      item_type: "event",
       start_time: at(15, 30),
       end_time: at(16, 30),
       status: "planned",
-      is_flexible: false,
-      sort_order: 2,
     },
     {
       id: "demo-plan-3",
-      day_plan_id: "demo-plan",
       title: "测试日报-提醒功能验证",
-      item_type: "event",
       start_time: at(16, 8),
       end_time: at(17, 8),
       status: "planned",
-      is_flexible: false,
-      sort_order: 3,
     },
     {
       id: "demo-plan-4",
-      day_plan_id: "demo-plan",
       title: "微信提醒测试",
-      item_type: "event",
       start_time: at(16, 17),
       end_time: at(17, 17),
       status: "planned",
-      is_flexible: false,
-      sort_order: 4,
     },
     {
       id: "demo-plan-5",
-      day_plan_id: "demo-plan",
       title: "API自动化测试 任务",
-      item_type: "task",
       start_time: at(17, 0),
       end_time: at(19, 0),
       status: "planned",
-      is_flexible: true,
-      sort_order: 5,
     },
   ];
 
   return {
-    plan: {
-      id: "demo-plan",
-      plan_date: planDate,
-      summary: "先把高优先级事项稳住，再推进写论文与评审准备。",
-      status: "confirmed",
-      items: planItems,
-    } as ScheduledItem,
-    events,
+    events: events as ScheduledItem[],
     tasks,
     conflicts,
     reminders,
-  };
+  } as DemoDashboard;
 }
 
 function getConflictColor(severity: string) {
@@ -465,7 +440,7 @@ function TodayPageView({
               <div>
                 <div className="today-summary-card__label">今日安排</div>
                 <Title level={2} className="today-summary-card__value">
-                  {summary.eventsCount}
+                  {summary.eventsCount as number ?? 0}
                 </Title>
                 <Text className="muted-text">已排定的时间块</Text>
               </div>
@@ -477,7 +452,7 @@ function TodayPageView({
               <div>
                 <div className="today-summary-card__label">待办任务</div>
                 <Title level={2} className="today-summary-card__value">
-                  {summary.tasksCount}
+                  {(summary.tasksCount as number ?? 0)}
                 </Title>
                 <Text className="muted-text">等待安排的任务</Text>
               </div>
@@ -489,7 +464,7 @@ function TodayPageView({
               <div>
                 <div className="today-summary-card__label">冲突事项</div>
                 <Title level={2} className="today-summary-card__value">
-                  {summary.conflictsCount}
+                  {(summary.conflictsCount as number ?? 0)}
                 </Title>
                 <Text className="muted-text">需要处理的冲突</Text>
               </div>
@@ -501,7 +476,7 @@ function TodayPageView({
               <div>
                 <div className="today-summary-card__label">提醒任务</div>
                 <Title level={2} className="today-summary-card__value">
-                  {summary.remindersCount}
+                  {(summary.remindersCount as number) ?? 0}
                 </Title>
                 <Text className="muted-text">即将触发提醒</Text>
               </div>
@@ -837,7 +812,7 @@ export default function TodayPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadTodayDashboard(accessToken, planDate);
+      const result = await loadTodayDashboard();
       setData(result);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "未知错误");
@@ -852,7 +827,12 @@ export default function TodayPage() {
 
   const viewData = data ?? demoData;
 
-  const summary = useMemo(() => buildDashboardSummary(viewData), [viewData]);
+  const summary = useMemo(() => ({
+    eventsCount: viewData.events.length,
+    tasksCount: viewData.tasks.length,
+    conflictsCount: viewData.conflicts.length,
+    remindersCount: viewData.reminders.length,
+  }), [viewData]);
   const sortedEvents = useMemo(
     () => [...viewData.events].sort((left, right) => dayjs(left.start_time).valueOf() - dayjs(right.start_time).valueOf()),
     [viewData.events],
@@ -926,14 +906,15 @@ export default function TodayPage() {
     try {
       const values = await eventForm.validateFields();
       setEventSubmitting(true);
-      await createCalendarEvent(accessToken, {
+      const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
+      await createScheduledItem({
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
         start_time: values.start_time.toISOString(),
-        end_time: values.end_time ? values.end_time.toISOString() : null,
+        end_time: endTime,
         timezone: values.timezone,
         location: values.location?.trim() ? values.location.trim() : null,
-        remind_before_minutes: values.remind_before_minutes ?? null,
+        remind_before_minutes: values.remind_before_minutes ?? 0,
       });
       messageApi.success("安排已创建");
       setEventModalOpen(false);

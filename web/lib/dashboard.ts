@@ -235,7 +235,9 @@ export type ReminderItem = {
   trigger_time: string;
   status: string;
   retry_count?: number;
+  max_retries?: number;
   error_message?: string | null;
+  conversation_id?: string | null;
 };
 
 export async function loadReminders(status?: string): Promise<ReminderItem[]> {
