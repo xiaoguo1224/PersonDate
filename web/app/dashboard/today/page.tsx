@@ -604,39 +604,7 @@ function TodayPageView({
               width={960}
               destroyOnClose
             >
-              <div className="today-gantt">
-                <div className="today-gantt__axis">
-                  <span className="today-gantt__axis-label">00:00</span>
-                  <span className="today-gantt__axis-label">06:00</span>
-                  <span className="today-gantt__axis-label">12:00</span>
-                  <span className="today-gantt__axis-label">18:00</span>
-                  <span className="today-gantt__axis-label">24:00</span>
-                </div>
-                <div className="today-gantt__list">
-                  {ganttRows.map((row) => (
-                    <div key={row.id} className="today-gantt__row">
-                      <div className="today-gantt__meta">
-                        <Text strong className="today-gantt__title">
-                          {row.title}
-                        </Text>
-                        <Text className="today-gantt__range">
-                          {row.startLabel} - {row.endLabel}
-                        </Text>
-                        <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
-                      </div>
-                      <div className="today-gantt__track">
-                        <div className="today-gantt__grid" />
-                        <div
-                          className={["today-gantt__bar", row.accentClass].join(" ")}
-                          style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
-                        >
-                          <span className="today-gantt__bar-title">{row.title}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <GanttChartAnimated rows={ganttRows} />
             </Modal>
           </Card>
         </div>
@@ -824,6 +792,67 @@ function SectionHeader({
         {title}
       </Title>
       {extra}
+    </div>
+  );
+}
+
+function GanttChartAnimated({ rows }: Readonly<{ rows: GanttRow[] }>) {
+  const ganttRef = useRef<HTMLDivElement | null>(null);
+
+  useGSAP(
+    () => {
+      gsap.from(ganttRef.current?.querySelectorAll(".today-gantt__bar") ?? [], {
+        scaleX: 0,
+        transformOrigin: "left center",
+        duration: 0.55,
+        stagger: 0.07,
+        ease: "power3.out",
+        clearProps: "scaleX",
+      });
+      gsap.from(ganttRef.current?.querySelectorAll(".today-gantt__row") ?? [], {
+        opacity: 0,
+        y: 8,
+        duration: 0.35,
+        stagger: 0.04,
+        ease: "power2.out",
+      });
+    },
+    { scope: ganttRef, dependencies: [] },
+  );
+
+  return (
+    <div ref={ganttRef} className="today-gantt">
+      <div className="today-gantt__axis">
+        <span className="today-gantt__axis-label">00:00</span>
+        <span className="today-gantt__axis-label">06:00</span>
+        <span className="today-gantt__axis-label">12:00</span>
+        <span className="today-gantt__axis-label">18:00</span>
+        <span className="today-gantt__axis-label">24:00</span>
+      </div>
+      <div className="today-gantt__list">
+        {rows.map((row) => (
+          <div key={row.id} className="today-gantt__row">
+            <div className="today-gantt__meta">
+              <Text strong className="today-gantt__title">
+                {row.title}
+              </Text>
+              <Text className="today-gantt__range">
+                {row.startLabel} - {row.endLabel}
+              </Text>
+              <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
+            </div>
+            <div className="today-gantt__track">
+              <div className="today-gantt__grid" />
+              <div
+                className={["today-gantt__bar", row.accentClass].join(" ")}
+                style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
+              >
+                <span className="today-gantt__bar-title">{row.title}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
