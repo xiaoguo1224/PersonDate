@@ -37,6 +37,7 @@ from app.models.schedule import (
     ScheduleConflict,
     TaskItem,
 )
+from app.models.scheduled_item import ScheduledItem
 from app.models.system import SystemSetting
 from app.models.user import InviteCode, InviteCodeUsage, User, UserSettings
 
@@ -70,6 +71,9 @@ __all__ = [
     "ReminderStatus",
     "ReminderTargetType",
     "ScheduleConflict",
+    "ScheduledItem",
+    "ScheduledItemStatus",
+    "ScheduledItemSource",
     "ScheduleSource",
     "SystemSetting",
     "TaskItem",

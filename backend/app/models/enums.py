@@ -31,6 +31,20 @@ class ContentType(StrEnum):
     TEXT = "text"
 
 
+class ScheduledItemStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    DELETED = "deleted"
+
+
+class ScheduledItemSource(StrEnum):
+    MANUAL = "manual"
+    AGENT = "agent"
+    PLAN = "plan"
+
+
 class EventStatus(StrEnum):
     ACTIVE = "active"
     DELETED = "deleted"
@@ -51,7 +65,9 @@ class TaskPriority(StrEnum):
 
 class TaskStatus(StrEnum):
     PENDING = "pending"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     DELETED = "deleted"
 
 
@@ -98,9 +114,8 @@ class ConflictStatus(StrEnum):
 
 
 class ReminderTargetType(StrEnum):
-    EVENT = "event"
+    SCHEDULED_ITEM = "scheduled_item"
     TASK = "task"
-    PLAN = "plan"
     OTHER = "other"
 
 
