@@ -128,6 +128,28 @@ export type ChannelMessageLogListResponse = {
   items: ChannelMessageLogItem[];
 };
 
+export type WechatOutboundQueueItem = {
+  id: string;
+  account_id: string;
+  message_id: string;
+  to_user_id: string;
+  conversation_id: string;
+  content: string;
+  context_token?: string | null;
+  raw_payload?: Record<string, unknown> | null;
+  status: string;
+  retry_count: number;
+  error_code?: string | null;
+  error_message?: string | null;
+  sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WechatOutboundQueueListResponse = {
+  items: WechatOutboundQueueItem[];
+};
+
 export type WechatStatusResponse = {
   connected: boolean;
   channel_token_configured: boolean;

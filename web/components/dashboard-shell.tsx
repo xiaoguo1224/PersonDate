@@ -15,6 +15,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   BellOutlined,
+  InboxOutlined,
   UserOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -90,6 +91,13 @@ const navigation: NavigationItem[] = [
     label: "全局消息日志",
     href: "/dashboard/message-logs",
     icon: <MessageOutlined />,
+    roles: ["owner"],
+  },
+  {
+    key: "/dashboard/wechat-outbound",
+    label: "微信出站队列",
+    href: "/dashboard/wechat-outbound",
+    icon: <InboxOutlined />,
     roles: ["owner"],
   },
   {

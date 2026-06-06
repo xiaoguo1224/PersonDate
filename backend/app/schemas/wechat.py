@@ -134,3 +134,25 @@ class WechatSendTextResponse(BaseModel):
     message_id: str | None = None
     status: str | None = None
     error_message: str | None = None
+
+
+class WechatOutboundQueueItem(BaseModel):
+    id: str
+    account_id: str
+    message_id: str
+    to_user_id: str
+    conversation_id: str
+    content: str
+    context_token: str | None = None
+    raw_payload: dict[str, Any] | None = None
+    status: str
+    retry_count: int
+    error_code: str | None = None
+    error_message: str | None = None
+    sent_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WechatOutboundQueueListResponse(BaseModel):
+    items: list[WechatOutboundQueueItem]

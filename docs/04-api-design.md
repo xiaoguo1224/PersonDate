@@ -773,6 +773,14 @@ GET /api/admin/message-logs?page=1&page_size=20
 
 权限：owner。
 
+### 16.3 微信出站队列
+
+```http
+GET /api/admin/wechat/outbound-queue?account_id=...&conversation_id=...&status=queued&limit=100
+```
+
+权限：owner。
+
 ## 17. 系统设置接口
 
 ### 17.1 获取系统设置

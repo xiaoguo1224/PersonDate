@@ -458,6 +458,31 @@ POST /api/admin/wechat/send-test
 GET /api/admin/message-logs
 ```
 
+### 4.14 微信出站队列页
+
+路径：
+
+```text
+/dashboard/wechat-outbound
+```
+
+权限：owner。
+
+功能：
+
+```text
+查看微信出站队列
+按账号 / 会话 / 状态筛选
+查看 queued / sent / failed 的最终状态
+排查发送失败原因
+```
+
+调用 API：
+
+```http
+GET /api/admin/wechat/outbound-queue
+```
+
 ## 5. 权限要求
 
 前端按角色隐藏菜单，但后端必须强制校验。

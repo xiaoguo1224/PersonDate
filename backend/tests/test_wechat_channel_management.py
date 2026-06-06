@@ -11,7 +11,13 @@ from app.api.deps import get_db
 from app.core.config import get_settings
 from app.db.base import Base
 from app.main import create_app
-from app.models import ChannelIdentity, ChannelMessageLog, ContentType, MessageDirection
+from app.models import (
+    ChannelIdentity,
+    ChannelMessageLog,
+    ContentType,
+    MessageDirection,
+    WechatChannelOutboundMessage,
+)
 from app.schemas.auth import LoginRequest
 from app.schemas.setup import OwnerInitRequest
 from app.services.auth_service import AuthService
@@ -226,3 +232,46 @@ def test_wechat_message_logs_and_status() -> None:
     member_logs_body = member_logs_response.json()
     assert len(member_logs_body["data"]["items"]) == 1
     assert member_logs_body["data"]["items"][0]["message_id"] == "msg-in-1"
+
+
+def test_admin_wechat_outbound_queue() -> None:
+    app, session = _build_client()
+    owner, _, owner_token, _ = _seed_users(session)
+
+    account = ChannelIdentity(
+        user_id=owner.id,
+        channel="wechat",
+        channel_user_id="wx_user_owner",
+        conversation_id="wx_user_owner",
+        display_name="主用户",
+        status="active",
+        bound_at=datetime.now(UTC),
+    )
+    session.add(account)
+    session.flush()
+
+    outbound = WechatChannelOutboundMessage(
+        account_id="wx_account_001",
+        message_id="msg-out-queue-1",
+        to_user_id="wx_user_owner",
+        conversation_id="wx_user_owner",
+        content="提醒：会议即将开始。",
+        context_token="ctx-out-queue-1",
+        raw_payload={"source": "worker"},
+        status="queued",
+        retry_count=0,
+    )
+    session.add(outbound)
+    session.commit()
+
+    response = TestClient(app).get(
+        "/api/admin/wechat/outbound-queue?status=queued",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert len(body["data"]["items"]) == 1
+    assert body["data"]["items"][0]["message_id"] == "msg-out-queue-1"
+    assert body["data"]["items"][0]["status"] == "queued"

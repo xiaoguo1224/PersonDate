@@ -3,7 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
-from app.models import ChannelIdentity, ChannelMessageLog, User, WechatAccount, WechatLoginSession
+from app.models import (
+    ChannelIdentity,
+    ChannelMessageLog,
+    User,
+    WechatAccount,
+    WechatChannelOutboundMessage,
+    WechatLoginSession,
+)
 from app.schemas.common import ApiResponse
 from app.schemas.wechat import (
     ChannelIdentityItem,
@@ -17,6 +24,8 @@ from app.schemas.wechat import (
     WechatLoginSessionConfirmRequest,
     WechatLoginSessionCreateResponse,
     WechatLoginSessionItem,
+    WechatOutboundQueueItem,
+    WechatOutboundQueueListResponse,
     WechatSendTextRequest,
     WechatSendTextResponse,
     WechatStatusResponse,
@@ -75,6 +84,26 @@ def _to_login_session_item(session: WechatLoginSession) -> WechatLoginSessionIte
         confirmed_at=session.confirmed_at,
         created_at=session.created_at,
         updated_at=session.updated_at,
+    )
+
+
+def _to_outbound_queue_item(message: WechatChannelOutboundMessage) -> WechatOutboundQueueItem:
+    return WechatOutboundQueueItem(
+        id=message.id,
+        account_id=message.account_id,
+        message_id=message.message_id,
+        to_user_id=message.to_user_id,
+        conversation_id=message.conversation_id,
+        content=message.content,
+        context_token=message.context_token,
+        raw_payload=message.raw_payload,
+        status=message.status,
+        retry_count=message.retry_count,
+        error_code=message.error_code,
+        error_message=message.error_message,
+        sent_at=message.sent_at,
+        created_at=message.created_at,
+        updated_at=message.updated_at,
     )
 
 
@@ -261,6 +290,28 @@ def list_admin_message_logs(
         )
     ]
     return ApiResponse(data=ChannelMessageLogListResponse(items=items))
+
+
+@router.get("/admin/wechat/outbound-queue")
+def list_admin_wechat_outbound_queue(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
+    account_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> ApiResponse[WechatOutboundQueueListResponse]:
+    service = WechatChannelService(db)
+    items = [
+        _to_outbound_queue_item(message)
+        for message in service.list_outbound_messages(
+            account_id=account_id,
+            conversation_id=conversation_id,
+            status=status,
+            limit=limit,
+        )
+    ]
+    return ApiResponse(data=WechatOutboundQueueListResponse(items=items))
 
 
 @router.post("/admin/wechat/send-test")
