@@ -48,6 +48,11 @@ def test_wechat_channel_app_starts_poll_scheduler_when_client_exists(monkeypatch
         lambda updates_client_provider=None, session_factory=None: fake_scheduler,
     )
     monkeypatch.setattr(app_module, "close_wechat_channel_client", lambda app: None)
+    monkeypatch.setattr(
+        app_module,
+        "_start_poller_manager",
+        lambda app: _FakePollerManager(),
+    )
 
     app = wechat_channel_app_module.create_wechat_channel_app()
 
@@ -56,6 +61,19 @@ def test_wechat_channel_app_starts_poll_scheduler_when_client_exists(monkeypatch
         assert fake_scheduler.started is True
 
     assert fake_scheduler.shutdown_called is True
+
+
+class _FakePollerManager:
+    """Minimal fake for PollerManager used by lifespan monkeypatch."""
+
+    def start_all(self, accounts=None):
+        pass
+
+    def stop_all(self):
+        pass
+
+    def refresh(self, accounts=None):
+        pass
 
 
 def test_wechat_channel_app_stays_idle_without_client(monkeypatch) -> None:
@@ -75,6 +93,11 @@ def test_wechat_channel_app_stays_idle_without_client(monkeypatch) -> None:
         lambda updates_client_provider=None, session_factory=None: (_ for _ in ()).throw(AssertionError("scheduler should not start")),  # noqa: E501
     )
     monkeypatch.setattr(app_module, "close_wechat_channel_client", lambda app: None)
+    monkeypatch.setattr(
+        app_module,
+        "_start_poller_manager",
+        lambda app: _FakePollerManager(),
+    )
 
     app = wechat_channel_app_module.create_wechat_channel_app()
 
