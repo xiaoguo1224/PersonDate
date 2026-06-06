@@ -30,6 +30,7 @@ from app.schemas.wechat_channel import (
     WechatIngestMessageRequest,
     WechatSendTypingResponse,
 )
+from wechat_channel.ilink_client import ILinkClient, ILinkSessionExpired
 
 
 def _as_utc(datetime_value: datetime) -> datetime:
@@ -189,6 +190,11 @@ class WechatChannelService:
             )
         )
         return self.db.scalar(stmt)
+
+    def _get_ilink_client(self) -> ILinkClient:
+        if not hasattr(self, '_ilink_client') or self._ilink_client is None:
+            self._ilink_client = ILinkClient()
+        return self._ilink_client
 
     def confirm_login_session(
         self,
@@ -545,24 +551,36 @@ class WechatChannelService:
     ) -> WechatSendTypingResponse:
         account = self._resolve_account(account_id=account_id, bot_token=bot_token)
         if account is None:
-            if account_id is None and bot_token is None:
-                return WechatSendTypingResponse(success=True, ret=0, typing=typing)
-            return WechatSendTypingResponse(
-                success=False,
-                ret=-1,
-                typing=typing,
-                error_code="ACCOUNT_NOT_FOUND",
-                error_message="微信账号不存在或未绑定",
-            )
+            return WechatSendTypingResponse(success=True, ret=0, typing=typing)
 
-        expected_ticket = self._build_typing_ticket(account)
-        if typing_ticket is not None and typing_ticket != expected_ticket:
+        ilink = self._get_ilink_client()
+        ticket = typing_ticket
+        if not ticket:
+            context_token = self._resolve_context_token(conversation_id)
+            if context_token:
+                ticket = ilink.get_typing_ticket(
+                    bot_token=account.bot_token,
+                    user_id=conversation_id,
+                    context_token=context_token,
+                )
+
+        if not ticket:
+            return WechatSendTypingResponse(success=True, ret=0, typing=typing)
+
+        try:
+            ilink.send_typing(
+                bot_token=account.bot_token,
+                user_id=conversation_id,
+                ticket=ticket,
+                status=1 if typing else 2,
+            )
+        except Exception:
             return WechatSendTypingResponse(
                 success=False,
                 ret=-1,
                 typing=typing,
-                error_code="INVALID_TYPING_TICKET",
-                error_message="typing_ticket 无效",
+                error_code="TYPING_FAILED",
+                error_message="发送 typing 状态失败",
             )
 
         return WechatSendTypingResponse(success=True, ret=0, typing=typing)
@@ -671,76 +689,120 @@ class WechatChannelService:
         )
         resolved_context_token = context_token or self._resolve_context_token(conversation_id)
 
-        outbound_message_id = message_id
+        account = self.resolve_send_account(
+            conversation_id=conversation_id,
+            to_user_id=resolved_channel_user_id,
+        )
+        if account is None:
+            return self.create_message_log(
+                user_id=resolved_user_id,
+                message_id=message_id,
+                conversation_id=conversation_id,
+                channel_user_id=resolved_channel_user_id,
+                direction=MessageDirection.OUTBOUND.value,
+                content_type="text",
+                content=content,
+                context_token=resolved_context_token,
+                status="failed",
+                error_code="NO_ACCOUNT",
+                error_message="当前没有可用的微信账号",
+            )
+
+        ilink = self._get_ilink_client()
         status = "failed"
-        error_message: str | None = None
-        error_code: str | None = None
+        error_code = None
+        error_message = None
         outbound_retry_count = retry_count
         attempt_count = 0
+
         while attempt_count < self.SEND_TEXT_MAX_ATTEMPTS:
             attempt_count += 1
             try:
-                if self.sender is None:
-                    raise RuntimeError("微信发送适配器未配置")
-                result = self._send_text_to_channel(
-                    conversation_id=conversation_id,
-                    content=content,
-                    context_token=resolved_context_token,
+                ticket = ilink.get_typing_ticket(
+                    bot_token=account.bot_token,
+                    user_id=resolved_channel_user_id or conversation_id,
+                    context_token=resolved_context_token or "",
                 )
-                if isinstance(result, dict):
-                    success = bool(result.get("success", True))
-                    result_status = result.get("status")
-                    outbound_message_id = result.get("message_id") or outbound_message_id
-                    error_message = result.get("error_message") or result.get("detail")
-                    error_code = result.get("error_code")
-                else:
-                    success = bool(getattr(result, "success", True))
-                    result_status = getattr(result, "status", None)
-                    outbound_message_id = (
-                        getattr(result, "message_id", None) or outbound_message_id
+
+                if ticket:
+                    ilink.send_typing(
+                        bot_token=account.bot_token,
+                        user_id=resolved_channel_user_id or conversation_id,
+                        ticket=ticket,
+                        status=1,
                     )
-                    error_message = getattr(result, "error_message", None)
-                    error_code = getattr(result, "error_code", None)
+
+                success = ilink.send_message(
+                    bot_token=account.bot_token,
+                    to_user_id=resolved_channel_user_id or conversation_id,
+                    text=content,
+                    context_token=resolved_context_token or "",
+                )
+
+                if ticket:
+                    try:
+                        ilink.send_typing(
+                            bot_token=account.bot_token,
+                            user_id=resolved_channel_user_id or conversation_id,
+                            ticket=ticket,
+                            status=2,
+                        )
+                    except Exception:
+                        pass
+
                 if success:
-                    status = result_status or "sent"
-                    error_message = None
+                    status = "sent"
                     error_code = None
+                    error_message = None
                     outbound_retry_count = retry_count + attempt_count - 1
+                    account.last_active_time = datetime.now(UTC)
                     break
-                error_message = error_message or "微信消息发送失败"
-                error_code = error_code or "SEND_FAILED"
+
+                error_message = "微信消息发送失败"
+                error_code = "SEND_FAILED"
                 if (
                     not self._is_retryable_send_failure(error_code, error_message)
                     or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
                 ):
                     outbound_retry_count = retry_count + attempt_count - 1
                     break
-            except Exception as exc:  # noqa: BLE001
+
+            except ILinkSessionExpired as exc:
+                status = "failed"
+                error_code = "SESSION_EXPIRED"
+                error_message = str(exc)
+                account.status = "expired"
+                self.db.flush()
+                break
+            except Exception as exc:
                 error_message = str(exc)
                 error_code = exc.__class__.__name__.upper()
-                if (
-                    not self._is_retryable_send_exception(exc)
-                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
-                ):
+                if not self._is_retryable_send_exception(exc) or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS:
                     outbound_retry_count = retry_count + attempt_count - 1
                     break
-        else:
-            outbound_retry_count = retry_count + self.SEND_TEXT_MAX_ATTEMPTS - 1
+
+        if account:
+            self.create_outbound_message(
+                account=account,
+                to_user_id=resolved_channel_user_id or conversation_id,
+                conversation_id=conversation_id,
+                content=content,
+                context_token=resolved_context_token,
+                status=status,
+                retry_count=outbound_retry_count,
+                error_code=error_code,
+                error_message=error_message,
+            )
 
         return self.create_message_log(
             user_id=resolved_user_id,
-            message_id=outbound_message_id,
+            message_id=message_id,
             conversation_id=conversation_id,
             channel_user_id=resolved_channel_user_id,
             direction=MessageDirection.OUTBOUND.value,
             content_type="text",
             content=content,
             context_token=resolved_context_token,
-            raw_payload={
-                "conversation_id": conversation_id,
-                "content": content,
-                "context_token": resolved_context_token,
-            },
             status=status,
             retry_count=outbound_retry_count,
             error_code=error_code,
