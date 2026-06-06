@@ -27,13 +27,17 @@ class PollerThread(threading.Thread):
     cursor: str | None
     db_url: str
     ilink: ILinkClient = field(default_factory=ILinkClient)
-    running: bool = True
     daemon: bool = True
 
     def __post_init__(self) -> None:
         super().__init__(name=f"poller-{self.account_id[:8]}", daemon=True)
         engine = create_engine(self.db_url)
         self._session_factory = sessionmaker(bind=engine)
+        self._stop_event = threading.Event()
+
+    @property
+    def running(self) -> bool:
+        return not self._stop_event.is_set()
 
     def run(self) -> None:
         logger.info("Poller 启动: account=%s", self.account_id)
@@ -65,6 +69,9 @@ class PollerThread(threading.Thread):
                     "Poller 异常(account=%s, retry=%ds)", self.account_id, wait
                 )
                 time.sleep(wait)
+
+        logger.info("Poller 停止: account=%s", self.account_id)
+        self.ilink.close()
 
     def _process_messages(self, msgs: list[dict[str, Any]]) -> None:
         db = self._session_factory()
@@ -144,7 +151,7 @@ class PollerThread(threading.Thread):
             db.close()
 
     def stop(self) -> None:
-        self.running = False
+        self._stop_event.set()
 
     @staticmethod
     def _build_cursor_token() -> str:
@@ -186,6 +193,7 @@ class PollerManager:
         active_ids = {a[0] for a in accounts}
         for account_id in list(self._threads.keys()):
             if account_id not in active_ids:
-                self._threads[account_id].stop()
-                del self._threads[account_id]
+                thread = self._threads.pop(account_id)
+                thread.stop()
+                thread.join(timeout=5)
         self.start_all(accounts)

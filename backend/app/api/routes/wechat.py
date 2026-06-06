@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +37,8 @@ from app.schemas.wechat import (
 from app.core.wechat_channel import build_wechat_channel_client
 from app.services.wechat_channel_adapter import WechatChannelAdapter
 from app.services.wechat_channel_service import WechatChannelService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["wechat"])
 
@@ -202,7 +206,7 @@ def get_my_wechat_login_session(
                     session.status = "expired"
                     db.commit()
             except Exception:
-                pass  # 轮询失败不阻塞
+                logger.warning("轮询二维码状态失败: session=%s qrcode_id=%s", session.id, session.qrcode_id, exc_info=True)
 
     return ApiResponse(data=_to_login_session_item(session))
 

@@ -173,6 +173,10 @@ class ILinkClient:
             extra_headers=self._auth_header(bot_token),
         )
 
+    def close(self) -> None:
+        """关闭底层 HTTP 连接池。"""
+        self._http.close()
+
     def _post(
         self,
         path: str,

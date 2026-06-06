@@ -29,12 +29,14 @@ class DailyNotificationService:
     def get_due_users(self) -> list[User]:
         """查找当前时间点需要推送的用户。"""
         current_time = self._current_time()
+        # daily_plan_push_time 可能包含秒数 ("08:00:00")，需兼容
+        trim_time = func.substr(UserSettings.daily_plan_push_time, 1, 5)
         stmt = (
             select(User)
             .join(UserSettings)
             .where(
                 UserSettings.daily_plan_push_enabled == True,
-                UserSettings.daily_plan_push_time == current_time,
+                trim_time == current_time,
             )
         )
         return list(self.db.scalars(stmt))

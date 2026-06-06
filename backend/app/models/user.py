@@ -38,7 +38,7 @@ class UserSettings(UUIDMixin, TimestampMixin, Base):
     )
     workday_start_time: Mapped[str | None] = mapped_column(String(8), default="09:00:00")
     workday_end_time: Mapped[str | None] = mapped_column(String(8), default="18:00:00")
-    daily_plan_push_time: Mapped[str | None] = mapped_column(String(8), default="08:00:00")
+    daily_plan_push_time: Mapped[str | None] = mapped_column(String(8), default="08:00")
     default_remind_before_minutes: Mapped[int | None] = mapped_column(Integer, default=0)
     daily_plan_push_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
