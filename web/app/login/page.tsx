@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { AuthLayout } from "@/components/auth-layout";
 import { useAuth } from "@/components/auth-provider";
+import { useLoginAnimation } from "@/hooks/use-login-animation";
 import { requestJson } from "@/lib/api";
 import type { AuthMeResponse, AuthSession } from "@/lib/types";
 
@@ -19,6 +20,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { session, login } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+
+  useLoginAnimation();
 
   useEffect(() => {
     if (session) {
