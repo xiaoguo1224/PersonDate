@@ -87,13 +87,21 @@ def test_build_wechat_channel_scheduler_registers_poll_job(monkeypatch) -> None:
     )
 
     assert scheduler is fake_scheduler
-    assert len(fake_scheduler.jobs) == 1
-    job = fake_scheduler.jobs[0]
+    assert len(fake_scheduler.jobs) == 2
+    job = next(item for item in fake_scheduler.jobs if item["id"] == "wechat-poll-scan")
     assert job["id"] == "wechat-poll-scan"
     assert job["trigger"] == "interval"
     assert job["seconds"] == 7
     assert job["max_instances"] == 1
     assert job["coalesce"] is True
+
+    dispatch_job = next(
+        item for item in fake_scheduler.jobs if item["id"] == "wechat-outbound-dispatch-scan"
+    )
+    assert dispatch_job["trigger"] == "interval"
+    assert dispatch_job["seconds"] == 7
+    assert dispatch_job["max_instances"] == 1
+    assert dispatch_job["coalesce"] is True
 
 
 def test_run_wechat_poll_scan_dispatches_active_accounts(monkeypatch) -> None:

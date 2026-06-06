@@ -668,7 +668,7 @@ class WechatChannelService:
         context_token: str | None = None,
         raw_payload: dict[str, object] | None = None,
         message_id: str | None = None,
-        status: str = "sent",
+        status: str = "queued",
         retry_count: int = 0,
         error_code: str | None = None,
         error_message: str | None = None,
@@ -693,6 +693,48 @@ class WechatChannelService:
         self.db.add(outbound)
         self.db.flush()
         return outbound
+
+    def list_queued_outbound_messages(
+        self,
+        *,
+        account_id: str | None = None,
+        limit: int = 50,
+    ) -> list[WechatChannelOutboundMessage]:
+        stmt = select(WechatChannelOutboundMessage).where(
+            WechatChannelOutboundMessage.status == "queued",
+        )
+        if account_id is not None:
+            stmt = stmt.where(WechatChannelOutboundMessage.account_id == account_id)
+        stmt = stmt.order_by(
+            WechatChannelOutboundMessage.created_at.asc(),
+            WechatChannelOutboundMessage.id.asc(),
+        ).limit(limit)
+        return list(self.db.scalars(stmt))
+
+    def dispatch_outbound_messages_once(self, *, limit: int = 50) -> int:
+        queued_messages = self.list_queued_outbound_messages(limit=limit)
+        if not queued_messages:
+            return 0
+
+        dispatched_count = 0
+        now = datetime.now(UTC)
+        for message in queued_messages:
+            account = self.get_account_by_account_id(message.account_id)
+            if account is None or account.status != "active":
+                message.status = "failed"
+                message.error_code = "ACCOUNT_NOT_AVAILABLE"
+                message.error_message = "微信账号当前不可用"
+                continue
+
+            message.status = "sent"
+            message.sent_at = now
+            message.error_code = None
+            message.error_message = None
+            account.last_active_time = now
+            dispatched_count += 1
+
+        self.db.flush()
+        return dispatched_count
 
     def get_status_summary(self, *, recent_limit: int = 10) -> WechatStatusSummary:
         settings = get_settings()

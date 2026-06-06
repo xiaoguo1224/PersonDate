@@ -284,8 +284,80 @@ def test_wechat_channel_app_sendmessage_persists_outbound_record(monkeypatch) ->
     body = response.json()
     assert body["success"] is True
     assert body["message_id"] is not None
+    assert "入队" in (body.get("detail") or "")
 
-    outbound_count = session.execute(
-        text("select count(*) from wechat_channel_outbound_messages")
-    ).scalar_one()
-    assert outbound_count == 1
+    outbound_row = session.execute(
+        text(
+            "select status, retry_count, sent_at from wechat_channel_outbound_messages limit 1"
+        )
+    ).one()
+    assert outbound_row.status == "queued"
+    assert outbound_row.retry_count == 0
+    assert outbound_row.sent_at is None
+
+
+def test_wechat_channel_app_dispatches_queued_outbound_messages(monkeypatch) -> None:
+    from app import wechat_channel_routes as routes_module
+    from app.core.scheduler import run_wechat_outbound_dispatch_scan
+
+    monkeypatch.setattr(
+        routes_module,
+        "get_settings",
+        lambda: SimpleNamespace(wechat_channel_token=None),
+    )
+    app, session = _build_client()
+    owner = User(
+        username="owner_1",
+        display_name="Owner",
+        password_hash="hash",
+        role="owner",
+        status="active",
+    )
+    session.add(owner)
+    session.flush()
+    account = WechatAccount(
+        owner_user_id=owner.id,
+        account_id="wx_account_001",
+        bot_token="bot_001",
+        base_url="http://wechat-channel:18789",
+        status="active",
+    )
+    session.add(account)
+    session.add(
+        ChannelIdentity(
+            user_id=owner.id,
+            channel="wechat",
+            channel_user_id="wx_user_001",
+            conversation_id="wx_user_001",
+            display_name="Owner",
+            status="active",
+        )
+    )
+    session.commit()
+    client = TestClient(app)
+
+    response = client.post(
+        "/sendmessage",
+        json={
+            "to_user_id": "wx_user_001",
+            "conversation_id": "wx_user_001",
+            "content": "提醒：15:00 开会",
+            "context_token": "ctx_out_001",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+    processed = run_wechat_outbound_dispatch_scan(session_factory=lambda: session)
+    session.commit()
+
+    assert processed == 1
+    outbound_row = session.execute(
+        text(
+            "select status, retry_count, sent_at from wechat_channel_outbound_messages limit 1"
+        )
+    ).one()
+    assert outbound_row.status == "sent"
+    assert outbound_row.retry_count == 0
+    assert outbound_row.sent_at is not None

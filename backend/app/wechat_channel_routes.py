@@ -132,7 +132,6 @@ def send_message(
             "content": payload.content,
             "context_token": payload.context_token,
         },
-        status="sent",
     )
     db.commit()
 
@@ -140,7 +139,7 @@ def send_message(
         success=True,
         ret=0,
         message_id=outbound.message_id,
-        detail=f"消息已发送到 {conversation_id}",
+        detail=f"消息已入队到 {conversation_id}",
     )
 
 

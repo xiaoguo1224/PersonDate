@@ -11,7 +11,7 @@
 1. `WECHAT_CHANNEL_BASE_URL` 表示我们自己部署的微信通道服务地址。
 2. `wechat-channel` 是本项目自研的通道进程，不是 OpenClaw gateway。
 3. `getupdates` / `sendmessage` 是我们需要实现并对接的 HTTP 协议接口。
-4. 二维码登录、账号状态、游标、去重和消息日志都由我们自己的服务维护。
+4. 二维码登录、账号状态、游标、去重、出站队列和消息日志都由我们自己的服务维护。
 
 ## 1. 接入目标
 
@@ -372,7 +372,9 @@ Agent 返回 reply_text
   ↓
 带上 context_token
   ↓
-发送文本 item
+先写入出站队列
+  ↓
+由 wechat-channel 调度器派发
   ↓
 记录发送结果
 ```
@@ -623,7 +625,7 @@ wechat_message_logs
   - 入站、出站消息、context_token、retry_count、error_code、处理状态
 
 wechat_channel_outbound_messages
-  - 通道侧出站消息、发送状态、错误信息
+  - 通道侧出站消息队列、发送状态、错误信息
 
 wechat_allowed_users
   - 通道白名单
@@ -678,6 +680,7 @@ wechat_allowed_users
 ```text
 去重
 白名单
+出站队列派发
 多账号
 异常重试
 token 失效重绑

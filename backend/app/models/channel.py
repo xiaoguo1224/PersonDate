@@ -112,7 +112,7 @@ class WechatChannelOutboundMessage(UUIDMixin, TimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     context_token: Mapped[str | None] = mapped_column(Text)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(json_type, default=dict)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="sent", index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)

@@ -1,7 +1,7 @@
 """add wechat channel outbound messages
 
 Revision ID: 0005_wechat_channel_outbound_messages
-Revises: 0004_day_plan_partial_unique_index
+Revises: 0004_dayplan_partial_uq
 Create Date: 2026-06-06 00:00:00.000000
 
 """
@@ -13,12 +13,19 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0005_wechat_channel_outbound_messages"
-down_revision = "0004_day_plan_partial_unique_index"
+down_revision = "0004_dayplan_partial_uq"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    op.alter_column(
+        "alembic_version",
+        "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=64),
+        existing_nullable=False,
+    )
     op.create_table(
         "wechat_channel_outbound_messages",
         sa.Column("account_id", sa.String(length=255), nullable=False),

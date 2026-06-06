@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.wechat_channel_poller import WechatChannelPoller, WechatUpdatesClient
+from app.services.wechat_channel_service import WechatChannelService
 from app.workers.reminder_worker import ReminderWorker
 
 SessionFactory = Callable[[], Session]
@@ -46,6 +47,20 @@ def run_wechat_poll_scan(
             return 0
         poller = WechatChannelPoller(db, updates_client)
         return poller.poll_active_accounts_once()
+    finally:
+        db.close()
+
+
+def run_wechat_outbound_dispatch_scan(
+    *,
+    session_factory: SessionFactory = SessionLocal,
+) -> int:
+    db = session_factory()
+    try:
+        service = WechatChannelService(db)
+        processed = service.dispatch_outbound_messages_once()
+        db.commit()
+        return processed
     finally:
         db.close()
 
@@ -91,6 +106,18 @@ def build_wechat_channel_scheduler(
         kwargs={
             "session_factory": session_factory,
             "updates_client_provider": updates_client_provider,
+        },
+    )
+    scheduler.add_job(
+        run_wechat_outbound_dispatch_scan,
+        trigger="interval",
+        seconds=settings.wechat_poll_interval_seconds,
+        id="wechat-outbound-dispatch-scan",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        kwargs={
+            "session_factory": session_factory,
         },
     )
     return scheduler
