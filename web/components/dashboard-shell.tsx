@@ -11,12 +11,12 @@ import {
   LogoutOutlined,
   MessageOutlined,
   QrcodeOutlined,
+  RobotOutlined,
   SettingOutlined,
   TeamOutlined,
   BellOutlined,
   UserOutlined,
   WarningOutlined,
-  RobotOutlined,
 } from "@ant-design/icons";
 import { Avatar, Button, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
@@ -111,6 +111,15 @@ function getMenuItems(role: UserRole) {
     }));
 }
 
+function getHeaderDateLabel() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date());
+}
+
 export function DashboardShell({
   children,
 }: Readonly<{
@@ -130,79 +139,90 @@ export function DashboardShell({
 
   if (loading || !session) {
     return (
-      <div className="app-shell" style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+      <div className="app-shell dashboard-shell dashboard-shell--loading">
         <Spin size="large" tip="正在进入驾驶舱..." />
       </div>
     );
   }
 
   return (
-    <Layout className="app-shell" style={{ minHeight: "100vh" }}>
-      <Sider
-        breakpoint="lg"
-        collapsedWidth={0}
-        width={264}
-        style={{
-          background: "rgba(4, 9, 18, 0.92)",
-          borderRight: "1px solid rgba(148, 163, 184, 0.12)",
-        }}
-      >
-        <div style={{ padding: 24 }}>
-          <div className="hero-kicker" style={{ marginBottom: 16 }}>
+    <Layout className="app-shell dashboard-shell">
+      <Sider breakpoint="lg" collapsedWidth={0} width={284} className="dashboard-sidebar">
+        <div className="dashboard-sidebar__brand">
+          <div className="dashboard-brand-mark">
             <AppstoreOutlined />
-            Dashboard
           </div>
-          <Title level={4} style={{ color: "var(--text-primary)", margin: 0 }}>
-            日程驾驶舱
-          </Title>
-          <Text className="muted-text">Role: {session.role}</Text>
+          <div>
+            <Title level={4} className="dashboard-brand-title">
+              日程驾驶舱
+            </Title>
+            <Text className="muted-text">智能规划 · 高效每一天</Text>
+          </div>
         </div>
+
+        <div className="dashboard-sidebar__meta">
+          <span className="hero-kicker">owner / member</span>
+          <Text className="muted-text">全站视觉已切换为浅色编辑风格</Text>
+        </div>
+
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
           selectedKeys={[pathname]}
           items={menuItems}
           onClick={({ key }) => router.push(key)}
-          style={{
-            background: "transparent",
-            borderRight: 0,
-            fontWeight: 500,
-          }}
+          className="dashboard-nav"
         />
-      </Sider>
-      <Layout>
-        <Header
-          style={{
-            padding: "0 24px",
-            background: "rgba(5, 11, 19, 0.82)",
-            backdropFilter: "blur(18px)",
-            borderBottom: "1px solid rgba(148, 163, 184, 0.12)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <Space direction="vertical" size={0}>
-            <Text className="muted-text">欢迎回来</Text>
-            <Title level={5} style={{ color: "var(--text-primary)", margin: 0 }}>
-              {session.displayName || session.username || session.userId || "用户"}
-            </Title>
-          </Space>
-          <Space size={12}>
-            <Tag color={session.role === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
-              {session.role}
-            </Tag>
-            <Avatar style={{ background: "linear-gradient(135deg, #7dd3fc 0%, #fbbf24 100%)", color: "#06111f" }}>
+
+        <div className="dashboard-sidebar__footer">
+          <div className="dashboard-profile-card">
+            <Avatar className="dashboard-profile-card__avatar">
               {(session.displayName || session.username || "U").slice(0, 1).toUpperCase()}
             </Avatar>
+            <div className="dashboard-profile-card__body">
+              <Text strong className="dashboard-profile-card__name">
+                {session.displayName || session.username || session.userId || "用户"}
+              </Text>
+              <Space size={8} wrap>
+                <Tag color={session.role === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
+                  {session.role}
+                </Tag>
+                <Text className="muted-text">在线</Text>
+              </Space>
+            </div>
+          </div>
+          <Space className="dashboard-sidebar__actions" size={8} wrap>
+            <Button icon={<BellOutlined />} href="/dashboard/reminders">
+              提醒
+            </Button>
             <Button icon={<LogoutOutlined />} onClick={logout}>
               退出
             </Button>
           </Space>
+        </div>
+      </Sider>
+
+      <Layout className="dashboard-main">
+        <Header className="dashboard-topbar">
+          <Space direction="vertical" size={2}>
+            <Text className="muted-text">欢迎回来</Text>
+            <Title level={5} className="dashboard-topbar__title">
+              {session.displayName || session.username || session.userId || "用户"}
+            </Title>
+          </Space>
+          <Space size={12} wrap className="dashboard-topbar__actions">
+            <Tag color="blue" className="dashboard-topbar__date">
+              {getHeaderDateLabel()}
+            </Tag>
+            <Button href="/dashboard/today">回到今日</Button>
+            <Avatar className="dashboard-topbar__avatar">
+              {(session.displayName || session.username || "U").slice(0, 1).toUpperCase()}
+            </Avatar>
+          </Space>
         </Header>
-        <Content style={{ padding: 24 }}>
-          <div style={{ maxWidth: 1440, margin: "0 auto" }}>{children}</div>
+
+        <Content className="dashboard-content">
+          <div className="dashboard-content__inner">{children}</div>
         </Content>
       </Layout>
     </Layout>

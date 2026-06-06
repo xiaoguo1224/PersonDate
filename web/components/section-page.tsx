@@ -19,57 +19,70 @@ export function SectionPage({
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" bordered={false}>
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <span className="hero-kicker">
-            <RocketOutlined />
-            Web Dashboard
-          </span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>{title}</Title>
-          <Paragraph className="muted-text" style={{ maxWidth: 900, marginBottom: 0 }}>
-            {description}
-          </Paragraph>
-          <Space wrap>
-            {badges.map((badge) => (
-              <Tag key={badge} color="cyan">
-                {badge}
-              </Tag>
-            ))}
-          </Space>
-          <Button type="primary" icon={<ArrowRightOutlined />} style={{ width: "fit-content" }}>
-            后续接入数据
-          </Button>
-        </Space>
-      </Card>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={16}>
-          <Card className="section-card" bordered={false}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Title level={4} style={{ color: "var(--text-primary)", margin: 0 }}>
-                功能占位
+        <Row gutter={[24, 24]} align="stretch">
+          <Col xs={24} lg={15}>
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <span className="hero-kicker">
+                <RocketOutlined />
+                Web Dashboard
+              </span>
+              <Title className="page-title" style={{ margin: 0 }}>
+                {title}
               </Title>
-              {bullets.length > 0 ? (
-                <ul style={{ margin: 0, paddingLeft: 18, color: "var(--text-secondary)" }}>
-                  {bullets.map((bullet) => (
-                    <li key={bullet} style={{ marginBottom: 8 }}>
-                      {bullet}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Text className="muted-text">这里会接入后端接口、列表和筛选条件。</Text>
-              )}
+              <Paragraph className="muted-text page-summary">{description}</Paragraph>
+              <Space wrap>
+                {badges.map((badge) => (
+                  <Tag key={badge} color="blue" className="dashboard-chip">
+                    {badge}
+                  </Tag>
+                ))}
+              </Space>
+              <Button type="primary" icon={<ArrowRightOutlined />} style={{ width: "fit-content" }}>
+                继续接入数据
+              </Button>
             </Space>
+          </Col>
+          <Col xs={24} lg={9}>
+            <div className="section-page-preview">
+              <Text className="muted-text">当前状态</Text>
+              <Title level={3} className="section-page-preview__title">
+                基础骨架已就绪
+              </Title>
+              <Text className="muted-text">
+                这些页面会在统一视觉系统下继续接入真实数据和交互。
+              </Text>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={16}>
+          <Card className="section-card" bordered={false} title="功能占位">
+            {bullets.length > 0 ? (
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                {bullets.map((bullet) => (
+                  <div key={bullet} className="section-page-bullet">
+                    <span className="section-page-bullet__dot" />
+                    <Text>{bullet}</Text>
+                  </div>
+                ))}
+              </Space>
+            ) : (
+              <Text className="muted-text">这里会接入后端接口、列表和筛选条件。</Text>
+            )}
           </Card>
         </Col>
-        <Col xs={24} lg={8}>
+        <Col xs={24} xl={8}>
           <Card className="section-card" bordered={false}>
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Title level={4} style={{ color: "var(--text-primary)", margin: 0 }}>
-                当前状态
+              <Text className="muted-text">下一步</Text>
+              <Title level={4} style={{ margin: 0 }}>
+                统一成更成熟的产品面貌
               </Title>
-              <div className="dashboard-empty">
-                <Text className="muted-text">基础骨架已就绪</Text>
-              </div>
+              <Text className="muted-text">
+                继续把列表、表单、详情和空状态收口到同一套节奏上。
+              </Text>
             </Space>
           </Card>
         </Col>

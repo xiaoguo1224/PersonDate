@@ -12,14 +12,18 @@ export default function Providers({
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme.darkAlgorithm,
+        algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: "#7dd3fc",
-          colorInfo: "#7dd3fc",
-          colorSuccess: "#34d399",
-          colorWarning: "#fbbf24",
-          colorError: "#fb7185",
-          borderRadius: 14,
+          colorPrimary: "#3b82f6",
+          colorInfo: "#3b82f6",
+          colorSuccess: "#10b981",
+          colorWarning: "#f59e0b",
+          colorError: "#ef4444",
+          colorBgBase: "#f8fafc",
+          colorBgContainer: "#ffffff",
+          colorBgElevated: "#ffffff",
+          colorTextBase: "#0f172a",
+          borderRadius: 16,
           fontFamily:
             'var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", sans-serif',
         },
