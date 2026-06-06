@@ -14,7 +14,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { useGSAP } from "@gsap/react";
-import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Segmented, Space, Spin, Tag, Typography, message } from "antd";
+import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Space, Spin, Tag, Typography, message } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import gsap from "gsap";
 import { useRouter } from "next/navigation";
@@ -56,8 +56,6 @@ type ChatMessage = {
 };
 
 type DemoDashboard = TodayDashboardData;
-
-type TimelineMode = "timeline" | "gantt";
 
 type CalendarEventFormValues = {
   title: string;
@@ -495,7 +493,7 @@ function TodayPageView({
 }: TodayPageViewProps) {
   const conflictRows = viewData.conflicts;
   const reminderRows = viewData.reminders;
-  const [timelineMode, setTimelineMode] = useState<TimelineMode>("timeline");
+  const [ganttModalOpen, setGanttModalOpen] = useState(false);
   const ganttRows = useMemo(
     () => buildGanttRows(combinedTimeline, selectedDate, timezone),
     [combinedTimeline, selectedDate, timezone],
@@ -574,130 +572,131 @@ function TodayPageView({
                 <Text className="muted-text">日期：{selectedDate.format("YYYY年M月D日")}</Text>
               </div>
               <Space wrap size={10}>
-                <Segmented
-                  options={[
-                    { label: "时间轴", value: "timeline" },
-                    { label: "甘特图", value: "gantt" },
-                  ]}
-                  value={timelineMode}
-                  onChange={(value) => setTimelineMode(value as TimelineMode)}
-                  size="small"
-                />
+                <Button icon={<ExpandOutlined />} size="small" onClick={() => setGanttModalOpen(true)}>
+                  甘特图
+                </Button>
                 <Button icon={<ArrowRightOutlined />} type="text" onClick={onNavigateCalendar}>
                   查看日历
                 </Button>
               </Space>
             </div>
             {combinedTimeline.length ? (
-              timelineMode === "timeline" ? (
-                <div className="today-timeline-horizontal">
-                  <div className="today-timeline-horizontal__axis">
-                    <span>00:00</span>
-                    <span>06:00</span>
-                    <span>12:00</span>
-                    <span>18:00</span>
-                    <span>24:00</span>
-                  </div>
-                  {(() => {
-                    const TRACK_HEIGHT = 56;
-                    const TRACK_GAP = 4;
-                    const dayStart = selectedDate.startOf("day");
-                    const nextDayStart = dayStart.add(1, "day");
-                    const totalMinutes = 24 * 60;
-
-                    const entries = combinedTimeline.map((entry) => {
-                      const start = dayjs(entry.start_time);
-                      const rawEnd = dayjs(entry.end_time ?? entry.start_time);
-                      const fallback = entry.kind === "plan_item" ? 90 : 60;
-                      const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallback, "minute");
-                      const clampedStart = start.isBefore(dayStart) ? dayStart : start;
-                      const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
-                      const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
-                      const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
-                      const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
-                      const barWidth = Math.min(100 - barLeft, Math.max(3, (durationMinutes / totalMinutes) * 100));
-                      return { ...entry, _left: barLeft, _width: barWidth, _startMs: clampedStart.valueOf(), _endMs: clampedEnd.valueOf() };
-                    });
-
-                    const tracks = assignTracks(entries.map((e) => ({ id: e.id, startMs: e._startMs, endMs: e._endMs })));
-                    const trackCount = Math.max(1, ...tracks) + 1;
-                    const trackHeight = TRACK_HEIGHT * trackCount + TRACK_GAP * (trackCount - 1) + 20;
-
-                    return (
-                      <div
-                        className="today-timeline-horizontal__track"
-                        style={{ height: trackHeight }}
-                      >
-                        {entries.map((entry, idx) => {
-                          const track = tracks[idx];
-                          return (
-                            <div
-                              key={entry.id}
-                              className="today-timeline-horizontal__item"
-                              data-kind={entry.kind}
-                              style={{
-                                left: `${entry._left}%`,
-                                width: `${entry._width}%`,
-                                top: 10 + track * (TRACK_HEIGHT + TRACK_GAP),
-                                height: TRACK_HEIGHT,
-                              }}
-                            >
-                              <div className="today-timeline-horizontal__time">
-                                {formatClock(entry.start_time, timezone)}
-                              </div>
-                              <div className="today-timeline-horizontal__title" title={entry.title}>
-                                {entry.title}
-                              </div>
-                              <div className="today-timeline-horizontal__meta">
-                                <Tag color={entry.kind === "plan_item" ? "green" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 6px" }}>
-                                  {getTimelineStatusLabel(entry)}
-                                </Tag>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+              <div className="today-timeline-horizontal">
+                <div className="today-timeline-horizontal__axis">
+                  <span>00:00</span>
+                  <span>06:00</span>
+                  <span>12:00</span>
+                  <span>18:00</span>
+                  <span>24:00</span>
                 </div>
-              ) : (
-                <div className="today-gantt">
-                  <div className="today-gantt__axis">
-                    <span className="today-gantt__axis-label">00:00</span>
-                    <span className="today-gantt__axis-label">06:00</span>
-                    <span className="today-gantt__axis-label">12:00</span>
-                    <span className="today-gantt__axis-label">18:00</span>
-                    <span className="today-gantt__axis-label">24:00</span>
-                  </div>
-                  <div className="today-gantt__list">
-                    {ganttRows.map((row) => (
-                      <div key={row.id} className="today-gantt__row">
-                        <div className="today-gantt__meta">
-                          <Text strong className="today-gantt__title">
-                            {row.title}
-                          </Text>
-                          <Text className="today-gantt__range">
-                            {row.startLabel} - {row.endLabel}
-                          </Text>
-                          <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
-                        </div>
-                        <div className="today-gantt__track">
-                          <div className="today-gantt__grid" />
+                {(() => {
+                  const TRACK_HEIGHT = 56;
+                  const TRACK_GAP = 4;
+                  const dayStart = selectedDate.startOf("day");
+                  const nextDayStart = dayStart.add(1, "day");
+                  const totalMinutes = 24 * 60;
+
+                  const entries = combinedTimeline.map((entry) => {
+                    const start = dayjs(entry.start_time);
+                    const rawEnd = dayjs(entry.end_time ?? entry.start_time);
+                    const fallback = entry.kind === "plan_item" ? 90 : 60;
+                    const end = rawEnd.isAfter(start) ? rawEnd : start.add(fallback, "minute");
+                    const clampedStart = start.isBefore(dayStart) ? dayStart : start;
+                    const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
+                    const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
+                    const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
+                    const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
+                    const barWidth = Math.min(100 - barLeft, Math.max(3, (durationMinutes / totalMinutes) * 100));
+                    return { ...entry, _left: barLeft, _width: barWidth, _startMs: clampedStart.valueOf(), _endMs: clampedEnd.valueOf() };
+                  });
+
+                  const tracks = assignTracks(entries.map((e) => ({ id: e.id, startMs: e._startMs, endMs: e._endMs })));
+                  const trackCount = Math.max(1, ...tracks) + 1;
+                  const trackHeight = TRACK_HEIGHT * trackCount + TRACK_GAP * (trackCount - 1) + 20;
+
+                  return (
+                    <div
+                      className="today-timeline-horizontal__track"
+                      style={{ height: trackHeight }}
+                    >
+                      {entries.map((entry, idx) => {
+                        const track = tracks[idx];
+                        return (
                           <div
-                            className={["today-gantt__bar", row.accentClass].join(" ")}
-                            style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
+                            key={entry.id}
+                            className="today-timeline-horizontal__item"
+                            data-kind={entry.kind}
+                            style={{
+                              left: `${entry._left}%`,
+                              width: `${entry._width}%`,
+                              top: 10 + track * (TRACK_HEIGHT + TRACK_GAP),
+                              height: TRACK_HEIGHT,
+                            }}
                           >
-                            <span className="today-gantt__bar-title">{row.title}</span>
+                            <div className="today-timeline-horizontal__time">
+                              {formatClock(entry.start_time, timezone)}
+                            </div>
+                            <div className="today-timeline-horizontal__title" title={entry.title}>
+                              {entry.title}
+                            </div>
+                            <div className="today-timeline-horizontal__meta">
+                              <Tag color={entry.kind === "plan_item" ? "green" : "blue"} style={{ fontSize: 10, lineHeight: "16px", padding: "0 6px" }}>
+                                {getTimelineStatusLabel(entry)}
+                              </Tag>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             ) : (
               <EmptyState title="今天还没有正式安排" />
             )}
+
+            <Modal
+              title="甘特图 · 今日时间概览"
+              open={ganttModalOpen}
+              onCancel={() => setGanttModalOpen(false)}
+              footer={null}
+              width={960}
+              destroyOnClose
+            >
+              <div className="today-gantt">
+                <div className="today-gantt__axis">
+                  <span className="today-gantt__axis-label">00:00</span>
+                  <span className="today-gantt__axis-label">06:00</span>
+                  <span className="today-gantt__axis-label">12:00</span>
+                  <span className="today-gantt__axis-label">18:00</span>
+                  <span className="today-gantt__axis-label">24:00</span>
+                </div>
+                <div className="today-gantt__list">
+                  {ganttRows.map((row) => (
+                    <div key={row.id} className="today-gantt__row">
+                      <div className="today-gantt__meta">
+                        <Text strong className="today-gantt__title">
+                          {row.title}
+                        </Text>
+                        <Text className="today-gantt__range">
+                          {row.startLabel} - {row.endLabel}
+                        </Text>
+                        <Tag color={row.kind === "plan_item" ? "cyan" : "blue"}>{row.trackLabel}</Tag>
+                      </div>
+                      <div className="today-gantt__track">
+                        <div className="today-gantt__grid" />
+                        <div
+                          className={["today-gantt__bar", row.accentClass].join(" ")}
+                          style={{ left: `${row.barLeft}%`, width: `${row.barWidth}%` }}
+                        >
+                          <span className="today-gantt__bar-title">{row.title}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Modal>
             <Button block className="today-ghost-button" type="default" onClick={onOpenEventModal}>
               + 新增安排
             </Button>
