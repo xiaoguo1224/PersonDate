@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000",
         alias="CORS_ALLOW_ORIGINS",
     )
+    weather_api_provider: str = Field(default="qweather", alias="WEATHER_API_PROVIDER")
+    weather_api_key: str = Field(default="", alias="WEATHER_API_KEY")
 
 
 @lru_cache

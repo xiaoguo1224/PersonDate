@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.services.daily_notification_service import DailyNotificationService
 from app.services.wechat_channel_poller import WechatChannelPoller, WechatUpdatesClient
 from app.services.wechat_channel_service import WechatChannelService
 from app.workers.reminder_worker import ReminderWorker
@@ -88,6 +89,27 @@ def build_reminder_scheduler(
     return scheduler
 
 
+def run_daily_notification_scan(
+    *,
+    session_factory: SessionFactory = SessionLocal,
+) -> int:
+    """检查并执行到点的每日推送。"""
+    db = session_factory()
+    try:
+        service = DailyNotificationService(db)
+        users = service.get_due_users()
+        pushed_count = 0
+        for user in users:
+            try:
+                if service.notify_user(user):
+                    pushed_count += 1
+            except Exception:
+                logger.exception("推送失败: user=%s", user.id)
+        return pushed_count
+    finally:
+        db.close()
+
+
 def build_wechat_channel_scheduler(
     *,
     session_factory: SessionFactory = SessionLocal,
@@ -113,6 +135,18 @@ def build_wechat_channel_scheduler(
         trigger="interval",
         seconds=settings.wechat_poll_interval_seconds,
         id="wechat-outbound-dispatch-scan",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        kwargs={
+            "session_factory": session_factory,
+        },
+    )
+    scheduler.add_job(
+        run_daily_notification_scan,
+        trigger="interval",
+        minutes=1,
+        id="daily-notification-scan",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
