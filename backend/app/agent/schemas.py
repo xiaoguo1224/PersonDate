@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class IntentDecision(BaseModel):
     intent: Literal[
-        "create_event",
-        "query_events",
+        "create_scheduled_item",
+        "query_scheduled_items",
         "create_task",
         "plan_day",
-        "update_event",
-        "delete_event",
+        "update_scheduled_item",
+        "delete_scheduled_item",
         "confirm_plan",
         "ask_user_clarification",
         "unknown",
@@ -32,14 +32,14 @@ class IntentDecision(BaseModel):
         if isinstance(payload.get("intent"), str):
             intent = payload["intent"].strip().lower()
             payload["intent"] = {
-                "schedule": "create_event",
-                "meeting": "create_event",
-                "event": "create_event",
-                "query": "query_events",
+                "schedule": "create_scheduled_item",
+                "meeting": "create_scheduled_item",
+                "event": "create_scheduled_item",
+                "query": "query_scheduled_items",
                 "task": "create_task",
                 "plan": "plan_day",
-                "update": "update_event",
-                "delete": "delete_event",
+                "update": "update_scheduled_item",
+                "delete": "delete_scheduled_item",
                 "confirm": "confirm_plan",
                 "clarify": "ask_user_clarification",
             }.get(intent, payload["intent"])
@@ -52,22 +52,22 @@ class IntentDecision(BaseModel):
             return "unknown"
         normalized = value.strip().lower()
         aliases = {
-            "schedule_meeting": "create_event",
-            "schedule event": "create_event",
-            "create schedule": "create_event",
-            "query_schedule": "query_events",
-            "query calendar": "query_events",
+            "schedule_meeting": "create_scheduled_item",
+            "schedule event": "create_scheduled_item",
+            "create schedule": "create_scheduled_item",
+            "query_schedule": "query_scheduled_items",
+            "query calendar": "query_scheduled_items",
             "create_reminder": "ask_user_clarification",
             "ask_clarification": "ask_user_clarification",
             "clarify": "ask_user_clarification",
             "create_task": "create_task",
             "create todo": "create_task",
             "plan_schedule": "plan_day",
-            "reschedule": "update_event",
-            "edit_event": "update_event",
-            "modify_event": "update_event",
-            "delete_schedule": "delete_event",
-            "remove_event": "delete_event",
+            "reschedule": "update_scheduled_item",
+            "edit_event": "update_scheduled_item",
+            "modify_event": "update_scheduled_item",
+            "delete_schedule": "delete_scheduled_item",
+            "remove_event": "delete_scheduled_item",
             "confirm": "confirm_plan",
         }
         return aliases.get(normalized, normalized)
