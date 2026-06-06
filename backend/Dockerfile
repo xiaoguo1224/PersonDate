@@ -11,6 +11,7 @@ COPY pyproject.toml uv.lock ./
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
+COPY wechat_channel ./wechat_channel
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
