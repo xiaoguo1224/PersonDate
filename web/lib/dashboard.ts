@@ -69,6 +69,14 @@ export type TaskItem = {
   status: string;
 };
 
+export type TaskCreatePayload = {
+  title: string;
+  description?: string | null;
+  estimated_minutes?: number | null;
+  deadline?: string | null;
+  priority: string;
+};
+
 export type TaskListResponse = {
   items: TaskItem[];
 };
@@ -148,6 +156,20 @@ export async function loadTodayDashboard(
 
 export async function loadCalendarEvents(accessToken: string): Promise<CalendarEventsResponse> {
   return requestJson<CalendarEventsResponse>("/api/calendar-events", {}, accessToken);
+}
+
+export async function createTask(
+  accessToken: string,
+  payload: TaskCreatePayload,
+): Promise<TaskItem> {
+  return requestJson<TaskItem>(
+    "/api/tasks",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
 }
 
 export async function loadDayPlan(accessToken: string, planDate: string): Promise<DayPlan | null> {
@@ -290,6 +312,36 @@ export type DashboardSummary = {
   remindersCount: number;
 };
 
+function getDateParts(value: string | Date, timeZone?: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date(value));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+export function getDateKey(value: string | Date, timeZone?: string) {
+  const parts = getDateParts(value, timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function getTodayDateKey(timeZone?: string) {
+  return getDateKey(new Date(), timeZone);
+}
+
 export function buildDashboardSummary(data: TodayDashboardData): DashboardSummary {
   return {
     eventsCount: data.events.length,
@@ -299,18 +351,20 @@ export function buildDashboardSummary(data: TodayDashboardData): DashboardSummar
   };
 }
 
-export function formatClock(value: string) {
+export function formatClock(value: string, timeZone?: string) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("zh-CN", {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(date);
 }
 
-export function formatDateTime(value: string) {
+export function formatDateTime(value: string, timeZone?: string) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("zh-CN", {
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -320,9 +374,9 @@ export function formatDateTime(value: string) {
   }).format(date);
 }
 
-export function formatRange(start: string, end?: string | null) {
+export function formatRange(start: string, end?: string | null, timeZone?: string) {
   if (!end) {
-    return formatClock(start);
+    return formatClock(start, timeZone);
   }
-  return `${formatClock(start)} - ${formatClock(end)}`;
+  return `${formatClock(start, timeZone)} - ${formatClock(end, timeZone)}`;
 }
