@@ -65,21 +65,11 @@ class WechatChannelPoller:
                 )
                 self.db.commit()
                 return 0
-            service.update_account_status(
-                account_id=account.account_id,
-                status="error",
-                last_active_time=datetime.now(UTC),
-            )
-            self.db.commit()
             raise
+        except httpx.RemoteProtocolError:
+            return 0  # 临时断开连接，不标记 error
         except httpx.RequestError:
-            service.update_account_status(
-                account_id=account.account_id,
-                status="error",
-                last_active_time=datetime.now(UTC),
-            )
-            self.db.commit()
-            raise
+            return 0  # 临时网络错误，不标记 error
 
         processed_count = 0
         for message in result.messages:

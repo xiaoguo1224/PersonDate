@@ -113,7 +113,7 @@ class ILinkClient:
         payload = {
             "msg": {
                 "from_user_id": "",
-                "to_user_id": f"{to_user_id}@im.wechat",
+                "to_user_id": to_user_id if to_user_id.endswith("@im.wechat") else f"{to_user_id}@im.wechat",
                 "client_id": client_id,
                 "message_type": 2,
                 "message_state": 2,
@@ -127,8 +127,9 @@ class ILinkClient:
             json=payload,
             extra_headers=self._auth_header(bot_token),
         )
-        ret = data.get("ret", -1)
-        return ret == 0
+        # ret=0 成功, ret=-2 排队中（iLink 正常行为）, 其他值失败
+        ret = data.get("ret", 0)
+        return ret in (0, -2)
 
     def get_typing_ticket(
         self, bot_token: str, user_id: str, context_token: str,
