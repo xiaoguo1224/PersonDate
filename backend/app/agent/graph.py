@@ -334,7 +334,7 @@ class SchedulePlanningGraph:
                 matched.append(event)
         return matched or candidates
 
-    def _handle_create_event(self, state: AgentState) -> None:
+    def _handle_create_scheduled_item(self, state: AgentState) -> None:
         extracted = state.extracted or {}
         title = extracted.get("event_title") or "安排"
         start_time = extracted.get("event_start_time")
@@ -423,7 +423,7 @@ class SchedulePlanningGraph:
             f"已为你创建安排：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"
         )
 
-    def _handle_query_events(self, state: AgentState) -> None:
+    def _handle_query_scheduled_items(self, state: AgentState) -> None:
         extracted = state.extracted or {}
         target_date = extracted.get("query_start_date") or extracted.get("query_end_date")
         if target_date is None:
@@ -584,7 +584,7 @@ class SchedulePlanningGraph:
             f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
         )
 
-    def _handle_update_event(self, state: AgentState) -> None:
+    def _handle_update_scheduled_item(self, state: AgentState) -> None:
         extracted = state.extracted or {}
         keyword = extracted.get("target_event_keyword")
         target_time = extracted.get("original_time") or extracted.get("event_start_time")
@@ -660,7 +660,7 @@ class SchedulePlanningGraph:
             f"{_format_clock_time(new_start)}。"
         )
 
-    def _handle_delete_event(self, state: AgentState) -> None:
+    def _handle_delete_scheduled_item(self, state: AgentState) -> None:
         extracted = state.extracted or {}
         keyword = extracted.get("target_event_keyword")
         target_time = extracted.get("event_start_time") or extracted.get("original_time")
