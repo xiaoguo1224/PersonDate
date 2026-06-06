@@ -812,7 +812,7 @@ export default function TodayPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadTodayDashboard();
+      const result = await loadTodayDashboard(accessToken);
       setData(result);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "未知错误");

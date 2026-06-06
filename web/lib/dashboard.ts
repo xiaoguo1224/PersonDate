@@ -67,13 +67,16 @@ export type TaskListResponse = {
 
 // ── 安排 API ──────────────────────────────────────────────
 
-export async function loadScheduledItems(params: {
-  start_time?: string;
-  end_time?: string;
-  date?: string;
-  keyword?: string;
-  status?: string;
-}): Promise<ScheduledItem[]> {
+export async function loadScheduledItems(
+  params: {
+    start_time?: string;
+    end_time?: string;
+    date?: string;
+    keyword?: string;
+    status?: string;
+  },
+  accessToken?: string,
+): Promise<ScheduledItem[]> {
   const query = new URLSearchParams();
   if (params.start_time) query.set("start_time", params.start_time);
   if (params.end_time) query.set("end_time", params.end_time);
@@ -81,7 +84,9 @@ export async function loadScheduledItems(params: {
   if (params.keyword) query.set("keyword", params.keyword);
   if (params.status) query.set("status", params.status);
   const resp = await requestJson<{ data: { items: ScheduledItem[] } }>(
-    `/api/scheduled-items?${query.toString()}`
+    `/api/scheduled-items?${query.toString()}`,
+    {},
+    accessToken,
   );
   return resp.data.items;
 }
@@ -347,10 +352,10 @@ export type TodayDashboardData = {
   summary?: DashboardSummary;
 };
 
-export async function loadTodayDashboard(): Promise<TodayDashboardData> {
+export async function loadTodayDashboard(accessToken?: string): Promise<TodayDashboardData> {
   const today = new Date().toISOString().slice(0, 10);
   const [events, tasks, conflicts, reminders] = await Promise.all([
-    loadScheduledItems({ date: today }),
+    loadScheduledItems({ date: today }, accessToken),
     loadTasks(),
     loadConflicts("open"),
     loadReminders("pending"),

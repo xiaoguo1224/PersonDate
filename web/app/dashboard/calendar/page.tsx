@@ -369,7 +369,7 @@ export default function CalendarPage() {
       const result = await loadScheduledItems({
         start_time: range.start.toISOString(),
         end_time: range.end.toISOString(),
-      });
+      }, accessToken);
       setEvents(sortEvents(result));
     } catch (caughtError: unknown) {
       setEventsError(caughtError instanceof Error ? caughtError.message : "未知错误");
