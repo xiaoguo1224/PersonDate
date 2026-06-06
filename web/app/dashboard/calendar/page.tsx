@@ -41,8 +41,12 @@ import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { requestJson } from "@/lib/api";
 import {
   completeScheduledItem,
+  confirmDayDrafts,
+  createScheduledItem,
   createScheduledItem,
   deleteScheduledItem,
+  generateDayDrafts,
+  confirmDayDrafts,
   formatRange,
   formatClock,
   getDateKey,
@@ -541,7 +545,7 @@ export default function CalendarPage() {
   }, [fetchDayPlan, fetchEvents]);
 
   const handlePlanItemSubmit = useCallback(
-    async (values: ScheduledItem) => {
+    async (values: PlanItemFormValues) => {
       if (!accessToken) {
         return;
       }
@@ -580,8 +584,7 @@ export default function CalendarPage() {
     [accessToken, closePlanItemModal, editingPlanItem, focusDate, messageApi, refreshData],
   );
 
-  const handleCompletePlanItem = useCallback(
-    async (item: ScheduledItem) => {
+  const handleCompletePlanItem = useCallback( async (item: PlanItemFormValues) => {
       if (!accessToken) {
         return;
       }
@@ -599,8 +602,7 @@ export default function CalendarPage() {
     [accessToken, messageApi, refreshData],
   );
 
-  const handleDeletePlanItem = useCallback(
-    (item: ScheduledItem) => {
+  const handleDeletePlanItem = useCallback( (item: PlanItemFormValues) => {
       Modal.confirm({
         title: "删除安排项",
         content: `确定删除安排项“${item.title}”吗？系统会保留记录，仅将其标记为取消。`,
@@ -699,25 +701,23 @@ export default function CalendarPage() {
       messageApi.error(caughtError instanceof Error ? caughtError.message : "生成失败");
     } finally {
       setPlanSubmitting(false);
-      await fetchDayPlan();
     }
   }, [accessToken, fetchDayPlan, focusDate, messageApi]);
 
   const handleConfirmPlan = useCallback(async () => {
-    if (!accessToken || !dayPlan) {
+    if (!accessToken) {
       return;
     }
     setPlanSubmitting(true);
     try {
       await confirmDayDrafts(accessToken, dayPlan.id);
-      messageApi.success("计划已确认");
-      await fetchDayPlan();
+      messageApi.success("安排已确认");
     } catch (caughtError: unknown) {
       messageApi.error(caughtError instanceof Error ? caughtError.message : "确认失败");
     } finally {
       setPlanSubmitting(false);
     }
-  }, [accessToken, dayPlan, fetchDayPlan, messageApi]);
+  }, [accessToken, focusDate, messageApi]);
 
   const heroTags = [
     { color: "cyan", label: `${summary.totalEvents} 条安排` },
