@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -259,16 +260,28 @@ def generate_qr_code(
     _: Annotated[None, Depends(_require_channel_token)],
 ) -> dict[str, str]:
     """生成真实的 iLink 登录二维码，返回 base64 图片数据。"""
-    from wechat_channel.ilink_client import ILinkClient
+    import base64
+    from io import BytesIO
+
+    import qrcode
+    from wechat_channel.ilink_client import ILinkClient, ILinkError
 
     try:
         client = ILinkClient()
         result = client.get_qr_code()
     except ILinkError as exc:
         raise HTTPException(status_code=502, detail=f"获取 iLink 二维码失败: {exc.message}")
+
+    # iLink 返回二维码 URL（如 liteapp.weixin.qq.com/...），用它生成二维码图片
+    qr_data = result.qr_img_content or result.qrcode_id
+    img = qrcode.make(qr_data)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    qr_base64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
     return {
         "qrcode_id": result.qrcode_id,
-        "qr_img_content": result.qr_img_content,
+        "qr_img_content": qr_base64,
     }
 
 
