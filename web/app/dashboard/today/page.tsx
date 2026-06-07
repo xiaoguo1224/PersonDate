@@ -333,7 +333,9 @@ function TodayPageView({
   viewData,
   combinedTimeline,
   selectedDate,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   nextEvent,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   nextReminder,
   agentMessages,
   agentMessage,
@@ -728,7 +730,7 @@ export default function TodayPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, planDate, timezone, timezoneLoading]);
+  }, [accessToken, timezone, timezoneLoading]);
 
   useEffect(() => {
     void fetchData();

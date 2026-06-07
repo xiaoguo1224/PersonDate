@@ -2,8 +2,6 @@
 
 import {
   CalendarOutlined,
-  DeleteOutlined,
-  EditOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -21,12 +19,9 @@ import {
   Modal,
   Row,
   Segmented,
-  Select,
   Space,
   Spin,
-  Switch,
   Tag,
-  Timeline,
   Typography,
   message,
 } from "antd";
@@ -181,16 +176,6 @@ function sortEvents<T extends SortableTimelineItem>(items: T[]) {
   });
 }
 
-function getEventColor(status: string) {
-  if (status === "deleted") {
-    return "default";
-  }
-  if (status === "completed") {
-    return "green";
-  }
-  return "cyan";
-}
-
 function getEventDotColor(status: string) {
   if (status === "completed") {
     return "#34d399";
@@ -222,14 +207,12 @@ function getWeekEventTheme(status: string) {
 
 function WeekEventCard({
   segment,
-  dayKey,
   day,
   theme,
   openEditModal,
   setFocusDate,
 }: {
   segment: WeekTimelineEventSegment;
-  dayKey: string;
   day: Dayjs;
   theme: ReturnType<typeof getWeekEventTheme>;
   openEditModal: (event: ScheduledItem) => void;
@@ -652,6 +635,7 @@ export default function CalendarPage() {
     [accessToken, closeModal, editingEvent, messageApi, refreshData, timezone],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDelete = useCallback(
     (event: ScheduledItem) => {
       if (!accessToken) {
@@ -1014,7 +998,6 @@ export default function CalendarPage() {
                                   <WeekEventCard
                                     key={`${segment.event.id}-${dayKey}-${segment.startLabel}`}
                                     segment={segment}
-                                    dayKey={dayKey}
                                     day={day}
                                     theme={getWeekEventTheme(segment.event.status)}
                                     openEditModal={openEditModal}

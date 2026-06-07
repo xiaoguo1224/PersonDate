@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, loadScheduledItems, loadTaskScheduledItems, type ScheduledItem, type TaskItem } from "@/lib/dashboard";
+import { formatDateTime, loadTaskScheduledItems, type ScheduledItem, type TaskItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -205,7 +205,7 @@ export default function TasksPage() {
       setFormModalOpen(false);
       fetchTasks(filter === "all" ? undefined : filter);
     } catch (caughtError: unknown) {
-      if (caughtError instanceof Error && !("errorFields" in (caughtError as any))) {
+      if (caughtError instanceof Error && !("errorFields" in (caughtError as { errorFields?: unknown }))) {
         message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
       }
     } finally {
