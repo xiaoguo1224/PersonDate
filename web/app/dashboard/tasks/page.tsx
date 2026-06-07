@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Segmented, Space, Spin, Tag, TimePicker, Typography, message } from "antd";
+import { App, Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Segmented, Space, Spin, Tag, TimePicker, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -55,6 +55,7 @@ export default function TasksPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const { modal, message } = App.useApp();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +117,7 @@ export default function TasksPage() {
 
   const handleDelete = async (taskId: string) => {
     if (!accessToken) return;
-    Modal.confirm({
+    modal.confirm({
       title: "确认删除",
       content: "确定要删除该任务吗？",
       okText: "删除",

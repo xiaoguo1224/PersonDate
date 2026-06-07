@@ -22,7 +22,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { Avatar, Badge, Button, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
+import { App, Avatar, Badge, Button, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 
@@ -203,6 +203,7 @@ function DashboardShellContent({
   const dateLabel = getHeaderDateLabel(preferences.timezone);
 
   return (
+    <App>
     <Layout className="app-shell dashboard-shell">
       <Sider breakpoint="lg" collapsedWidth={0} width={254} className="dashboard-sidebar">
         <div className="dashboard-sidebar__brand">
@@ -284,5 +285,6 @@ function DashboardShellContent({
         </Content>
       </Layout>
     </Layout>
+    </App>
   );
 }
