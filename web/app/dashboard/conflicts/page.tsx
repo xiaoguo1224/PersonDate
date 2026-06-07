@@ -1,7 +1,9 @@
 "use client";
 
-import { Alert, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Card, DatePicker, Empty, List, Modal, Segmented, Space, Spin, Tag, Typography, message } from "antd";
+import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import dayjs, { type Dayjs } from "dayjs";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
@@ -10,9 +12,7 @@ import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
 
-type ConflictListResponse = {
-  items: ConflictItem[];
-};
+type StatusFilter = "open" | "resolved" | "ignored" | "all";
 
 function getSeverityColor(severity: string) {
   if (severity === "high") return "red";
@@ -26,103 +26,145 @@ function getStatusColor(status: string) {
   return "orange";
 }
 
-function ConflictsLoading() {
-  return (
-    <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载冲突事项..." />
-    </div>
-  );
-}
-
-function ConflictsError({ message }: Readonly<{ message: string }>) {
-  return <Alert type="error" showIcon message="加载冲突事项失败" description={message} />;
-}
-
-function ConflictEmpty() {
-  return (
-    <div className="dashboard-empty">
-      <Empty description="当前没有冲突事项" />
-    </div>
-  );
-}
-
 export default function ConflictsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+
+  const fetchConflicts = useCallback(() => {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const statusParam = statusFilter === "all" ? "" : `?status=${statusFilter}`;
+    requestJson<{ items: ConflictItem[] }>(`/api/conflicts${statusParam}`, {}, accessToken)
+      .then((result) => {
+        setConflicts(result.items);
+      })
+      .catch(() => setConflicts([]))
+      .finally(() => setLoading(false));
+  }, [accessToken, statusFilter]);
 
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
-      setError("请先登录后查看冲突事项");
       return;
     }
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    requestJson<ConflictListResponse>("/api/conflicts?status=open", {}, accessToken)
-      .then((result) => {
-        if (alive) {
-          setConflicts(result.items);
-        }
-      })
-      .catch((caughtError: unknown) => {
-        if (alive) {
-          setError(caughtError instanceof Error ? caughtError.message : "未知错误");
-        }
-      })
-      .finally(() => {
-        if (alive) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [accessToken]);
+    fetchConflicts();
+  }, [accessToken, fetchConflicts]);
+
+  const handleResolve = async (id: string) => {
+    if (!accessToken) return;
+    try {
+      await requestJson(`/api/conflicts/${id}/resolve`, { method: "POST" }, accessToken);
+      message.success("冲突已解决");
+      fetchConflicts();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "操作失败");
+    }
+  };
+
+  const handleIgnore = async (id: string) => {
+    if (!accessToken) return;
+    try {
+      await requestJson(`/api/conflicts/${id}/ignore`, { method: "POST" }, accessToken);
+      message.success("冲突已忽略");
+      fetchConflicts();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "操作失败");
+    }
+  };
+
+  const handleConfirmResolve = (conflict: ConflictItem) => {
+    Modal.confirm({
+      title: "确认解决",
+      content: `确定要解决"${conflict.title}"冲突吗？`,
+      okText: "解决",
+      cancelText: "取消",
+      onOk: () => void handleResolve(conflict.id),
+    });
+  };
+
+  const filteredConflicts = useMemo(() => {
+    if (!filterDate) return conflicts;
+    const dateKey = filterDate.format("YYYY-MM-DD");
+    return conflicts.filter((c) => {
+      const detectedKey = dayjs(c.detected_at).format("YYYY-MM-DD");
+      return detectedKey === dateKey;
+    });
+  }, [conflicts, filterDate]);
 
   const summary = useMemo(() => {
     const high = conflicts.filter((item) => item.severity === "high").length;
     const medium = conflicts.filter((item) => item.severity === "medium").length;
     const open = conflicts.filter((item) => item.status === "open").length;
-    return {
-      total: conflicts.length,
-      high,
-      medium,
-      open,
-    };
+    const resolved = conflicts.filter((item) => item.status === "resolved").length;
+    return { total: conflicts.length, high, medium, open, resolved };
   }, [conflicts]);
+
+  const statusOptions = [
+    { label: "未解决", value: "open" as StatusFilter },
+    { label: "已解决", value: "resolved" as StatusFilter },
+    { label: "已忽略", value: "ignored" as StatusFilter },
+    { label: "全部", value: "all" as StatusFilter },
+  ];
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" bordered={false}>
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">冲突事项</span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>冲突总览</Title>
+          <Title style={{ margin: 0 }}>冲突总览</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里已经接入后端冲突列表。后续可在此基础上补充忽略、解决和重新规划入口。
+            管理日程冲突：按天筛选、查看历史、解决或忽略冲突。
           </Paragraph>
           <Space wrap>
             <Tag color="red">{summary.high} 个高优先级</Tag>
             <Tag color="gold">{summary.medium} 个中优先级</Tag>
-            <Tag color="orange">{summary.open} 个待处理</Tag>
-            <Tag color="cyan">{summary.total} 条记录</Tag>
+            <Tag color="orange">{summary.open} 个未解决</Tag>
+            <Tag color="green">{summary.resolved} 个已解决</Tag>
           </Space>
         </Space>
       </Card>
 
-      {error ? <ConflictsError message={error} /> : null}
+      <Card className="section-card" bordered={false}>
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space wrap>
+            <DatePicker
+              placeholder="按日期筛选"
+              allowClear
+              value={filterDate}
+              onChange={(value) => setFilterDate(value)}
+              style={{ minWidth: 180 }}
+            />
+            {filterDate && (
+              <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
+                日期：{filterDate.format("YYYY-MM-DD")}
+              </Tag>
+            )}
+          </Space>
+          <Segmented<StatusFilter>
+            options={statusOptions}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value)}
+          />
+        </Space>
+      </Card>
 
       {loading ? (
-        <ConflictsLoading />
-      ) : conflicts.length ? (
-        <Card className="section-card" bordered={false} title="冲突列表">
+        <div className="dashboard-empty">
+          <Spin size="large" tip="正在加载..." />
+        </div>
+      ) : filteredConflicts.length ? (
+        <Card className="section-card" bordered={false} title={filterDate ? `${filterDate.format("YYYY-MM-DD")} 的冲突` : "冲突列表"}>
           <List
             itemLayout="vertical"
-            dataSource={conflicts}
+            dataSource={filteredConflicts}
             renderItem={(conflict) => (
               <List.Item key={conflict.id}>
                 <Card size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -131,14 +173,28 @@ export default function ConflictsPage() {
                       <Text strong>{conflict.title}</Text>
                       <Tag color={getSeverityColor(conflict.severity)}>{conflict.severity}</Tag>
                       <Tag color={getStatusColor(conflict.status)}>{conflict.status}</Tag>
-                      <Tag color="cyan">{conflict.conflict_type}</Tag>
                     </Space>
                     {conflict.description ? <Text className="muted-text">{conflict.description}</Text> : null}
                     {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
                     <Space wrap>
                       <Tag>检测时间 {formatDateTime(conflict.detected_at, timezone)}</Tag>
-                      {conflict.related_item_ids?.length ? (
-                        <Tag>{conflict.related_item_ids.length} 个相关事项</Tag>
+                      {conflict.status === "open" ? (
+                        <>
+                          <Tag
+                            color="green"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => handleConfirmResolve(conflict)}
+                          >
+                            <CheckOutlined /> 解决
+                          </Tag>
+                          <Tag
+                            color="default"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => void handleIgnore(conflict.id)}
+                          >
+                            <CloseOutlined /> 忽略
+                          </Tag>
+                        </>
                       ) : null}
                     </Space>
                   </Space>
@@ -148,7 +204,9 @@ export default function ConflictsPage() {
           />
         </Card>
       ) : (
-        <ConflictEmpty />
+        <div className="dashboard-empty">
+          <Empty description={filterDate ? `${filterDate.format("YYYY-MM-DD")} 无冲突` : "当前没有冲突事项"} />
+        </div>
       )}
     </Space>
   );

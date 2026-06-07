@@ -1,12 +1,13 @@
 "use client";
 
 import { BellOutlined } from "@ant-design/icons";
-import { Alert, Card, Col, Empty, Row, Space, Spin, Tag, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Modal, Row, Space, Spin, Switch, Tag, Typography, message } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, type ReminderItem } from "@/lib/dashboard";
+import { formatClock, formatDateTime, type ReminderItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -22,26 +23,6 @@ function getStatusColor(status: string) {
   return "orange";
 }
 
-function RemindersLoading() {
-  return (
-    <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载提醒任务..." />
-    </div>
-  );
-}
-
-function RemindersError({ message }: Readonly<{ message: string }>) {
-  return <Alert type="error" showIcon message="加载提醒任务失败" description={message} />;
-}
-
-function RemindersEmpty() {
-  return (
-    <div className="dashboard-empty">
-      <Empty description="当前没有提醒任务" />
-    </div>
-  );
-}
-
 export default function RemindersPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
@@ -49,47 +30,96 @@ export default function RemindersPage() {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
+  const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
+  const [savingDefault, setSavingDefault] = useState(false);
+
+  const fetchReminders = useCallback(() => {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    requestJson<ReminderListResponse>("/api/reminders?status=pending", {}, accessToken)
+      .then((result) => {
+        setReminders(result.items);
+      })
+      .catch((caughtError: unknown) => {
+        setError(caughtError instanceof Error ? caughtError.message : "未知错误");
+      })
+      .finally(() => setLoading(false));
+  }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
-      setError("请先登录后查看提醒任务");
       return;
     }
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    requestJson<ReminderListResponse>("/api/reminders", {}, accessToken)
-      .then((result) => {
-        if (alive) {
-          setReminders(result.items);
-        }
-      })
-      .catch((caughtError: unknown) => {
-        if (alive) {
-          setError(caughtError instanceof Error ? caughtError.message : "未知错误");
-        }
-      })
-      .finally(() => {
-        if (alive) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
+    fetchReminders();
+  }, [accessToken, fetchReminders]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    requestJson<{ data: { default_remind_before_minutes?: number } }>(
+      "/api/me/settings",
+      {},
+      accessToken,
+    ).then((result) => {
+      const mins = result.data?.default_remind_before_minutes;
+      if (mins !== undefined) setDefaultRemindBefore(mins);
+    }).catch(() => {});
   }, [accessToken]);
+
+  const handleSaveDefault = async () => {
+    if (!accessToken) return;
+    setSavingDefault(true);
+    try {
+      await requestJson("/api/me/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ default_remind_before_minutes: defaultRemindBefore }),
+      }, accessToken);
+      message.success("默认提醒时间已更新");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSavingDefault(false);
+    }
+  };
+
+  const handleCancel = async (reminder: ReminderItem) => {
+    if (!accessToken) return;
+    Modal.confirm({
+      title: "取消提醒",
+      content: `确定要取消"${reminder.title}"的提醒吗？`,
+      okText: "取消提醒",
+      okType: "danger",
+      cancelText: "保持开启",
+      onOk: async () => {
+        try {
+          await requestJson(`/api/reminders/${reminder.id}/cancel`, { method: "POST" }, accessToken);
+          message.success("提醒已取消");
+          fetchReminders();
+        } catch (err) {
+          message.error(err instanceof Error ? err.message : "操作失败");
+        }
+      },
+    });
+  };
+
+  const filteredReminders = useMemo(() => {
+    if (!filterDate) return reminders;
+    const dateKey = filterDate.format("YYYY-MM-DD");
+    return reminders.filter((r) => {
+      const triggerKey = dayjs(r.trigger_time).format("YYYY-MM-DD");
+      return triggerKey === dateKey;
+    });
+  }, [reminders, filterDate]);
 
   const summary = useMemo(() => {
     const pending = reminders.filter((item) => item.status === "pending").length;
     const fired = reminders.filter((item) => item.status === "fired").length;
     const failed = reminders.filter((item) => item.status === "failed").length;
-    return {
-      total: reminders.length,
-      pending,
-      fired,
-      failed,
-    };
+    return { total: reminders.length, pending, fired, failed };
   }, [reminders]);
 
   return (
@@ -100,9 +130,9 @@ export default function RemindersPage() {
             <BellOutlined />
             提醒任务
           </span>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>提醒任务总览</Title>
+          <Title style={{ margin: 0 }}>提醒任务总览</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里已经接入后端提醒任务列表。后续可在此基础上补充取消提醒、失败重试和触发测试入口。
+            管理提醒任务：按天筛选、取消提醒、设置默认提前时间。
           </Paragraph>
           <Space wrap>
             <Tag color="orange">{summary.pending} 个待触发</Tag>
@@ -113,13 +143,62 @@ export default function RemindersPage() {
         </Space>
       </Card>
 
-      {error ? <RemindersError message={error} /> : null}
+      <Card className="section-card" bordered={false} title="系统默认设置">
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Text className="muted-text">
+            所有新建安排的默认提前提醒时间
+          </Text>
+          <Space>
+            <InputNumber
+              min={0}
+              max={120}
+              value={defaultRemindBefore}
+              onChange={(v) => setDefaultRemindBefore(v ?? 0)}
+              addonAfter="分钟"
+              style={{ width: 160 }}
+            />
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => void handleSaveDefault()}
+              loading={savingDefault}
+            >
+              保存
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      <Card className="section-card" bordered={false}>
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space wrap>
+            <DatePicker
+              placeholder="按日期筛选"
+              allowClear
+              value={filterDate}
+              onChange={(value) => setFilterDate(value)}
+              style={{ minWidth: 180 }}
+            />
+            {filterDate && (
+              <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
+                日期：{filterDate.format("YYYY-MM-DD")}
+              </Tag>
+            )}
+          </Space>
+        </Space>
+      </Card>
+
+      {error ? (
+        <Alert type="error" showIcon message="加载提醒任务失败" description={error} />
+      ) : null}
 
       {loading ? (
-        <RemindersLoading />
-      ) : reminders.length ? (
+        <div className="dashboard-empty">
+          <Spin size="large" tip="正在加载..." />
+        </div>
+      ) : filteredReminders.length ? (
         <Row gutter={[16, 16]}>
-          {reminders.map((reminder) => (
+          {filteredReminders.map((reminder) => (
             <Col xs={24} lg={12} key={reminder.id}>
               <Card className="section-card" bordered={false}>
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -130,11 +209,21 @@ export default function RemindersPage() {
                   </Space>
                   <Text className="muted-text">
                     触发时间：{formatDateTime(reminder.trigger_time, timezone)}
+                    {" "}({formatClock(reminder.trigger_time, timezone)})
                   </Text>
                   <Text className="muted-text">会话：{reminder.conversation_id}</Text>
                   <Space wrap>
                     <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
                     <Tag>目标 {reminder.target_id}</Tag>
+                    {reminder.status === "pending" ? (
+                      <Button
+                        danger
+                        size="small"
+                        onClick={() => void handleCancel(reminder)}
+                      >
+                        取消提醒
+                      </Button>
+                    ) : null}
                   </Space>
                 </Space>
               </Card>
@@ -142,7 +231,9 @@ export default function RemindersPage() {
           ))}
         </Row>
       ) : (
-        <RemindersEmpty />
+        <div className="dashboard-empty">
+          <Empty description={filterDate ? `${filterDate.format("YYYY-MM-DD")} 无提醒` : "当前没有提醒任务"} />
+        </div>
       )}
     </Space>
   );

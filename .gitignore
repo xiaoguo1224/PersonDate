@@ -17,4 +17,4 @@ node_modules/
 dist/
 .codex-*.png
 .playwright-mcp/
-.mypy_*/
+.mypy_*/.claude/worktrees/
