@@ -122,13 +122,13 @@ export default function CloudEffect({
 }: CloudEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const performance = usePerformance();
-  const [mounted, setMounted] = useState(false);
-  const count = mounted ? COUNT_MAP[performance] : COUNT_MAP.medium;
-  const [cloudDefs] = useState(() => generateCloudDefs(18));
+  const [cloudDefs, setCloudDefs] = useState<CloudDef[]>([]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setCloudDefs(generateCloudDefs(COUNT_MAP[performance]));
+  }, [performance]);
+
+  const count = cloudDefs.length;
 
   useGSAP(
     () => {
