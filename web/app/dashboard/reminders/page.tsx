@@ -303,7 +303,7 @@ export default function RemindersPage() {
                         取消提醒
                       </Button>
                     ) : null}
-                    {reminder.status === "canceled" ? (
+                    {reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
                       <Button
                         type="primary"
                         size="small"
