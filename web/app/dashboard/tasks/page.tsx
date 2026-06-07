@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Select, Segmented, Space, Spin, Tag, TimePicker, Typography, message } from "antd";
+import { Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Segmented, Space, Spin, Tag, TimePicker, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -59,6 +59,9 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskStatus>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [scheduledSlots, setScheduledSlots] = useState<ScheduledItem[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -68,7 +71,7 @@ export default function TasksPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const fetchTasks = (status?: string) => {
+  const fetchTasks = (status?: string, p?: number, ps?: number) => {
     if (!accessToken) {
       setLoading(false);
       setError("请先登录后查看待办");
@@ -76,10 +79,16 @@ export default function TasksPage() {
     }
     setLoading(true);
     setError(null);
-    const query = status ? `?status=${status}` : "";
-    requestJson<TaskListResponse>(`/api/tasks${query}`, {}, accessToken)
+    const currentPage = p ?? page;
+    const currentPageSize = ps ?? pageSize;
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    params.set("page", String(currentPage));
+    params.set("page_size", String(currentPageSize));
+    requestJson<TaskListResponse>(`/api/tasks?${params}`, {}, accessToken)
       .then((result) => {
         setTasks(result.items);
+        setTotal(result.total);
       })
       .catch((caughtError: unknown) => {
         setError(caughtError instanceof Error ? caughtError.message : "未知错误");
@@ -90,7 +99,8 @@ export default function TasksPage() {
   };
 
   useEffect(() => {
-    fetchTasks(filter === "all" ? undefined : filter);
+    setPage(1);
+    fetchTasks(filter === "all" ? undefined : filter, 1);
   }, [accessToken, filter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = async (taskId: string) => {
@@ -98,7 +108,7 @@ export default function TasksPage() {
     try {
       await requestJson(`/api/tasks/${taskId}/complete`, { method: "PATCH" }, accessToken);
       message.success("任务已完成");
-      fetchTasks(filter === "all" ? undefined : filter);
+      fetchTasks(filter === "all" ? undefined : filter, page);
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
     }
@@ -116,7 +126,7 @@ export default function TasksPage() {
         try {
           await requestJson(`/api/tasks/${taskId}`, { method: "DELETE" }, accessToken);
           message.success("任务已删除");
-          fetchTasks(filter === "all" ? undefined : filter);
+          fetchTasks(filter === "all" ? undefined : filter, page);
         } catch (caughtError: unknown) {
           message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
         }
@@ -199,7 +209,7 @@ export default function TasksPage() {
       }
 
       setFormModalOpen(false);
-      fetchTasks(filter === "all" ? undefined : filter);
+      fetchTasks(filter === "all" ? undefined : filter, page);
     } catch (caughtError: unknown) {
       if (caughtError instanceof Error && !("errorFields" in (caughtError as { errorFields?: unknown }))) {
         message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
@@ -272,6 +282,7 @@ export default function TasksPage() {
           <List
             itemLayout="vertical"
             dataSource={tasks}
+            pagination={false}
             renderItem={(task: TaskItem) => (
               <List.Item key={task.id}>
                 <Card size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -338,6 +349,22 @@ export default function TasksPage() {
               </List.Item>
             )}
           />
+          {total > pageSize && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={total}
+                showSizeChanger
+                showTotal={(t) => `共 ${t} 条`}
+                onChange={(p, ps) => {
+                  setPage(p);
+                  setPageSize(ps);
+                  fetchTasks(filter === "all" ? undefined : filter, p, ps);
+                }}
+              />
+            </div>
+          )}
         </Card>
       ) : (
         <div className="dashboard-empty">
