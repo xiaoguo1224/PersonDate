@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Select, Segmented, Space, Spin, Tag, TimePicker, Typography, message } from "antd";
+import { Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Select, Segmented, Space, Spin, Tag, TimePicker, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -276,7 +276,7 @@ export default function TasksPage() {
           <List
             itemLayout="vertical"
             dataSource={tasks}
-            renderItem={(task) => (
+            renderItem={(task: TaskItem) => (
               <List.Item key={task.id}>
                 <Card size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -364,7 +364,7 @@ export default function TasksPage() {
         ) : scheduledSlots.length ? (
           <List
             dataSource={scheduledSlots}
-            renderItem={(slot) => (
+            renderItem={(slot: ScheduledItem) => (
               <List.Item>
                 <Space>
                   <CalendarOutlined />

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models import TaskItem, User
 from app.schemas.common import ApiResponse
-from app.schemas.scheduled_item import ScheduledItemDTO
+from app.schemas.scheduled_item import ScheduledItemDTO, ScheduledItemListResponse
 from app.schemas.task import TaskCreateRequest, TaskItemDTO, TaskListResponse, TaskUpdateRequest
 from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
