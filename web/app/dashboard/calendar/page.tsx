@@ -586,7 +586,7 @@ export default function CalendarPage() {
             timezone: values.timezone || timezone || DEFAULT_TIMEZONE,
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
-          });
+          }, accessToken);
           messageApi.success("安排已更新");
         } else {
           await createScheduledItem({
@@ -597,7 +597,7 @@ export default function CalendarPage() {
             timezone: values.timezone || timezone || DEFAULT_TIMEZONE,
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
-          });
+          }, accessToken);
           messageApi.success("安排已创建");
         }
         closeModal();
@@ -624,7 +624,7 @@ export default function CalendarPage() {
         cancelText: "取消",
         centered: true,
         onOk: async () => {
-          await deleteScheduledItem(event.id);
+          await deleteScheduledItem(event.id, accessToken);
           messageApi.success("安排已删除");
           await refreshData();
         },
@@ -639,7 +639,7 @@ export default function CalendarPage() {
     }
     setPlanSubmitting(true);
     try {
-      await generateDayDrafts(toDateKey(focusDate));
+      await generateDayDrafts(toDateKey(focusDate), accessToken);
       await fetchEvents();
       messageApi.success("安排草案已生成");
     } catch (caughtError: unknown) {
@@ -655,7 +655,7 @@ export default function CalendarPage() {
     }
     setPlanSubmitting(true);
     try {
-      await confirmDayDrafts(toDateKey(focusDate));
+      await confirmDayDrafts(toDateKey(focusDate), accessToken);
       await fetchEvents();
       messageApi.success("安排已确认");
     } catch (caughtError: unknown) {

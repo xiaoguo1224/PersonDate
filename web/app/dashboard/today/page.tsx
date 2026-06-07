@@ -915,7 +915,7 @@ export default function TodayPage() {
         timezone: values.timezone,
         location: values.location?.trim() ? values.location.trim() : null,
         remind_before_minutes: values.remind_before_minutes ?? 0,
-      });
+      }, accessToken);
       messageApi.success("安排已创建");
       setEventModalOpen(false);
       eventForm.resetFields();

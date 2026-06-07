@@ -92,51 +92,57 @@ export async function loadScheduledItems(
 }
 
 export async function createScheduledItem(
-  data: ScheduledItemCreatePayload
+  data: ScheduledItemCreatePayload,
+  accessToken?: string,
 ): Promise<ScheduledItem> {
   return requestJson<ScheduledItem>("/api/scheduled-items", {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, accessToken);
 }
 
 export async function updateScheduledItem(
   id: string,
-  data: ScheduledItemUpdatePayload
+  data: ScheduledItemUpdatePayload,
+  accessToken?: string,
 ): Promise<ScheduledItem> {
   return requestJson<ScheduledItem>(
     `/api/scheduled-items/${id}`,
-    { method: "PATCH", body: JSON.stringify(data) }
+    { method: "PATCH", body: JSON.stringify(data) },
+    accessToken,
   );
 }
 
-export async function deleteScheduledItem(id: string): Promise<void> {
-  await requestJson(`/api/scheduled-items/${id}`, { method: "DELETE" });
+export async function deleteScheduledItem(id: string, accessToken?: string): Promise<void> {
+  await requestJson(`/api/scheduled-items/${id}`, { method: "DELETE" }, accessToken);
 }
 
-export async function completeScheduledItem(id: string): Promise<ScheduledItem> {
+export async function completeScheduledItem(id: string, accessToken?: string): Promise<ScheduledItem> {
   return requestJson<ScheduledItem>(
     `/api/scheduled-items/${id}/complete`,
-    { method: "PATCH" }
+    { method: "PATCH" },
+    accessToken,
   );
 }
 
 export async function generateDayDrafts(
   planDate: string,
+  accessToken?: string,
   options?: { include_pending_tasks?: boolean; auto_detect_conflicts?: boolean }
 ): Promise<ScheduledItem[]> {
   const resp = await requestJson<{ items: ScheduledItem[] }>(
     `/api/scheduled-items/generate/${planDate}`,
-    { method: "POST", body: JSON.stringify(options || {}) }
+    { method: "POST", body: JSON.stringify(options || {}) },
+    accessToken,
   );
   return resp.items;
 }
 
-export async function confirmDayDrafts(planDate: string): Promise<void> {
+export async function confirmDayDrafts(planDate: string, accessToken?: string): Promise<void> {
   await requestJson("/api/scheduled-items/confirm", {
     method: "POST",
     body: JSON.stringify({ plan_date: planDate }),
-  });
+  }, accessToken);
 }
 
 // ── 格式化工具 ───────────────────────────────────────────
