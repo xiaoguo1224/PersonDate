@@ -28,7 +28,9 @@ import { useEffect, useMemo } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { DashboardPreferencesProvider, useDashboardTimezone } from "@/components/dashboard-preferences";
+import { useTheme } from "@/components/theme-provider";
 import type { UserRole } from "@/lib/types";
+import type { ThemeName } from "@/components/theme-provider";
 
 type NavigationItem = {
   key: string;
@@ -96,6 +98,29 @@ function getMenuItems(role: UserRole) {
   return navigation
     .map((item) => menuItemToAntD(item, role))
     .filter((item): item is MenuItem => item !== null);
+}
+
+function ThemeSwitcher() {
+  const { themeName, setThemeName } = useTheme();
+  const themes: { name: ThemeName; color: string; label: string }[] = [
+    { name: "blue-white", color: "#1677ff", label: "蓝白" },
+    { name: "black-gold", color: "#d4a853", label: "黑金" },
+    { name: "pink", color: "#e84393", label: "粉" },
+  ];
+  return (
+    <div className="dashboard-theme-switcher">
+      {themes.map((t) => (
+        <button
+          key={t.name}
+          className={`dashboard-theme-dot ${themeName === t.name ? "active" : ""}`}
+          style={{ background: t.color }}
+          onClick={() => setThemeName(t.name)}
+          title={t.label}
+          aria-label={t.label}
+        />
+      ))}
+    </div>
+  );
 }
 
 function getHeaderDateLabel(timeZone: string) {
@@ -221,6 +246,7 @@ function DashboardShellContent({
               </Space>
             </div>
           </div>
+          <ThemeSwitcher />
           <Space className="dashboard-sidebar__actions" size={8} wrap>
             <Button icon={<BellOutlined />} href="/dashboard/reminders">
               提醒

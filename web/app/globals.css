@@ -4457,3 +4457,20 @@ body {
     justify-self: start;
   }
 }
+
+/* ── 主题切换 ── */
+.dashboard-theme-switcher {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  justify-content: center;
+}
+.dashboard-theme-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s; padding: 0;
+}
+.dashboard-theme-dot:hover { transform: scale(1.2); }
+.dashboard-theme-dot.active {
+  border-color: var(--text-primary); transform: scale(1.15);
+}

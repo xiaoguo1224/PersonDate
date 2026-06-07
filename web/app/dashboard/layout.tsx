@@ -1,9 +1,14 @@
 import { DashboardShell } from "@/components/dashboard-shell";
+import ThemeProvider from "@/components/theme-provider";
 
 export default function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <ThemeProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </ThemeProvider>
+  );
 }
