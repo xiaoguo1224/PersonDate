@@ -346,8 +346,8 @@ export type TodayDashboardData = {
   summary?: DashboardSummary;
 };
 
-export async function loadTodayDashboard(accessToken?: string): Promise<TodayDashboardData> {
-  const today = new Date().toISOString().slice(0, 10);
+export async function loadTodayDashboard(accessToken?: string, timezone?: string): Promise<TodayDashboardData> {
+  const today = getTodayDateKey(timezone);
   const [events, tasks, conflicts, reminders] = await Promise.all([
     loadScheduledItems({ date: today }, accessToken),
     loadTasks(),
