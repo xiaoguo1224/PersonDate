@@ -87,15 +87,21 @@ a {
 }
 
 .section-card {
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(8, 15, 27, 0.7);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+  border-radius: var(--border-radius-lg);
+  border: var(--card-border);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.section-card:hover {
+  box-shadow: var(--card-shadow-hover);
 }
 
 .dashboard-hero {
   position: relative;
   overflow: hidden;
+  background: var(--hero-gradient);
 }
 
 .dashboard-hero::after {
@@ -944,20 +950,30 @@ body {
     radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.05), transparent 24%);
 }
 
+.dashboard-main {
+  margin-left: 254px;
+}
+
 .dashboard-shell--loading {
   display: grid;
   place-items: center;
 }
 
 .dashboard-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 22px 18px 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 252, 0.98));
-  border-right: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow: 10px 0 30px rgba(15, 23, 42, 0.04);
+  background: var(--sidebar-gradient);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.04);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .dashboard-sidebar .ant-layout-sider-children {
@@ -1009,19 +1025,19 @@ body {
   height: 46px;
   line-height: 46px;
   margin: 4px 0 !important;
-  border-radius: 14px !important;
+  border-radius: var(--border-radius) !important;
   color: var(--text-secondary) !important;
 }
 
 .dashboard-nav .ant-menu-item:hover {
   color: var(--text-primary) !important;
-  background: rgba(59, 130, 246, 0.08) !important;
+  background: var(--accent-light) !important;
 }
 
 .dashboard-nav .ant-menu-item-selected {
-  color: #1d4ed8 !important;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(96, 165, 250, 0.18)) !important;
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  color: var(--accent) !important;
+  background: var(--accent-gradient) !important;
+  box-shadow: inset 0 0 0 1px var(--accent-light);
 }
 
 .dashboard-nav .ant-menu-item .anticon {
@@ -1069,10 +1085,52 @@ body {
 
 .dashboard-sidebar__actions .ant-btn {
   width: 100%;
+  border-radius: var(--btn-radius) !important;
 }
 
 .dashboard-main {
   background: transparent;
+}
+
+/* ── 主题感知组件样式 ── */
+.section-card .ant-card-head {
+  border-bottom-color: var(--border-color);
+}
+.section-card .ant-card-body {
+  padding: 20px;
+}
+
+.ant-tag {
+  border-radius: var(--tag-radius) !important;
+}
+.ant-tag:not([color]) {
+  background: color-mix(in srgb, var(--accent) calc(var(--tag-bg-opacity, 0.08) * 100), transparent);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+.ant-input,
+.ant-input-outlined,
+.ant-select-selector {
+  border-radius: var(--border-radius) !important;
+}
+.ant-input-outlined,
+.ant-select-outlined .ant-select-selector {
+  background: var(--input-bg) !important;
+  border: var(--input-border) !important;
+}
+
+.ant-btn {
+  border-radius: var(--btn-radius) !important;
+  font-weight: var(--font-weight-body);
+}
+.ant-btn-primary {
+  background: var(--accent-gradient);
+  border-color: transparent;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-weight-heading) !important;
 }
 
 .dashboard-topbar {
@@ -1084,7 +1142,7 @@ body {
   padding: 18px 28px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .dashboard-topbar__title {
