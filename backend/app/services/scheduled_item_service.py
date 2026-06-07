@@ -63,8 +63,8 @@ class ScheduledItemService:
     ) -> list[ScheduledItem]:
         conditions = [
             ScheduledItem.user_id == user_id,
-            ScheduledItem.start_time >= start_time,
-            ScheduledItem.start_time <= end_time,
+            ScheduledItem.start_time < end_time,
+            ScheduledItem.end_time > start_time,
             ScheduledItem.status != ScheduledItemStatus.DELETED.value,
         ]
         if status:
