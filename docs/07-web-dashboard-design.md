@@ -163,9 +163,11 @@ DELETE /api/plan-items/{id}
 ```text
 月视图
 周视图
-日视图
+日视图（垂直时间轴）
+甘特图视图（左右折叠扑克牌样式）
 展示 calendar_events
 展示 plan_items
+展示冲突项（红色标记）
 点击查看详情
 手动创建安排
 编辑安排
@@ -175,6 +177,7 @@ DELETE /api/plan-items/{id}
 完成安排项
 删除安排项
 自然语言 Agent 添加
+冲突项管理面板
 ```
 
 调用 API：
@@ -189,6 +192,7 @@ PATCH /api/plan-items/{id}
 PATCH /api/plan-items/{id}/complete
 DELETE /api/plan-items/{id}
 POST /api/me/agent/message
+GET /api/conflicts?status=open
 ```
 
 ### 4.5 待办页
@@ -205,11 +209,15 @@ POST /api/me/agent/message
 展示未安排任务
 展示任务优先级
 展示截止时间
+展示任务日期范围
+展示固定/弹性时间标记
 创建任务
 编辑任务
 删除任务
 标记完成
 触发 Agent 安排任务
+自动排程
+冲突重排
 ```
 
 调用 API：
@@ -221,6 +229,8 @@ PATCH /api/tasks/{id}
 DELETE /api/tasks/{id}
 PATCH /api/tasks/{id}/complete
 POST /api/day-plans/{date}/generate
+POST /api/tasks/{id}/auto-schedule
+POST /api/tasks/{id}/reschedule
 ```
 
 ### 4.6 冲突事项页
@@ -235,18 +245,23 @@ POST /api/day-plans/{date}/generate
 
 ```text
 展示冲突列表
+按天查询冲突
+展示已过冲突（历史冲突）
 展示冲突严重程度
 展示涉及事项
 展示建议
 忽略冲突
 标记解决
 重新规划
+冲突解决面板
 ```
 
 调用 API：
 
 ```http
 GET /api/conflicts
+GET /api/conflicts?date={date}
+GET /api/conflicts?status=resolved
 PATCH /api/conflicts/{id}/ignore
 PATCH /api/conflicts/{id}/resolve
 POST /api/conflicts/detect
@@ -496,7 +511,44 @@ GET /api/admin/wechat/outbound-queue
 4. 直接访问 admin URL 时，前端应跳转 403 页面。
 5. 后端返回 403 时，前端展示无权限提示。
 
-## 6. Web 设计结论
+## 6. 主题与 UI 设计
+
+### 6.1 主题系统
+
+支持三套主题：
+
+```text
+蓝白主题（默认）
+黑金主题
+粉色主题
+```
+
+主题切换：
+
+```text
+侧栏主题切换按钮
+localStorage 持久化
+刷新页面后保持主题
+```
+
+### 6.2 动画效果
+
+```text
+GSAP 全屏背景粒子动画
+页面切换动画
+组件加载动画
+```
+
+### 6.3 导航结构
+
+```text
+侧栏导航
+日志和设置合并为子菜单
+响应式布局
+移动端适配
+```
+
+## 7. Web 设计结论
 
 Web Dashboard 必须服务于两个目标：
 

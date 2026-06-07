@@ -811,6 +811,65 @@ docs(api): 补充微信入站接口说明
 - 禁止提交 `dist/`、`.next/`、缓存目录。
 - 禁止提交真实 API Key、微信通道 token、数据库密码。
 
+### 分批提交与部署验证
+
+完成一个功能或任务后，必须按照以下流程进行分批提交和部署验证：
+
+**分批提交策略：**
+
+```text
+1. 后端代码变更（models、services、routes、agent 等）
+2. 前端代码变更（components、pages、hooks、api 等）
+3. 配置文件变更（docker-compose、Dockerfile、环境变量等）
+4. 文档变更（docs、README 等）
+```
+
+**提交流程：**
+
+```text
+1. 检查 git status，识别所有变更文件
+2. 按模块分组：后端、前端、配置、文档
+3. 分批执行 git add 和 git commit
+4. 每批 commit message 必须清晰描述变更范围
+5. 确保每批提交都能独立构建通过
+```
+
+**Docker 部署验证流程：**
+
+```text
+1. 完成所有分批提交后
+2. 执行 docker compose build --no-cache 重新构建镜像
+3. 执行 docker compose up -d 启动服务
+4. 等待服务启动完成（约 30-60 秒）
+5. 验证后端服务：curl http://localhost:8000/health
+6. 验证前端服务：访问 http://localhost:3000
+7. 检查日志：docker compose logs --tail=50
+8. 确认无错误后，执行 docker compose down 停止服务
+```
+
+**验证检查点：**
+
+```text
+后端验证：
+- GET /health 返回 ok
+- 数据库连接正常
+- API 接口响应正常
+
+前端验证：
+- 页面能正常加载
+- 无控制台错误
+- API 调用正常
+```
+
+**异常处理：**
+
+```text
+1. 如果构建失败，检查 Dockerfile 和依赖
+2. 如果启动失败，检查 docker compose logs
+3. 如果接口异常，检查后端日志和数据库连接
+4. 如果前端异常，检查构建日志和控制台错误
+```
+
 ## 测试要求
 
 ### 后端测试
