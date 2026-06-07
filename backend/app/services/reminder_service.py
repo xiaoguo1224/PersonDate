@@ -1,6 +1,6 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ReminderJob, ReminderStatus
@@ -45,12 +45,13 @@ class ReminderService:
         remind_before_minutes: int,
         conversation_id: str | None = None,
     ) -> ReminderJob:
+        actual_trigger = trigger_time - timedelta(minutes=remind_before_minutes)
         reminder = ReminderJob(
             user_id=user_id,
             target_type=ReminderTargetType.SCHEDULED_ITEM.value,
             target_id=scheduled_item_id,
             title=title,
-            trigger_time=trigger_time,
+            trigger_time=actual_trigger,
             conversation_id=conversation_id or self.channel_identities.get_conversation_id(user_id),
             status=ReminderStatus.PENDING.value,
         )
@@ -67,11 +68,25 @@ class ReminderService:
         for job in self.db.scalars(stmt):
             job.status = ReminderStatus.CANCELED.value
 
-    def list_jobs(self, user_id: str, status: str | None = None) -> list[ReminderJob]:
-        stmt = select(ReminderJob).where(ReminderJob.user_id == user_id)
+    def list_jobs(
+        self,
+        user_id: str,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ReminderJob], int]:
+        base = select(ReminderJob).where(ReminderJob.user_id == user_id)
         if status:
-            stmt = stmt.where(ReminderJob.status == status)
-        return list(self.db.scalars(stmt.order_by(ReminderJob.created_at.desc())))
+            base = base.where(ReminderJob.status == status)
+        total = self.db.scalar(select(func.count()).select_from(base.subquery()))
+        items = list(
+            self.db.scalars(
+                base.order_by(ReminderJob.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        return items, total
 
     def get_job(self, user_id: str, job_id: str) -> ReminderJob | None:
         stmt = select(ReminderJob).where(ReminderJob.user_id == user_id, ReminderJob.id == job_id)

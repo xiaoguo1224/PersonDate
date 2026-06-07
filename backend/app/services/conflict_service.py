@@ -189,7 +189,13 @@ class ConflictService:
         self.db.flush()
         return conflicts
 
-    def list_conflicts(self, user_id: str, status: str | None = None) -> list[ScheduleConflict]:
+    def list_conflicts(
+        self,
+        user_id: str,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ScheduleConflict], int]:
         now = datetime.now(UTC)
         self._resolve_stale_open_conflicts(user_id, now)
         stmt = select(ScheduleConflict).where(ScheduleConflict.user_id == user_id)
@@ -211,7 +217,9 @@ class ConflictService:
                 continue
             seen.add(key)
             unique_conflicts.append(conflict)
-        return unique_conflicts
+        total = len(unique_conflicts)
+        start = (page - 1) * page_size
+        return unique_conflicts[start : start + page_size], total
 
     def resolve_conflicts_for_item(self, user_id: str, item_id: str) -> list[ScheduleConflict]:
         stmt = select(ScheduleConflict).where(
