@@ -362,22 +362,20 @@ export default function TasksPage() {
               </List.Item>
             )}
           />
-          {total > pageSize && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-              <Pagination
-                current={page}
-                pageSize={pageSize}
-                total={total}
-                showSizeChanger
-                showTotal={(t) => `共 ${t} 条`}
-                onChange={(p, ps) => {
-                  setPage(p);
-                  setPageSize(ps);
-                  fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, p, ps);
-                }}
-              />
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              showSizeChanger
+              showTotal={(t) => `共 ${t} 条`}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+                fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, p, ps);
+              }}
+            />
+          </div>
         </Card>
       ) : (
         <div className="dashboard-empty">

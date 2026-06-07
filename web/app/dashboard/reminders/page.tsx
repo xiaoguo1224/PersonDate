@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Pagination, Row, Space, Spin, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Pagination, Row, Space, Spin, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -38,6 +38,7 @@ export default function RemindersPage() {
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
   const [savingDefault, setSavingDefault] = useState(false);
   const [page, setPage] = useState(1);
@@ -53,6 +54,7 @@ export default function RemindersPage() {
     const currentPage = p ?? page;
     const currentPageSize = ps ?? pageSize;
     const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
     if (searchKeyword) params.set("keyword", searchKeyword);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
@@ -65,7 +67,7 @@ export default function RemindersPage() {
         setError(caughtError instanceof Error ? caughtError.message : "未知错误");
       })
       .finally(() => setLoading(false));
-  }, [accessToken, searchKeyword, page, pageSize]);
+  }, [accessToken, statusFilter, searchKeyword, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -233,6 +235,38 @@ export default function RemindersPage() {
 
       <Card className="section-card" variant="borderless">
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Tabs
+            activeKey={statusFilter}
+            onChange={(key) => {
+              setStatusFilter(key);
+              setPage(1);
+              setFilterDate(null);
+              setSearchKeyword("");
+              setKeyword("");
+              if (accessToken) {
+                const params = new URLSearchParams();
+                if (key !== "all") params.set("status", key);
+                params.set("page", "1");
+                params.set("page_size", String(pageSize));
+                setLoading(true);
+                requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
+                  .then((result) => {
+                    setReminders(result.items);
+                    setTotal(result.total);
+                  })
+                  .catch((caughtError: unknown) => {
+                    setError(caughtError instanceof Error ? caughtError.message : "未知错误");
+                  })
+                  .finally(() => setLoading(false));
+              }
+            }}
+            items={[
+              { key: "all", label: "全部" },
+              { key: "pending", label: "未提醒" },
+              { key: "fired", label: "已提醒" },
+              { key: "failed", label: "提醒错误" },
+            ]}
+          />
           <Space wrap>
             <DatePicker
               placeholder="按日期筛选"
@@ -246,7 +280,12 @@ export default function RemindersPage() {
               allowClear
               enterButton={<SearchOutlined />}
               style={{ width: 300 }}
-              onSearch={(value) => setSearchKeyword(value)}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onSearch={(value) => {
+                setSearchKeyword(value);
+                setPage(1);
+              }}
             />
             {filterDate && (
               <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
@@ -324,24 +363,22 @@ export default function RemindersPage() {
         </div>
       )}
 
-      {total > pageSize && (
-        <Card className="section-card" variant="borderless">
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              showSizeChanger
-              showTotal={(t) => `共 ${t} 条`}
-              onChange={(p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-                fetchReminders(p, ps);
-              }}
-            />
-          </div>
-        </Card>
-      )}
+      <Card className="section-card" variant="borderless">
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Pagination
+            current={page}
+            pageSize={pageSize}
+            total={total}
+            showSizeChanger
+            showTotal={(t) => `共 ${t} 条`}
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+              fetchReminders(p, ps);
+            }}
+          />
+        </div>
+      </Card>
     </Space>
   );
 }
