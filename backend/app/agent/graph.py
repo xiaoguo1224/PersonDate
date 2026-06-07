@@ -412,15 +412,19 @@ class SchedulePlanningGraph:
                 "state_type": pending.state_type,
                 "status": pending.status,
             }
-            lines = [f"已创建安排：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"]
+            user_tz = ZoneInfo(state.timezone)
+            local_start = start_time.astimezone(user_tz)
+            lines = [f"已创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}。"]
             lines.append("但检测到冲突，请回复 1、2 或 3 选择处理方式。")
             lines.append("1. 保留当前安排并忽略冲突")
             lines.append("2. 将当前安排顺延 1 小时")
             lines.append("3. 删除当前安排")
             state.final_response = "\n".join(lines)
             return
+        user_tz = ZoneInfo(state.timezone)
+        local_start = start_time.astimezone(user_tz)
         state.final_response = (
-            f"已为你创建安排：{title}，时间为 {start_time.strftime('%Y-%m-%d %H:%M')}。"
+            f"已为你创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}。"
         )
 
     def _handle_query_scheduled_items(self, state: AgentState) -> None:
@@ -449,15 +453,18 @@ class SchedulePlanningGraph:
             state.final_response = f"{target_date.isoformat()} 没有安排。"
             return
         lines = [f"{target_date.isoformat()} 的安排："]
+        user_tz = ZoneInfo(state.timezone)
         for index, event in enumerate(events, start=1):
             start = event["start_time"]
             end = event.get("end_time")
             if isinstance(start, str):
-                start_text = start.replace("T", " ")[:16]
+                start_dt = datetime.fromisoformat(start).astimezone(user_tz)
+                start_text = start_dt.strftime("%Y-%m-%d %H:%M")
             else:
                 start_text = str(start)
             if isinstance(end, str):
-                end_text = end.replace("T", " ")[:16]
+                end_dt = datetime.fromisoformat(end).astimezone(user_tz)
+                end_text = end_dt.strftime("%Y-%m-%d %H:%M")
             else:
                 end_text = str(end)
             lines.append(f"{index}. {event['title']} {start_text} - {end_text}")
@@ -803,8 +810,9 @@ class SchedulePlanningGraph:
             if result.success:
                 self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
                 state.pending_state = None
+                local_new_start = new_start.astimezone(ZoneInfo(state.timezone))
                 state.final_response = (
-                    f"已将当前冲突安排顺延到 {new_start:%Y-%m-%d} {_format_clock_time(new_start)}。"
+                    f"已将当前冲突安排顺延到 {local_new_start:%Y-%m-%d} {_format_clock_time(local_new_start)}。"
                 )
                 return
             state.final_response = result.error or "顺延安排失败。"
