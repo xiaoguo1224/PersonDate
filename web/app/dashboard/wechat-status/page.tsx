@@ -74,7 +74,7 @@ export default function WechatStatusPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载微信通道状态..." />
+        <Spin size="large" />
       </div>
     );
   }

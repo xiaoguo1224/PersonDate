@@ -96,7 +96,7 @@ export default function ModelConfigPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载模型配置..." />
+        <Spin size="large" />
       </div>
     );
   }

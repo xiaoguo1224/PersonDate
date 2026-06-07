@@ -199,7 +199,7 @@ export default function WechatBindingPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载微信绑定信息..." />
+        <Spin size="large" />
       </div>
     );
   }
@@ -261,7 +261,7 @@ export default function WechatBindingPage() {
         onCancel={handleCloseQrModal}
         footer={null}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" size={16} style={{ width: "100%", alignItems: "center", textAlign: "center" }}>
           {loginSession?.qr_img_content ? (

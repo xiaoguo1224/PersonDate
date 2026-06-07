@@ -93,7 +93,7 @@ export default function SystemSettingsPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载系统设置..." />
+        <Spin size="large" />
       </div>
     );
   }

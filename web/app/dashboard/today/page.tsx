@@ -490,7 +490,7 @@ function TodayPageView({
               onCancel={() => setGanttModalOpen(false)}
               footer={null}
               width={960}
-              destroyOnClose
+              destroyOnHidden
             >
               <GanttChart
                 items={ganttItems}
@@ -659,7 +659,7 @@ function TodayPageView({
 function TodayLoading() {
   return (
     <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载今日数据..." />
+      <Spin size="large" />
     </div>
   );
 }
@@ -975,7 +975,7 @@ export default function TodayPage() {
         okText="创建安排"
         cancelText="取消"
         confirmLoading={eventSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={eventForm} layout="vertical" initialValues={buildEventFormDefaults(selectedDate)}>
           <Form.Item

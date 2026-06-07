@@ -211,7 +211,7 @@ export default function RemindersPage() {
 
       {loading ? (
         <div className="dashboard-empty">
-          <Spin size="large" tip="正在加载..." />
+          <Spin size="large" />
         </div>
       ) : filteredReminders.length ? (
         <Row gutter={[16, 16]}>

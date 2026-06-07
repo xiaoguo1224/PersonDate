@@ -276,7 +276,7 @@ export default function TasksPage() {
 
       {loading ? (
         <div className="dashboard-empty">
-          <Spin size="large" tip="正在加载..." />
+          <Spin size="large" />
         </div>
       ) : tasks.length ? (
         <Card className="section-card" variant="borderless" title={filter === "completed" ? "已完成任务" : "任务列表"}>

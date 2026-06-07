@@ -53,7 +53,7 @@ function getStatusColor(status: string) {
 function UsersLoading() {
   return (
     <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载用户列表..." />
+      <Spin size="large" />
     </div>
   );
 }
@@ -256,7 +256,7 @@ export default function UsersPage() {
       >
         {bindingLoading ? (
           <div className="dashboard-empty">
-            <Spin tip="正在加载绑定信息..." />
+            <Spin />
           </div>
         ) : bindingError ? (
           <Alert type="error" showIcon message="加载绑定信息失败" description={bindingError} />

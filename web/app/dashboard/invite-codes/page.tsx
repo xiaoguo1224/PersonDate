@@ -34,7 +34,7 @@ type InviteCodeCreatePayload = {
 function InviteCodesLoading() {
   return (
     <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载邀请码..." />
+      <Spin size="large" />
     </div>
   );
 }

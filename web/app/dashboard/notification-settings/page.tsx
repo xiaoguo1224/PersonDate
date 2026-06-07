@@ -68,7 +68,7 @@ export default function NotificationSettingsPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载通知设置..." />
+        <Spin size="large" />
       </div>
     );
   }

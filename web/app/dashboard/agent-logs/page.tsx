@@ -115,7 +115,7 @@ export default function AgentLogsPage() {
 
       {loading ? (
         <div className="dashboard-empty">
-          <Spin size="large" tip="正在加载 Agent 日志..." />
+          <Spin size="large" />
         </div>
       ) : (
         <Card className="section-card" variant="borderless">

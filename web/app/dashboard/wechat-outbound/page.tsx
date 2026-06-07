@@ -200,7 +200,7 @@ export default function WechatOutboundQueuePage() {
 
       {loading ? (
         <div className="dashboard-empty">
-          <Spin size="large" tip="正在加载出站队列..." />
+          <Spin size="large" />
         </div>
       ) : (
         <Card className="section-card" variant="borderless">

@@ -169,7 +169,7 @@ export default function ConflictsPage() {
 
       {loading ? (
         <div className="dashboard-empty">
-          <Spin size="large" tip="正在加载..." />
+          <Spin size="large" />
         </div>
       ) : filteredConflicts.length ? (
         <Card className="section-card" variant="borderless" title={filterDate ? `${filterDate.format("YYYY-MM-DD")} 的冲突` : "冲突列表"}>

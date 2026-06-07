@@ -92,7 +92,7 @@ export default function AccountPage() {
   if (loading) {
     return (
       <div className="dashboard-empty">
-        <Spin size="large" tip="正在加载个人设置..." />
+        <Spin size="large" />
       </div>
     );
   }
