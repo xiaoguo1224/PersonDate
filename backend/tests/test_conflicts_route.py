@@ -1,159 +1,54 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from datetime import UTC, datetime, timedelta
 
-from app.api.deps import get_db
-from app.core.config import get_settings
-from app.db.base import Base
-from app.main import create_app
-from app.schemas.auth import LoginRequest
-from app.schemas.setup import OwnerInitRequest
-from app.services.auth_service import AuthService
-from app.services.setup_service import SetupService
+_FUTURE_DATE = (datetime.now(UTC) + timedelta(days=30)).strftime("%Y-%m-%d")
 
 
-def test_detect_conflicts_returns_persisted_ids() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
-
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    setup = SetupService(session)
-    setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
-    )
-    session.commit()
-
-    auth = AuthService(session)
-    settings = get_settings()
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
-    session.commit()
-
-    client = TestClient(app)
-    headers = {"Authorization": f"Bearer {token}"}
-    first_event = client.post(
-        "/api/calendar-events",
+def _create_event(client, headers, title: str, start: str, end: str, location: str = "会议室") -> dict:
+    resp = client.post(
+        "/api/scheduled-items",
         headers=headers,
         json={
-            "title": "会议A",
+            "title": title,
             "description": "测试冲突",
-            "start_time": "2026-06-06T15:00:00+08:00",
-            "end_time": "2026-06-06T16:00:00+08:00",
+            "start_time": start,
+            "end_time": end,
             "timezone": "Asia/Shanghai",
-            "location": "会议室A",
+            "location": location,
             "remind_before_minutes": 10,
+            "source": "manual",
         },
     )
-    assert first_event.status_code == 200
+    assert resp.status_code == 200
+    return resp.json()["data"]
 
-    second_event = client.post(
-        "/api/calendar-events",
-        headers=headers,
-        json={
-            "title": "会议B",
-            "description": "测试冲突",
-            "start_time": "2026-06-06T15:30:00+08:00",
-            "end_time": "2026-06-06T16:30:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室B",
-            "remind_before_minutes": 10,
-        },
-    )
-    assert second_event.status_code == 200
+
+def test_detect_conflicts_returns_persisted_ids(client, admin_token) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    _create_event(client, headers, "会议A", f"{_FUTURE_DATE}T15:00:00+08:00", f"{_FUTURE_DATE}T16:00:00+08:00", "会议室A")
+    _create_event(client, headers, "会议B", f"{_FUTURE_DATE}T15:30:00+08:00", f"{_FUTURE_DATE}T16:30:00+08:00", "会议室B")
 
     response = client.post("/api/conflicts/detect", headers=headers)
-
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["items"] == []
+    items = body["data"]["items"]
+    assert len(items) == 1
+    assert items[0]
 
     list_response = client.get("/api/conflicts?status=open", headers=headers)
     assert list_response.status_code == 200
-    listed_items = list_response.json()["data"]["items"]
-    assert len(listed_items) == 1
-    assert listed_items[0]["id"]
-    assert listed_items[0]["title"] == "日程冲突：会议A 与 会议B"
+    listed = list_response.json()["data"]["items"]
+    assert len(listed) == 1
+    assert listed[0]["id"]
+    assert listed[0]["title"] == "安排冲突：会议A 与 会议B"
 
 
-def test_detect_conflicts_deduplicates_repeated_pairs() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
-
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    setup = SetupService(session)
-    setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
-    )
-    session.commit()
-
-    auth = AuthService(session)
-    settings = get_settings()
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
-    session.commit()
-
-    client = TestClient(app)
-    headers = {"Authorization": f"Bearer {token}"}
-    for payload in (
-        {
-            "title": "会议A",
-            "description": "测试冲突",
-            "start_time": "2026-06-06T15:00:00+08:00",
-            "end_time": "2026-06-06T16:00:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室A",
-            "remind_before_minutes": 10,
-        },
-        {
-            "title": "会议B",
-            "description": "测试冲突",
-            "start_time": "2026-06-06T15:30:00+08:00",
-            "end_time": "2026-06-06T16:30:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室B",
-            "remind_before_minutes": 10,
-        },
-    ):
-        response = client.post("/api/calendar-events", headers=headers, json=payload)
-        assert response.status_code == 200
+def test_detect_conflicts_deduplicates_repeated_pairs(client, admin_token) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    _create_event(client, headers, "会议A", f"{_FUTURE_DATE}T15:00:00+08:00", f"{_FUTURE_DATE}T16:00:00+08:00", "会议室A")
+    _create_event(client, headers, "会议B", f"{_FUTURE_DATE}T15:30:00+08:00", f"{_FUTURE_DATE}T16:30:00+08:00", "会议室B")
 
     first_detect = client.post("/api/conflicts/detect", headers=headers)
     second_detect = client.post("/api/conflicts/detect", headers=headers)
@@ -161,84 +56,24 @@ def test_detect_conflicts_deduplicates_repeated_pairs() -> None:
 
     assert first_detect.status_code == 200
     assert second_detect.status_code == 200
-    assert len(first_detect.json()["data"]["items"]) == 0
+    assert len(first_detect.json()["data"]["items"]) == 1
     assert len(second_detect.json()["data"]["items"]) == 0
     assert len(list_response.json()["data"]["items"]) == 1
-    assert list_response.json()["data"]["items"][0]["title"] == "日程冲突：会议A 与 会议B"
 
 
-def test_deleting_event_resolves_related_conflicts() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
+def test_deleting_event_resolves_related_conflicts(client, admin_token) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    event_a = _create_event(client, headers, "开会", f"{_FUTURE_DATE}T15:00:00+08:00", f"{_FUTURE_DATE}T16:00:00+08:00", "会议室A")
+    event_id = event_a["id"]
+    _create_event(client, headers, "API自动化测试 日程 B", f"{_FUTURE_DATE}T15:30:00+08:00", f"{_FUTURE_DATE}T16:30:00+08:00", "会议室B")
 
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    setup = SetupService(session)
-    setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
-    )
-    session.commit()
-
-    auth = AuthService(session)
-    settings = get_settings()
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
-    session.commit()
-
-    client = TestClient(app)
-    headers = {"Authorization": f"Bearer {token}"}
-    create_one = client.post(
-        "/api/calendar-events",
-        headers=headers,
-        json={
-            "title": "开会",
-            "description": "测试冲突",
-            "start_time": "2026-06-06T15:00:00+08:00",
-            "end_time": "2026-06-06T16:00:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室A",
-            "remind_before_minutes": 10,
-        },
-    )
-    assert create_one.status_code == 200
-    event_id = create_one.json()["data"]["id"]
-
-    create_two = client.post(
-        "/api/calendar-events",
-        headers=headers,
-        json={
-            "title": "API自动化测试 日程 B",
-            "description": "测试冲突",
-            "start_time": "2026-06-06T15:30:00+08:00",
-            "end_time": "2026-06-06T16:30:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室B",
-            "remind_before_minutes": 10,
-        },
-    )
-    assert create_two.status_code == 200
+    client.post("/api/conflicts/detect", headers=headers)
 
     before_delete = client.get("/api/conflicts?status=open", headers=headers)
     assert before_delete.status_code == 200
     assert len(before_delete.json()["data"]["items"]) == 1
 
-    delete_response = client.delete(f"/api/calendar-events/{event_id}", headers=headers)
+    delete_response = client.delete(f"/api/scheduled-items/{event_id}", headers=headers)
     assert delete_response.status_code == 200
 
     after_delete = client.get("/api/conflicts?status=open", headers=headers)
@@ -250,64 +85,13 @@ def test_deleting_event_resolves_related_conflicts() -> None:
     assert len(resolved_response.json()["data"]["items"]) == 1
 
 
-def test_list_conflicts_auto_resolves_finished_pairs() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
+def test_list_conflicts_auto_resolves_finished_pairs(client, admin_token) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    _create_event(client, headers, "已结束会议A", "2025-06-06T15:00:00+08:00", "2025-06-06T16:00:00+08:00", "会议室A")
+    _create_event(client, headers, "已结束会议B", "2025-06-06T15:30:00+08:00", "2025-06-06T16:30:00+08:00", "会议室B")
 
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    setup = SetupService(session)
-    setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
-    )
-    session.commit()
-
-    auth = AuthService(session)
-    settings = get_settings()
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
-    session.commit()
-
-    client = TestClient(app)
-    headers = {"Authorization": f"Bearer {token}"}
-    for payload in (
-        {
-            "title": "已结束会议A",
-            "description": "历史冲突",
-            "start_time": "2025-06-06T15:00:00+08:00",
-            "end_time": "2025-06-06T16:00:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室A",
-            "remind_before_minutes": 10,
-        },
-        {
-            "title": "已结束会议B",
-            "description": "历史冲突",
-            "start_time": "2025-06-06T15:30:00+08:00",
-            "end_time": "2025-06-06T16:30:00+08:00",
-            "timezone": "Asia/Shanghai",
-            "location": "会议室B",
-            "remind_before_minutes": 10,
-        },
-    ):
-        response = client.post("/api/calendar-events", headers=headers, json=payload)
-        assert response.status_code == 200
+    detect_response = client.post("/api/conflicts/detect", headers=headers)
+    assert detect_response.status_code == 200
 
     open_response = client.get("/api/conflicts?status=open", headers=headers)
     resolved_response = client.get("/api/conflicts?status=resolved", headers=headers)
