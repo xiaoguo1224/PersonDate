@@ -41,6 +41,7 @@ import gsap from "gsap";
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import GanttChart from "@/components/gantt-chart";
+import { requestJson } from "@/lib/api";
 import {
   confirmDayDrafts,
   createScheduledItem,
@@ -70,16 +71,6 @@ type ScheduledItemFormValues = {
   timezone: string;
   location?: string | null;
   remind_before_minutes?: number | null;
-};
-
-type PlanItemFormValues = {
-  title: string;
-  item_type: string;
-  start_time: Dayjs;
-  end_time: Dayjs;
-  status: string;
-  is_flexible: boolean;
-  sort_order?: number | null;
 };
 
 type WeekTimelineEventSegment = {
@@ -440,23 +431,19 @@ export default function CalendarPage() {
   const accessToken = session?.accessToken;
   const { timezone, loading: timezoneLoading } = useDashboardTimezone();
   const [form] = Form.useForm<ScheduledItemFormValues>();
-  const [planItemForm] = Form.useForm<PlanItemFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<ScheduledItem[]>([]);
+  const [dayConflicts, setDayConflicts] = useState<ScheduledItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const [planError, setPlanError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ScheduledItem | null>(null);
-  const [planItemModalOpen, setPlanItemModalOpen] = useState(false);
-  const [editingPlanItem, setEditingPlanItem] = useState<PlanItemFormValues | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
-  const [planItemSubmitting, setPlanItemSubmitting] = useState(false);
 
   useEffect(() => {
     setFocusDate(dayjs(getTodayDateKey(timezone)));
@@ -494,6 +481,31 @@ export default function CalendarPage() {
     }
     void fetchEvents();
   }, [accessToken, fetchEvents, timezoneLoading]);
+
+  const fetchDayConflicts = useCallback(() => {
+    if (!accessToken) return;
+    requestJson<{ data?: { items?: { related_item_ids?: Record<string, string> }[] }; items?: { related_item_ids?: Record<string, string> }[] }>(
+      "/api/conflicts?status=open",
+      {},
+      accessToken,
+    ).then((result) => {
+      const conflictItems = result.data?.items || result.items || [];
+      const conflictItemIds = new Set<string>();
+      for (const c of conflictItems) {
+        const ids = c.related_item_ids;
+        if (ids) {
+          Object.values(ids).forEach((id) => conflictItemIds.add(id as string));
+        }
+      }
+      const dayConflictItems = events.filter((e) => conflictItemIds.has(e.id));
+      setDayConflicts(dayConflictItems);
+    }).catch(() => setDayConflicts([]));
+  }, [accessToken, events]);
+
+  useEffect(() => {
+    if (!accessToken || timezoneLoading) return;
+    fetchDayConflicts();
+  }, [accessToken, timezoneLoading, fetchDayConflicts]);
 
   const viewRange = useMemo(() => getViewRange(viewMode, focusDate), [focusDate, viewMode]);
   const visibleEvents = useMemo(
@@ -587,23 +599,9 @@ export default function CalendarPage() {
     form.resetFields();
   }, [form]);
 
-  const closePlanItemModal = useCallback(() => {
-    setPlanItemModalOpen(false);
-    setEditingPlanItem(null);
-    planItemForm.resetFields();
-  }, [planItemForm]);
-
   const refreshData = useCallback(async () => {
     await fetchEvents();
   }, [fetchEvents]);
-
-  const handlePlanItemSubmit = useCallback(
-    async (_values: Record<string, unknown>) => {
-      messageApi.warning("安排项管理已迁移，请在安排列表中操作。");
-      closePlanItemModal();
-    },
-    [closePlanItemModal, messageApi],
-  );
 
   const handleSubmit = useCallback(
     async (values: ScheduledItemFormValues) => {
@@ -737,9 +735,6 @@ export default function CalendarPage() {
         </Card>
 
         {eventsError ? <CalendarError message={eventsError} /> : null}
-        {planError ? (
-          <Alert type="warning" showIcon message="加载计划失败" description={planError} />
-        ) : null}
 
         <Card className="section-card" bordered={false}>
           <Row gutter={[16, 16]} align="middle">
@@ -1197,100 +1192,34 @@ export default function CalendarPage() {
         </Modal>
 
         <Modal
-          title={editingPlanItem ? "编辑安排项" : "新建安排项"}
-          open={planItemModalOpen}
-          onCancel={closePlanItemModal}
-          destroyOnClose
-          okText={editingPlanItem ? "保存修改" : "创建安排项"}
-          cancelText="取消"
-          confirmLoading={planItemSubmitting}
-          onOk={() => void planItemForm.submit()}
+          title={`${focusDate.format("YYYY-MM-DD")} 的冲突项`}
+          open={dayConflicts.length > 0}
+          onCancel={() => setDayConflicts([])}
+          footer={null}
+          width={520}
         >
-          <Form
-            form={planItemForm}
-            layout="vertical"
-            requiredMark={false}
-            onFinish={(values) => void handlePlanItemSubmit(values)}
-          >
-            <Form.Item
-              name="title"
-              label="标题"
-              rules={[{ required: true, message: "请输入安排项标题" }]}
-            >
-              <Input placeholder="例如：整理论文材料" />
-            </Form.Item>
-            <Row gutter={12}>
-              <Col span={12}>
-                <Form.Item
-                  name="item_type"
-                  label="类型"
-                  rules={[{ required: true, message: "请选择安排项类型" }]}
-                >
-                  <Select
-                    options={[
-                      { value: "manual", label: "手动" },
-                      { value: "task", label: "任务" },
-                      { value: "event", label: "安排" },
-                      { value: "break", label: "休息" },
-                    ]}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="status"
-                  label="状态"
-                  rules={[{ required: true, message: "请选择安排项状态" }]}
-                >
-                  <Select
-                    options={[
-                      { value: "planned", label: "待安排" },
-                      { value: "in_progress", label: "进行中" },
-                      { value: "completed", label: "已完成" },
-                      { value: "skipped", label: "已跳过" },
-                      { value: "cancelled", label: "已取消" },
-                    ]}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={12}>
-              <Col span={12}>
-                <Form.Item
-                  name="start_time"
-                  label="开始时间"
-                  rules={[{ required: true, message: "请选择开始时间" }]}
-                >
-                  <DatePicker showTime style={{ width: "100%" }} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="end_time"
-                  label="结束时间"
-                  rules={[{ required: true, message: "请选择结束时间" }]}
-                >
-                  <DatePicker showTime style={{ width: "100%" }} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={12}>
-              <Col span={12}>
-                <Form.Item name="sort_order" label="排序">
-                  <InputNumber min={0} style={{ width: "100%" }} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="is_flexible"
-                  label="可弹性调整"
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Text className="muted-text">
+              以下安排与当日其他安排存在时间重叠：
+            </Text>
+            {dayConflicts.map((event) => (
+              <Card
+                key={event.id}
+                size="small"
+                bordered={false}
+                style={{ background: "rgba(255,255,255,0.04)", cursor: "pointer" }}
+                onClick={() => openEditModal(event)}
+              >
+                <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                  <Text strong>{event.title}</Text>
+                  <Text className="muted-text">
+                    {formatRange(event.start_time, event.end_time, timezone)}
+                  </Text>
+                  <Tag color="red">时间冲突</Tag>
+                </Space>
+              </Card>
+            ))}
+          </Space>
         </Modal>
       </Space>
     </ConfigProvider>
