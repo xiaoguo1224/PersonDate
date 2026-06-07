@@ -26,6 +26,8 @@ type GanttBar = {
   startLabel: string;
   endLabel: string;
   type: "event" | "task" | "break";
+  laneIndex: number;
+  laneCount: number;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -39,7 +41,7 @@ function buildBars(
   const nextDayStart = dayStart.add(1, "day");
   const totalMinutes = 24 * 60;
 
-  return items
+  const rawBars = items
     .filter((item) => item.status !== "deleted")
     .map((item) => {
       const start = dayjs(item.start_time);
@@ -70,9 +72,36 @@ function buildBars(
         startLabel: formatClock(item.start_time, timezone),
         endLabel: formatClock(item.end_time ?? item.start_time, timezone),
         type: item.type ?? "event",
-      } as GanttBar;
+        startMinutes,
+        endMinutes: startMinutes + durationMinutes,
+      };
     })
-    .filter((item): item is GanttBar => item !== null);
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes);
+
+  // Poker card lane assignment for overlapping bars
+  const laneEnds: number[] = [];
+  const bars: GanttBar[] = [];
+
+  for (const bar of rawBars) {
+    let laneIndex = 0;
+    while (laneIndex < laneEnds.length && laneEnds[laneIndex] > bar.startMinutes) {
+      laneIndex++;
+    }
+    if (laneIndex >= laneEnds.length) {
+      laneEnds.push(bar.endMinutes);
+    } else {
+      laneEnds[laneIndex] = bar.endMinutes;
+    }
+    bars.push({ ...bar, laneIndex, laneCount: 0 });
+  }
+
+  const laneCount = Math.max(1, laneEnds.length);
+  for (const bar of bars) {
+    bar.laneCount = laneCount;
+  }
+
+  return bars;
 }
 
 export default function GanttChart({
@@ -140,27 +169,33 @@ export default function GanttChart({
         {bars.length === 0 ? (
           <div className="gantt-chart__empty">暂无安排</div>
         ) : (
-          bars.map((bar) => (
-            <div
-              key={bar.id}
-              className="gantt-chart__track"
-              onClick={() => onEventClick?.(bar)}
-            >
+          bars.map((bar) => {
+            const laneOffset = bar.laneIndex * 12;
+            const widthDeduct = (bar.laneCount - 1) * 12;
+            return (
               <div
-                className="gantt-bar"
-                style={{
-                  left: `${bar.barLeft}%`,
-                  width: `${bar.barWidth}%`,
-                  background: barColors[bar.type] ?? barColors.event,
-                }}
+                key={bar.id}
+                className="gantt-chart__track"
+                onClick={() => onEventClick?.(bar)}
+                style={{ marginBottom: bar.laneIndex === 0 ? 0 : -36 }}
               >
-                <span className="gantt-bar__title">{bar.title}</span>
-                <span className="gantt-bar__time">
-                  {bar.startLabel}
-                </span>
+                <div
+                  className="gantt-bar"
+                  style={{
+                    left: `calc(${bar.barLeft}% + ${laneOffset}px)`,
+                    width: `calc(${bar.barWidth}% - ${widthDeduct}px)`,
+                    background: barColors[bar.type] ?? barColors.event,
+                    zIndex: bar.laneIndex + 1,
+                  }}
+                >
+                  <span className="gantt-bar__title">{bar.title}</span>
+                  <span className="gantt-bar__time">
+                    {bar.startLabel}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
