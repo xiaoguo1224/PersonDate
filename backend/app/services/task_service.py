@@ -107,7 +107,7 @@ class TaskService:
         stmt = select(ScheduledItem).where(
             ScheduledItem.user_id == task.user_id,
             ScheduledItem.source_task_id == task.id,
-            ScheduledItem.status != ScheduledItemStatus.DELETED.value,
+            ScheduledItem.status == ScheduledItemStatus.ACTIVE.value,
         )
         for item in self.db.scalars(stmt):
             item.status = ScheduledItemStatus.DELETED.value
