@@ -880,10 +880,8 @@ body {
   place-items: center;
   min-height: 220px;
   border-radius: var(--radius-lg);
-  border: 1px dashed rgba(148, 163, 184, 0.28);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.98)),
-    rgba(255, 255, 255, 0.94);
+  border: 1px dashed var(--glass-border);
+  background: var(--empty-bg);
   box-shadow: var(--shadow-soft);
 }
 
