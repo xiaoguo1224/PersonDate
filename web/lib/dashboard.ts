@@ -78,6 +78,9 @@ export type TaskCreatePayload = {
 
 export type TaskListResponse = {
   items: TaskItem[];
+  total: number;
+  page: number;
+  page_size: number;
 };
 
 // ── 安排 API ──────────────────────────────────────────────
@@ -287,6 +290,7 @@ export type ReminderItem = {
   retry_count?: number;
   max_retries?: number;
   error_message?: string | null;
+  fired_at?: string | null;
   conversation_id?: string | null;
 };
 
@@ -300,8 +304,8 @@ export async function loadReminders(status?: string, accessToken?: string): Prom
   return resp.items;
 }
 
-export async function cancelReminder(id: string): Promise<void> {
-  await requestJson(`/api/reminders/${id}/cancel`, { method: "POST" });
+export async function cancelReminder(id: string, accessToken?: string): Promise<void> {
+  await requestJson(`/api/reminders/${id}/cancel`, { method: "PATCH" }, accessToken);
 }
 
 // ── Agent 消息 ──────────────────────────────────────────
