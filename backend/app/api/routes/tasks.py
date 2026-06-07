@@ -9,7 +9,7 @@ from app.schemas.common import ApiResponse
 from app.schemas.scheduled_item import ScheduledItemDTO, ScheduledItemListResponse
 from app.schemas.task import TaskCreateRequest, TaskItemDTO, TaskListResponse, TaskUpdateRequest
 from app.services.scheduled_item_service import ScheduledItemService
-from app.services.task_service import TaskService
+from app.services.task_service import TaskService, _UNSET
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -119,7 +119,6 @@ def update_task(
     title_changed = "title" in payload_dict
 
     # 用 _UNSET 填充未传入的字段，使 update_task 能区分"未传入"和"传入 None"
-    _UNSET = object()
     task = service.update_task(
         task,
         title=payload_dict.get("title", _UNSET),
