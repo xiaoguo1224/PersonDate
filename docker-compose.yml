@@ -29,7 +29,7 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
-      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:3001
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
     depends_on:
       postgres:

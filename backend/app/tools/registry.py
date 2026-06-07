@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import TaskItem
 from app.models.enums import ReminderTargetType
+from app.services.channel_identity_service import ChannelIdentityService
 from app.services.conflict_service import ConflictService
 from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
@@ -121,13 +122,14 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         # 创建提醒
         remind_before = payload.remind_before_minutes or 0
         trigger_time = payload.start_time - timedelta(minutes=remind_before)
+        real_conversation_id = ChannelIdentityService(session).get_conversation_id(user_id)
         ReminderService(session).create_for_target(
             user_id=user_id,
             target_type=ReminderTargetType.SCHEDULED_ITEM.value,
             target_id=item.id,
             title=item.title,
             trigger_time=trigger_time,
-            conversation_id=conversation_id,
+            conversation_id=real_conversation_id,
         )
         # 检测冲突
         ConflictService(session).detect_item_conflicts(user_id, item)
@@ -405,13 +407,14 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
         payload = CreateReminderArgs.model_validate(args)
+        real_conversation_id = ChannelIdentityService(session).get_conversation_id(user_id)
         job = ReminderService(session).create_for_target(
             user_id=user_id,
             target_type=payload.target_type,
             target_id=payload.target_id,
             title=payload.title,
             trigger_time=payload.trigger_time,
-            conversation_id=payload.conversation_id or conversation_id,
+            conversation_id=payload.conversation_id or real_conversation_id,
         )
         return ToolResult(data={"id": job.id}, message="提醒已创建")
 
