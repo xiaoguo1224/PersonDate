@@ -2,29 +2,128 @@
 
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePerformance, type PerformanceLevel } from "./use-performance";
 
-interface PetalEffectProps {
+interface SakuraEffectProps {
   visible: boolean;
   onFadeOutComplete?: () => void;
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 8,
-  medium: 15,
-  high: 20,
+  low: 15,
+  medium: 20,
+  high: 25,
 };
 
-const PETAL_COLORS = ["#e84393", "#fd79a8", "#fab1a0"];
+const PETAL_COLORS = ["#e84393", "#fd79a8", "#fab1a0", "#ffc0cb"];
 
-export default function PetalEffect({
+function SakuraTree() {
+  const trunkColor = "#5D4037";
+  const crownColors = [
+    "rgba(255, 182, 193, 0.5)",
+    "rgba(255, 192, 203, 0.45)",
+    "rgba(253, 121, 168, 0.35)",
+    "rgba(232, 67, 147, 0.25)",
+    "rgba(255, 218, 225, 0.5)",
+  ];
+
+  const crownCircles = [
+    { left: -60, top: -180, size: 160 },
+    { left: 10, top: -220, size: 180 },
+    { left: 70, top: -180, size: 150 },
+    { left: -30, top: -140, size: 140 },
+    { left: 40, top: -150, size: 130 },
+    { left: -10, top: -200, size: 170 },
+    { left: 50, top: -210, size: 140 },
+    { left: -50, top: -160, size: 120 },
+  ];
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: "5%",
+        bottom: 0,
+        width: 200,
+        height: 350,
+        pointerEvents: "none",
+        zIndex: 0,
+      }}
+    >
+      {/* 树干 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 24,
+          height: 200,
+          backgroundColor: trunkColor,
+          borderRadius: "8px 8px 12px 12px",
+        }}
+      />
+      {/* 树枝 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 120,
+          left: "50%",
+          width: 60,
+          height: 8,
+          backgroundColor: trunkColor,
+          borderRadius: 4,
+          transform: "translateX(-60%) rotate(-25deg)",
+          transformOrigin: "right center",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 150,
+          left: "50%",
+          width: 50,
+          height: 7,
+          backgroundColor: trunkColor,
+          borderRadius: 4,
+          transform: "translateX(0%) rotate(20deg)",
+          transformOrigin: "left center",
+        }}
+      />
+      {/* 树冠 */}
+      {crownCircles.map((c, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: "50%",
+            marginLeft: c.left,
+            marginTop: c.top,
+            width: c.size,
+            height: c.size,
+            borderRadius: "50%",
+            backgroundColor: crownColors[i % crownColors.length],
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function SakuraEffect({
   visible,
   onFadeOutComplete,
-}: PetalEffectProps) {
+}: SakuraEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const performance = usePerformance();
-  const count = COUNT_MAP[performance];
+  const [mounted, setMounted] = useState(false);
+  const count = mounted ? COUNT_MAP[performance] : COUNT_MAP.medium;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useGSAP(
     () => {
@@ -35,26 +134,33 @@ export default function PetalEffect({
       if (!petals.length) return;
 
       const vh = window.innerHeight;
-      const vw = window.innerWidth;
+
+      // 树冠区域的起始 x 范围（屏幕左侧 5% + 树冠偏移）
+      const treeCenterVw = 15;
+      const treeSpreadVw = 8;
 
       petals.forEach((petal) => {
-        const size = gsap.utils.random(15, 30);
-        const startX = gsap.utils.random(5, 95);
+        const size = gsap.utils.random(8, 20);
         const color =
           PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)];
-        const duration = gsap.utils.random(10, 18);
-        const delay = gsap.utils.random(0, 12);
-        const swayAmount = gsap.utils.random(30, 80);
+        const startXVw = gsap.utils.random(
+          treeCenterVw - treeSpreadVw,
+          treeCenterVw + treeSpreadVw
+        );
+        const startYVh = gsap.utils.random(15, 40);
+        const duration = gsap.utils.random(8, 16);
+        const delay = gsap.utils.random(0, 10);
+        const swayRange = gsap.utils.random(40, 100);
 
         gsap.set(petal, {
-          x: `${startX}vw`,
-          y: -50,
+          x: `${startXVw}vw`,
+          y: `${startYVh}vh`,
           width: size,
-          height: size * 0.7,
-          opacity: gsap.utils.random(0.3, 0.7),
+          height: size * 0.65,
+          opacity: gsap.utils.random(0.5, 0.85),
           backgroundColor: color,
           borderRadius: "50% 0 50% 0",
-          transform: `rotate(${gsap.utils.random(0, 360)}deg)`,
+          rotation: gsap.utils.random(0, 360),
         });
 
         const tl = gsap.timeline({
@@ -63,43 +169,52 @@ export default function PetalEffect({
           defaults: { ease: "none" },
         });
 
-        const keyframes = [
-          { x: `${startX}vw`, y: -50 },
-          {
-            x: `${startX + (swayAmount / vw) * 100}vw`,
-            y: vh * 0.25,
-          },
-          { x: `${startX}vw`, y: vh * 0.5 },
-          {
-            x: `${startX - (swayAmount / vw) * 100}vw`,
-            y: vh * 0.75,
-          },
-          { x: `${startX}vw`, y: vh + 50 },
-        ];
-
         tl.to(petal, {
-          keyframes: keyframes.map((kf) => ({
-            ...kf,
-            duration: duration / 4,
-          })),
+          keyframes: [
+            {
+              x: `${startXVw}vw`,
+              y: `${startYVh}vh`,
+              duration: 0,
+            },
+            {
+              x: `+=${swayRange * 0.6}`,
+              y: `+=${vh * 0.2}`,
+              duration: duration * 0.25,
+            },
+            {
+              x: `-=${swayRange}`,
+              y: `+=${vh * 0.25}`,
+              duration: duration * 0.25,
+            },
+            {
+              x: `+=${swayRange * 0.8}`,
+              y: `+=${vh * 0.25}`,
+              duration: duration * 0.25,
+            },
+            {
+              x: `-=${swayRange * 0.4}`,
+              y: `${vh + 50}`,
+              duration: duration * 0.25,
+            },
+          ],
         });
 
         gsap.to(petal, {
-          rotation: "+=360",
+          rotation: `+=${gsap.utils.random(270, 540)}`,
           duration: gsap.utils.random(4, 8),
           repeat: -1,
           ease: "none",
           delay,
         });
 
-        if (performance === "high") {
+        if (performance !== "low") {
           gsap.to(petal, {
-            scale: gsap.utils.random(0.8, 1.2),
+            scale: gsap.utils.random(0.8, 1.15),
             duration: gsap.utils.random(3, 6),
             repeat: -1,
             yoyo: true,
             ease: "sine.inOut",
-            delay,
+            delay: gsap.utils.random(0, 3),
           });
         }
       });
@@ -107,7 +222,7 @@ export default function PetalEffect({
       gsap.fromTo(
         container,
         { opacity: 0 },
-        { opacity: 1, duration: 0.6, ease: "power2.out" }
+        { opacity: 1, duration: 1, ease: "power2.out" }
       );
     },
     { scope: containerRef }
@@ -149,6 +264,7 @@ export default function PetalEffect({
       }}
       aria-hidden="true"
     >
+      <SakuraTree />
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
