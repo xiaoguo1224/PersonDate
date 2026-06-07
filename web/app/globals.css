@@ -4458,6 +4458,22 @@ body {
   }
 }
 
+/* ── 背景粒子动画 ── */
+.dashboard-bg-animation {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; overflow: hidden;
+}
+.bg-particle {
+  position: absolute; border-radius: 50%;
+  background: var(--accent, #1677ff);
+  will-change: transform, opacity;
+}
+.bg-line {
+  position: absolute; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent, #1677ff), transparent);
+  will-change: transform;
+}
+
 /* ── 主题切换 ── */
 .dashboard-theme-switcher {
   display: flex;
