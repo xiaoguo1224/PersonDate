@@ -11,9 +11,9 @@ interface StarfieldEffectProps {
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 150,
-  medium: 250,
-  high: 400,
+  low: 300,
+  medium: 500,
+  high: 800,
 };
 
 const STAR_COLORS = [
@@ -161,12 +161,13 @@ export default function StarfieldEffect({
       if (!stars.length) return;
 
       stars.forEach((star) => {
-        const size = gsap.utils.random(0.5, 3);
+        const size = gsap.utils.random(0.5, 3.5);
         const x = gsap.utils.random(0, 100);
         const y = gsap.utils.random(0, 100);
         const colorFn =
           STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)];
-        const alpha = gsap.utils.random(0.3, 0.9);
+        const alpha = gsap.utils.random(0.4, 1);
+        const hasGlow = size > 2 && Math.random() > 0.7;
 
         gsap.set(star, {
           x: `${x}vw`,
@@ -175,16 +176,19 @@ export default function StarfieldEffect({
           height: size,
           borderRadius: "50%",
           backgroundColor: colorFn(alpha),
+          boxShadow: hasGlow
+            ? `0 0 ${size * 2}px ${colorFn(0.4)}, 0 0 ${size * 4}px ${colorFn(0.2)}`
+            : "none",
         });
 
-        const flickerSpeed = gsap.utils.random(0.4, 3.0);
+        const flickerSpeed = gsap.utils.random(0.3, 2.5);
         gsap.to(star, {
-          opacity: gsap.utils.random(0.1, 1),
+          opacity: gsap.utils.random(0.2, 1),
           duration: flickerSpeed,
           repeat: -1,
           yoyo: true,
           ease: "sine.inOut",
-          delay: gsap.utils.random(0, 3),
+          delay: gsap.utils.random(0, 4),
         });
       });
 

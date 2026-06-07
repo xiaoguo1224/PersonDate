@@ -127,7 +127,7 @@ const themeConfigs: Record<ThemeName, ThemeDef> = {
       "--font-weight-heading": "600",
       "--font-weight-body": "400",
       "--tag-style": "flat",
-      "--body-bg": "linear-gradient(180deg, #0a0a1a 0%, #0d0d2b 30%, #0a0a1a 60%, #050510 100%)",
+      "--body-bg": "linear-gradient(180deg, #020210 0%, #050515 30%, #030312 60%, #010108 100%)",
       "--shell-bg": "transparent",
       "--topbar-bg": "rgba(10, 10, 26, 0.75)",
       "--hero-bg": "rgba(15, 15, 30, 0.8)",
