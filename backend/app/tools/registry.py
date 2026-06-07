@@ -84,6 +84,14 @@ def _task_to_dict(task: TaskItem) -> dict[str, Any]:
         "deadline": task.deadline,
         "priority": task.priority,
         "status": task.status,
+        "schedule_type": task.schedule_type,
+        "start_date": task.start_date.isoformat() if task.start_date else None,
+        "end_date": task.end_date.isoformat() if task.end_date else None,
+        "duration_days": task.duration_days,
+        "time_type": task.time_type,
+        "scheduled_time": task.scheduled_time.isoformat() if task.scheduled_time else None,
+        "scheduled_end_time": task.scheduled_end_time.isoformat() if task.scheduled_end_time else None,
+        "completed_days": task.completed_days or 0,
     }
 
 
@@ -189,7 +197,18 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     def create_task(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
+        from datetime import time as dt_time
         payload = CreateTaskArgs.model_validate(args)
+
+        sched_time = None
+        sched_end_time = None
+        if payload.scheduled_time:
+            parts = payload.scheduled_time.split(":")
+            sched_time = dt_time(int(parts[0]), int(parts[1]))
+        if payload.scheduled_end_time:
+            parts = payload.scheduled_end_time.split(":")
+            sched_end_time = dt_time(int(parts[0]), int(parts[1]))
+
         task = TaskService(session).create_task(
             user_id=user_id,
             title=payload.title,
@@ -197,8 +216,24 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             estimated_minutes=payload.estimated_minutes,
             deadline=payload.deadline,
             priority=payload.priority,
+            schedule_type=payload.schedule_type,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            duration_days=payload.duration_days,
+            time_type=payload.time_type,
+            scheduled_time=sched_time,
+            scheduled_end_time=sched_end_time,
         )
-        return ToolResult(data=_task_to_dict(task), message="任务已创建")
+
+        # 自动生成 ScheduledItem
+        items = []
+        if task.schedule_type:
+            items = TaskService(session).sync_task_to_scheduled_items(task, user_id)
+        session.commit()
+        msg = "任务已创建"
+        if items:
+            msg = f"任务已创建，已生成 {len(items)} 个排期"
+        return ToolResult(data=_task_to_dict(task), message=msg)
 
     def query_tasks(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -212,11 +247,22 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     def update_task(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
+        from datetime import time as dt_time
         payload = UpdateTaskArgs.model_validate(args)
         service = TaskService(session)
         task = service.get_task(user_id, payload.task_id)
         if task is None:
             return ToolResult(success=False, error="任务不存在")
+
+        sched_time = None
+        sched_end_time = None
+        if payload.scheduled_time:
+            parts = payload.scheduled_time.split(":")
+            sched_time = dt_time(int(parts[0]), int(parts[1]))
+        if payload.scheduled_end_time:
+            parts = payload.scheduled_end_time.split(":")
+            sched_end_time = dt_time(int(parts[0]), int(parts[1]))
+
         task = service.update_task(
             task,
             title=payload.title,
@@ -224,8 +270,29 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             estimated_minutes=payload.estimated_minutes,
             deadline=payload.deadline,
             priority=payload.priority,
+            schedule_type=payload.schedule_type,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            duration_days=payload.duration_days,
+            time_type=payload.time_type,
+            scheduled_time=sched_time,
+            scheduled_end_time=sched_end_time,
         )
-        return ToolResult(data=_task_to_dict(task), message="任务已更新")
+
+        # 同步排期
+        items = []
+        if task.schedule_type:
+            items = service.sync_task_to_scheduled_items(task, user_id)
+        elif payload.title is not None:
+            si_service = ScheduledItemService(session)
+            for item in si_service.list_by_task_id(user_id, task.id):
+                si_service.update(item, title=task.title)
+
+        session.commit()
+        msg = "任务已更新"
+        if items:
+            msg = f"任务已更新，已同步 {len(items)} 个排期"
+        return ToolResult(data=_task_to_dict(task), message=msg)
 
     def complete_task(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session

@@ -1,10 +1,14 @@
+from datetime import UTC, date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import TaskItem, User
 from app.schemas.common import ApiResponse
+from app.schemas.scheduled_item import ScheduledItemDTO
 from app.schemas.task import TaskCreateRequest, TaskItemDTO, TaskListResponse, TaskUpdateRequest
+from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -19,6 +23,33 @@ def _to_item(task: TaskItem) -> TaskItemDTO:
         deadline=task.deadline,
         priority=task.priority,
         status=task.status,
+        schedule_type=task.schedule_type,
+        start_date=task.start_date,
+        end_date=task.end_date,
+        duration_days=task.duration_days,
+        time_type=task.time_type,
+        scheduled_time=task.scheduled_time,
+        scheduled_end_time=task.scheduled_end_time,
+        completed_days=task.completed_days or 0,
+    )
+
+
+def _si_to_dto(item) -> ScheduledItemDTO:
+    return ScheduledItemDTO(
+        id=item.id,
+        title=item.title,
+        description=item.description,
+        start_time=item.start_time,
+        end_time=item.end_time,
+        timezone=item.timezone,
+        location=item.location,
+        source=item.source,
+        source_task_id=item.source_task_id,
+        remind_before_minutes=item.remind_before_minutes,
+        status=item.status,
+        sort_order=item.sort_order,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
 
 
@@ -37,16 +68,31 @@ def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse[TaskItemDTO]:
-    task = TaskService(db).create_task(
+    service = TaskService(db)
+    task = service.create_task(
         user_id=current_user.id,
         title=payload.title,
         description=payload.description,
         estimated_minutes=payload.estimated_minutes,
         deadline=payload.deadline,
         priority=payload.priority,
+        schedule_type=payload.schedule_type,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        duration_days=payload.duration_days,
+        time_type=payload.time_type,
+        scheduled_time=payload.scheduled_time,
+        scheduled_end_time=payload.scheduled_end_time,
     )
+    # 如果任务有排期配置，自动生成 ScheduledItem
+    scheduled_items = []
+    if task.schedule_type:
+        scheduled_items = service.sync_task_to_scheduled_items(task, current_user.id)
     db.commit()
-    return ApiResponse(data=_to_item(task), message="任务已创建")
+    msg = "任务已创建"
+    if scheduled_items:
+        msg = f"任务已创建，已生成 {len(scheduled_items)} 个排期"
+    return ApiResponse(data=_to_item(task), message=msg)
 
 
 @router.patch("/{task_id}")
@@ -60,6 +106,18 @@ def update_task(
     task = service.get_task(current_user.id, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+    # 检测是否需要重新生成排期
+    schedule_changed = any(
+        getattr(payload, field) is not None
+        for field in (
+            "schedule_type", "start_date", "end_date",
+            "duration_days", "time_type", "scheduled_time",
+            "scheduled_end_time", "estimated_minutes",
+        )
+    )
+    title_changed = payload.title is not None
+
     task = service.update_task(
         task,
         title=payload.title,
@@ -67,7 +125,22 @@ def update_task(
         estimated_minutes=payload.estimated_minutes,
         deadline=payload.deadline,
         priority=payload.priority,
+        schedule_type=payload.schedule_type,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        duration_days=payload.duration_days,
+        time_type=payload.time_type,
+        scheduled_time=payload.scheduled_time,
+        scheduled_end_time=payload.scheduled_end_time,
     )
+
+    if schedule_changed and task.schedule_type:
+        service.sync_task_to_scheduled_items(task, current_user.id)
+    elif title_changed:
+        si_service = ScheduledItemService(db)
+        for item in si_service.list_by_task_id(current_user.id, task.id):
+            si_service.update(item, title=task.title)
+
     db.commit()
     return ApiResponse(data=_to_item(task), message="任务已更新")
 
@@ -100,3 +173,42 @@ def complete_task(
     service.complete_task(task)
     db.commit()
     return ApiResponse(data=_to_item(task), message="任务已完成")
+
+
+@router.get("/{task_id}/scheduled-items")
+def list_task_scheduled_items(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[ScheduledItemListResponse]:
+    service = TaskService(db)
+    task = service.get_task(current_user.id, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    items = service.list_scheduled_items_for_task(current_user.id, task_id)
+    return ApiResponse(data=ScheduledItemListResponse(
+        items=[_si_to_dto(item) for item in items]
+    ))
+
+
+@router.post("/{task_id}/scheduled-items/regenerate")
+def regenerate_task_scheduled_items(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[ScheduledItemListResponse]:
+    service = TaskService(db)
+    task = service.get_task(current_user.id, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    if not task.schedule_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="任务未配置日期范围，无法重新生成排期"
+        )
+    items = service.sync_task_to_scheduled_items(task, current_user.id)
+    db.commit()
+    return ApiResponse(
+        data=ScheduledItemListResponse(items=[_si_to_dto(item) for item in items]),
+        message=f"已重新生成 {len(items)} 个排期"
+    )

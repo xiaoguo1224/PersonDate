@@ -158,6 +158,16 @@ class ScheduledItemService:
         ).order_by(TaskItem.priority.desc(), TaskItem.deadline.asc().nulls_last())
         return list(self.db.scalars(stmt))
 
+    def list_by_task_id(
+        self, user_id: str, task_id: str
+    ) -> list[ScheduledItem]:
+        stmt = select(ScheduledItem).where(
+            ScheduledItem.user_id == user_id,
+            ScheduledItem.source_task_id == task_id,
+            ScheduledItem.status != ScheduledItemStatus.DELETED.value,
+        ).order_by(ScheduledItem.start_time)
+        return list(self.db.scalars(stmt))
+
     def generate_day_drafts(self, user_id: str, plan_date: date) -> list[ScheduledItem]:
         existing = self.list_by_date(user_id, plan_date)
         planned_task_ids = {

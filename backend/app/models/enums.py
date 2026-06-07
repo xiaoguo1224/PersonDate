@@ -57,6 +57,18 @@ class ScheduleSource(StrEnum):
     SYSTEM = "system"
 
 
+class TaskScheduleType(StrEnum):
+    DAILY = "daily"
+    WEEKDAYS = "weekdays"
+    DURATION_DAYS = "duration_days"
+    CUSTOM_RANGE = "custom_range"
+
+
+class TaskTimeType(StrEnum):
+    FIXED = "fixed"
+    FLEXIBLE = "flexible"
+
+
 class TaskPriority(StrEnum):
     LOW = "low"
     MEDIUM = "medium"

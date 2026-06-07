@@ -51,6 +51,14 @@ export type TaskItem = {
   deadline?: string | null;
   priority: string;
   status: string;
+  schedule_type?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  duration_days?: number | null;
+  time_type?: string | null;
+  scheduled_time?: string | null;
+  scheduled_end_time?: string | null;
+  completed_days?: number | null;
 };
 
 export type TaskCreatePayload = {
@@ -58,7 +66,14 @@ export type TaskCreatePayload = {
   description?: string | null;
   estimated_minutes?: number | null;
   deadline?: string | null;
-  priority: string;
+  priority?: string;
+  schedule_type?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  duration_days?: number | null;
+  time_type?: string | null;
+  scheduled_time?: string | null;
+  scheduled_end_time?: string | null;
 };
 
 export type TaskListResponse = {
@@ -197,6 +212,30 @@ export async function completeTask(id: string): Promise<TaskItem> {
   return requestJson<TaskItem>(`/api/tasks/${id}/complete`, {
     method: "PATCH",
   });
+}
+
+export async function loadTaskScheduledItems(
+  taskId: string,
+  accessToken?: string,
+): Promise<ScheduledItem[]> {
+  const resp = await requestJson<{ items: ScheduledItem[] }>(
+    `/api/tasks/${taskId}/scheduled-items`,
+    {},
+    accessToken,
+  );
+  return resp.items;
+}
+
+export async function regenerateTaskScheduledItems(
+  taskId: string,
+  accessToken?: string,
+): Promise<ScheduledItem[]> {
+  const resp = await requestJson<{ items: ScheduledItem[] }>(
+    `/api/tasks/${taskId}/scheduled-items/regenerate`,
+    { method: "POST" },
+    accessToken,
+  );
+  return resp.items;
 }
 
 // ── 冲突 API ─────────────────────────────────────────────

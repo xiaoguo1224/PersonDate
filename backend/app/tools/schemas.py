@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -52,6 +50,13 @@ class CreateTaskArgs(BaseModel):
     estimated_minutes: int | None = None
     deadline: datetime | None = None
     priority: str = Field(default="medium", max_length=32)
+    schedule_type: str | None = Field(default=None, max_length=32)
+    start_date: date | None = None
+    end_date: date | None = None
+    duration_days: int | None = Field(default=None, ge=1)
+    time_type: str | None = Field(default=None, max_length=32)
+    scheduled_time: str | None = None
+    scheduled_end_time: str | None = None
 
 
 class QueryTasksArgs(BaseModel):
@@ -65,6 +70,13 @@ class UpdateTaskArgs(BaseModel):
     estimated_minutes: int | None = None
     deadline: datetime | None = None
     priority: str | None = None
+    schedule_type: str | None = Field(default=None, max_length=32)
+    start_date: date | None = None
+    end_date: date | None = None
+    duration_days: int | None = Field(default=None, ge=1)
+    time_type: str | None = Field(default=None, max_length=32)
+    scheduled_time: str | None = None
+    scheduled_end_time: str | None = None
 
 
 class CompleteTaskArgs(BaseModel):
