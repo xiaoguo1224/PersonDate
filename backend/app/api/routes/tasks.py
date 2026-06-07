@@ -1,6 +1,6 @@
 from datetime import UTC, date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -57,9 +57,14 @@ def _si_to_dto(item) -> ScheduledItemDTO:
 def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
 ) -> ApiResponse[TaskListResponse]:
-    items = [_to_item(task) for task in TaskService(db).list_tasks(current_user.id)]
-    return ApiResponse(data=TaskListResponse(items=items))
+    service = TaskService(db)
+    tasks, total = service.list_tasks(current_user.id, status=status, page=page, page_size=page_size)
+    items = [_to_item(task) for task in tasks]
+    return ApiResponse(data=TaskListResponse(items=items, total=total, page=page, page_size=page_size))
 
 
 @router.post("")

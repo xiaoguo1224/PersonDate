@@ -53,3 +53,6 @@ class TaskItemDTO(BaseModel):
 
 class TaskListResponse(BaseModel):
     items: list[TaskItemDTO]
+    total: int
+    page: int
+    page_size: int

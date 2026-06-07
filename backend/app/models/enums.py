@@ -43,6 +43,7 @@ class ScheduledItemSource(StrEnum):
     MANUAL = "manual"
     AGENT = "agent"
     PLAN = "plan"
+    TASK = "task"
 
 
 class EventStatus(StrEnum):

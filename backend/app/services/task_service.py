@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ScheduleSource, TaskItem, TaskStatus
@@ -56,14 +56,28 @@ class TaskService:
         self.db.flush()
         return item
 
-    def list_tasks(self, user_id: str, status: str | None = None) -> list[TaskItem]:
-        stmt = select(TaskItem).where(
+    def list_tasks(
+        self,
+        user_id: str,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[TaskItem], int]:
+        base = select(TaskItem).where(
             TaskItem.user_id == user_id,
             TaskItem.status != TaskStatus.DELETED.value,
         )
         if status:
-            stmt = stmt.where(TaskItem.status == status)
-        return list(self.db.scalars(stmt.order_by(TaskItem.created_at.desc())))
+            base = base.where(TaskItem.status == status)
+        total = self.db.scalar(select(func.count()).select_from(base.subquery()))
+        items = list(
+            self.db.scalars(
+                base.order_by(TaskItem.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        return items, total
 
     def get_task(self, user_id: str, task_id: str) -> TaskItem | None:
         stmt = select(TaskItem).where(TaskItem.user_id == user_id, TaskItem.id == task_id)
