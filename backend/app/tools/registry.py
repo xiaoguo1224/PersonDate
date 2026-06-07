@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models import TaskItem
+from app.models.enums import ReminderTargetType
 from app.services.conflict_service import ConflictService
 from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
@@ -94,10 +96,8 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         payload = CreateScheduledItemArgs.model_validate(args)
         service = ScheduledItemService(session)
         end_time = payload.end_time or payload.start_time
-        # 如果没有 end_time，往后推 1 小时
-        if payload.end_time is None:
-            from datetime import timedelta
 
+        if payload.end_time is None:
             end_time = payload.start_time + timedelta(hours=1)
         item = service.create(
             user_id=user_id,
@@ -109,6 +109,19 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             remind_before_minutes=payload.remind_before_minutes,
             source="agent",
         )
+        # 创建提醒
+        remind_before = payload.remind_before_minutes or 0
+        trigger_time = payload.start_time - timedelta(minutes=remind_before)
+        ReminderService(session).create_for_target(
+            user_id=user_id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+            target_id=item.id,
+            title=item.title,
+            trigger_time=trigger_time,
+            conversation_id=conversation_id,
+        )
+        # 检测冲突
+        ConflictService(session).detect_item_conflicts(user_id, item)
         session.commit()
         return ToolResult(data=_item_to_dict(item), message="安排已创建")
 
@@ -117,11 +130,17 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     ) -> ToolResult:
         payload = QueryScheduledItemsArgs.model_validate(args)
         service = ScheduledItemService(session)
-        items = service.list_by_date_range(
-            user_id,
-            start_time=payload.start_date,
-            end_time=payload.end_date,
-        ) if payload.start_date and payload.end_date else []
+
+        if payload.keyword:
+            items = service.search(user_id, payload.keyword, payload.on_date)
+        elif payload.start_date and payload.end_date:
+            from datetime import datetime as dt
+
+            start = dt.combine(payload.start_date, dt.min.time())
+            end = dt.combine(payload.end_date, dt.max.time())
+            items = service.list_by_date_range(user_id, start_time=start, end_time=end)
+        else:
+            items = []
         return ToolResult(data=[_item_to_dict(item) for item in items], message="安排查询完成")
 
     def update_scheduled_item(
@@ -142,6 +161,18 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             location=payload.location,
             remind_before_minutes=payload.remind_before_minutes,
         )
+        # 更新提醒时间
+        if payload.start_time is not None:
+            remind_before = payload.remind_before_minutes if payload.remind_before_minutes is not None else (item.remind_before_minutes or 0)
+            ReminderService(session).cancel_by_target(user_id=user_id, target_id=item.id)
+            ReminderService(session).create_for_target(
+                user_id=user_id,
+                target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+                target_id=item.id,
+                title=item.title,
+                trigger_time=payload.start_time - timedelta(minutes=remind_before),
+                conversation_id=conversation_id,
+            )
         return ToolResult(data=_item_to_dict(item), message="安排已更新")
 
     def delete_scheduled_item(

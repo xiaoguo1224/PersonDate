@@ -4,12 +4,12 @@ from sqlalchemy import select
 
 from app.models import (
     AgentPendingState,
-    CalendarEvent,
-    DayPlan,
     PendingStateStatus,
     ReminderJob,
+    ScheduledItem,
     TaskItem,
 )
+from app.models.enums import ReminderTargetType
 from app.schemas.setup import OwnerInitRequest
 from app.services.setup_service import SetupService
 
@@ -33,11 +33,11 @@ def test_create_event_and_reminder(db_session, graph) -> None:
     state = graph.invoke(current_user=owner, message="明天下午 3 点开会", conversation_id="debug")
     db_session.commit()
 
-    event = db_session.scalar(select(CalendarEvent).where(CalendarEvent.user_id == owner.id))
+    event = db_session.scalar(select(ScheduledItem).where(ScheduledItem.user_id == owner.id))
     reminder = db_session.scalar(select(ReminderJob).where(ReminderJob.user_id == owner.id))
 
     assert state.success is True
-    assert state.intent == "create_event"
+    assert state.intent == "create_scheduled_item"
     assert "已为你创建安排" in (state.final_response or "")
     assert state.graph_trace[:4] == [
         "load_context",
@@ -58,7 +58,7 @@ def test_query_events_for_tomorrow(db_session, graph) -> None:
     state = graph.invoke(current_user=owner, message="明天有什么安排？", conversation_id="debug")
     db_session.commit()
 
-    assert state.intent == "query_events"
+    assert state.intent == "query_scheduled_items"
     assert "的安排" in (state.final_response or "")
     assert "会议" in (state.final_response or "")
 
@@ -80,25 +80,35 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
             AgentPendingState.status == PendingStateStatus.ACTIVE.value,
         )
     )
-    draft_plan = db_session.scalar(
-        select(DayPlan).where(DayPlan.user_id == owner.id, DayPlan.status == "draft")
+    draft_items = list(
+        db_session.scalars(
+            select(ScheduledItem).where(
+                ScheduledItem.user_id == owner.id,
+                ScheduledItem.status == "draft",
+            )
+        )
     )
 
     assert task is not None
     assert task.title == "写论文"
     assert state.pending_state is not None
     assert pending is not None
-    assert draft_plan is not None
+    assert len(draft_items) >= 1
 
     confirm_state = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
     db_session.commit()
-    confirmed_plan = db_session.scalar(
-        select(DayPlan).where(DayPlan.user_id == owner.id, DayPlan.status == "confirmed")
+    confirmed_items = list(
+        db_session.scalars(
+            select(ScheduledItem).where(
+                ScheduledItem.user_id == owner.id,
+                ScheduledItem.status == "active",
+            )
+        )
     )
 
     assert confirm_state.intent == "confirm_plan"
     assert "计划已确认" in (confirm_state.final_response or "")
-    assert confirmed_plan is not None
+    assert len(confirmed_items) >= 1
 
 
 def test_confirm_plan_replaces_existing_confirmed_plan(db_session, graph) -> None:
@@ -127,20 +137,19 @@ def test_confirm_plan_replaces_existing_confirmed_plan(db_session, graph) -> Non
     second_confirm = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
     db_session.commit()
 
-    plan_date = second_state.pending_state["date"]
-    plans = list(
+    items = list(
         db_session.scalars(
-            select(DayPlan).where(
-                DayPlan.user_id == owner.id,
-                DayPlan.plan_date == plan_date,
+            select(ScheduledItem).where(
+                ScheduledItem.user_id == owner.id,
             )
         )
     )
-    plan_statuses = sorted(plan.status for plan in plans)
+    statuses = sorted(i.status for i in items)
 
     assert second_confirm.success is True
     assert "计划已确认" in (second_confirm.final_response or "")
-    assert plan_statuses == ["confirmed", "deleted"]
+    assert "active" in statuses
+    assert "draft" not in statuses
 
 
 def test_update_and_delete_event(db_session, graph) -> None:
@@ -156,9 +165,9 @@ def test_update_and_delete_event(db_session, graph) -> None:
     db_session.commit()
 
     updated_event = db_session.scalar(
-        select(CalendarEvent).where(CalendarEvent.user_id == owner.id)
+        select(ScheduledItem).where(ScheduledItem.user_id == owner.id)
     )
-    assert update_state.intent == "update_event"
+    assert update_state.intent == "update_scheduled_item"
     assert "4 点" in (update_state.final_response or "")
     assert updated_event is not None
     assert updated_event.start_time.hour == 16
@@ -171,13 +180,13 @@ def test_update_and_delete_event(db_session, graph) -> None:
     db_session.commit()
 
     deleted_event = db_session.scalar(
-        select(CalendarEvent).where(CalendarEvent.user_id == owner.id)
+        select(ScheduledItem).where(ScheduledItem.user_id == owner.id)
     )
     canceled_reminder = db_session.scalar(
         select(ReminderJob).where(ReminderJob.user_id == owner.id)
     )
 
-    assert delete_state.intent == "delete_event"
+    assert delete_state.intent == "delete_scheduled_item"
     assert "已删除" in (delete_state.final_response or "")
     assert deleted_event is not None
     assert deleted_event.status == "deleted"
@@ -204,15 +213,15 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
     db_session.commit()
 
     shifted_event = db_session.scalar(
-        select(CalendarEvent)
-        .where(CalendarEvent.user_id == owner.id, CalendarEvent.status == "active")
-        .order_by(CalendarEvent.start_time.desc())
+        select(ScheduledItem)
+        .where(ScheduledItem.user_id == owner.id, ScheduledItem.status == "active")
+        .order_by(ScheduledItem.start_time.desc())
     )
     shifted_reminder = db_session.scalar(
         select(ReminderJob)
         .where(
             ReminderJob.user_id == owner.id,
-            ReminderJob.target_type == "event",
+            ReminderJob.target_type == ReminderTargetType.SCHEDULED_ITEM.value,
             ReminderJob.status == "pending",
         )
         .order_by(ReminderJob.created_at.desc())

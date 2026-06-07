@@ -591,7 +591,7 @@ class SchedulePlanningGraph:
         target_date = extracted.get("target_event_date")
         if target_date is None and isinstance(target_time, datetime):
             target_date = target_time.date()
-        candidates = self._find_event_candidates(
+        candidates = self._find_scheduled_item_candidates(
             state,
             keyword=keyword,
             target_date=target_date,
@@ -634,7 +634,7 @@ class SchedulePlanningGraph:
         update_result = self.tools.execute(
             "update_scheduled_item",
             {
-                "event_id": candidate["id"],
+                "item_id": candidate["id"],
                 "title": candidate["title"],
                 "start_time": new_start,
                 "end_time": new_end,
@@ -646,7 +646,7 @@ class SchedulePlanningGraph:
         state.tool_calls.append(
             {
                 "tool_name": "update_scheduled_item",
-                "args": {"event_id": candidate["id"], "start_time": new_start, "end_time": new_end},
+                "args": {"item_id": candidate["id"], "start_time": new_start, "end_time": new_end},
             }
         )
         state.tool_results.append(
@@ -667,7 +667,7 @@ class SchedulePlanningGraph:
         target_date = extracted.get("target_event_date")
         if target_date is None and isinstance(target_time, datetime):
             target_date = target_time.date()
-        candidates = self._find_event_candidates(
+        candidates = self._find_scheduled_item_candidates(
             state,
             keyword=keyword,
             target_date=target_date,
@@ -700,12 +700,12 @@ class SchedulePlanningGraph:
         candidate = candidates[0]
         delete_result = self.tools.execute(
             "delete_scheduled_item",
-            {"event_id": candidate["id"]},
+            {"item_id": candidate["id"]},
             user_id=state.user_id,
             conversation_id=state.conversation_id,
         )
         state.tool_calls.append(
-            {"tool_name": "delete_scheduled_item", "args": {"event_id": candidate["id"]}}
+            {"tool_name": "delete_scheduled_item", "args": {"item_id": candidate["id"]}}
         )
         state.tool_results.append(
             {"tool_name": "delete_scheduled_item", "result": delete_result.model_dump(mode="json")}
@@ -777,7 +777,7 @@ class SchedulePlanningGraph:
             result = self.tools.execute(
                 "update_scheduled_item",
                 {
-                    "event_id": event_id,
+                    "item_id": event_id,
                     "title": event_title,
                     "start_time": new_start,
                     "end_time": new_end,
@@ -791,7 +791,7 @@ class SchedulePlanningGraph:
                 {
                     "tool_name": "update_scheduled_item",
                     "args": {
-                        "event_id": event_id,
+                        "item_id": event_id,
                         "start_time": new_start,
                         "end_time": new_end,
                     },
@@ -817,7 +817,7 @@ class SchedulePlanningGraph:
         if choice == 3 and event_id:
             self.tools.execute(
                 "delete_scheduled_item",
-                {"event_id": event_id},
+                {"item_id": event_id},
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )
@@ -846,7 +846,7 @@ class SchedulePlanningGraph:
         if action == "delete_scheduled_item":
             self.tools.execute(
                 "delete_scheduled_item",
-                {"event_id": candidate["id"]},
+                {"item_id": candidate["id"]},
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )

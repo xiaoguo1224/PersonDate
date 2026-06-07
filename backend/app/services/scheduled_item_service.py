@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from datetime import UTC
+
 from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.scheduled_item import ScheduledItem
 
@@ -71,7 +73,7 @@ class ScheduledItemService:
         return list(self.db.scalars(stmt))
 
     def list_by_date(self, user_id: str, plan_date: date) -> list[ScheduledItem]:
-        start = datetime(plan_date.year, plan_date.month, plan_date.day)
+        start = datetime(plan_date.year, plan_date.month, plan_date.day, tzinfo=UTC)
         end = start.replace(hour=23, minute=59, second=59)
         return self.list_by_date_range(user_id, start, end)
 
@@ -170,7 +172,7 @@ class ScheduledItemService:
         if not pending_tasks:
             return []
 
-        base = datetime(plan_date.year, plan_date.month, plan_date.day, 9, 0)
+        base = datetime(plan_date.year, plan_date.month, plan_date.day, 9, 0, tzinfo=UTC)
         created: list[ScheduledItem] = []
         for task in pending_tasks:
             mins = task.estimated_minutes or 60

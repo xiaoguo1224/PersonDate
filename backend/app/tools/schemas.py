@@ -26,6 +26,8 @@ class CreateScheduledItemArgs(BaseModel):
 class QueryScheduledItemsArgs(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
+    keyword: str | None = None
+    on_date: date | None = None
     timezone: str = "Asia/Shanghai"
 
 
