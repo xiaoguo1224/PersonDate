@@ -224,7 +224,7 @@ export default function ConflictsPage() {
         </Card>
       ) : (
         <div className="dashboard-empty">
-          <Empty description={filterDate ? `${filterDate.format("YYYY-MM-DD")} 无冲突` : "当前没有冲突事项"} />
+          <Empty description="当前没有冲突事项" />
         </div>
       )}
     </Space>
