@@ -7,6 +7,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import {
+  App,
   Alert,
   Button,
   Card,
@@ -17,7 +18,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Row,
   Segmented,
   Space,
@@ -514,6 +514,7 @@ export default function CalendarPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone, loading: timezoneLoading } = useDashboardTimezone();
+  const { modal } = App.useApp();
   const [form] = Form.useForm<ScheduledItemFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -742,7 +743,7 @@ export default function CalendarPage() {
       if (!accessToken) {
         return;
       }
-      Modal.confirm({
+      modal.confirm({
         title: "删除安排",
         content: `确认删除「${event.title}」吗？`,
         okText: "删除",
@@ -802,7 +803,7 @@ export default function CalendarPage() {
     <ConfigProvider locale={zhCN}>
       {contextHolder}
       <Space direction="vertical" size={20} style={{ width: "100%" }}>
-        <Card className="section-card dashboard-hero" bordered={false}>
+        <Card className="section-card dashboard-hero" variant="borderless">
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <span className="hero-kicker">
               <CalendarOutlined />
@@ -824,7 +825,7 @@ export default function CalendarPage() {
 
         {eventsError ? <CalendarError message={eventsError} /> : null}
 
-        <Card className="section-card" bordered={false}>
+        <Card className="section-card" variant="borderless">
           <Row gutter={[16, 16]} align="middle">
             <Col xs={24} lg={10}>
               <Space wrap>
@@ -863,7 +864,7 @@ export default function CalendarPage() {
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={6}>
-            <Card className="section-card" bordered={false}>
+            <Card className="section-card" variant="borderless">
               <Text className="muted-text">当前视图范围</Text>
               <Title level={4} style={{ color: "var(--text-primary)", margin: "8px 0 0" }}>
                 {viewMode === "month"
@@ -875,7 +876,7 @@ export default function CalendarPage() {
             </Card>
           </Col>
           <Col xs={24} md={6}>
-            <Card className="section-card" bordered={false}>
+            <Card className="section-card" variant="borderless">
               <Text className="muted-text">选中日期</Text>
               <Title level={4} style={{ color: "var(--text-primary)", margin: "8px 0 0" }}>
                 {toDisplayDate(focusDate)}
@@ -883,7 +884,7 @@ export default function CalendarPage() {
             </Card>
           </Col>
           <Col xs={24} md={6}>
-            <Card className="section-card" bordered={false}>
+            <Card className="section-card" variant="borderless">
               <Text className="muted-text">当日事件</Text>
               <Title level={4} style={{ color: "var(--text-primary)", margin: "8px 0 0" }}>
                 {summary.selectedEvents} 条
@@ -891,7 +892,7 @@ export default function CalendarPage() {
             </Card>
           </Col>
           <Col xs={24} md={6}>
-            <Card className="section-card" bordered={false}>
+            <Card className="section-card" variant="borderless">
               <Text className="muted-text">当前安排</Text>
               <Title level={4} style={{ color: "var(--text-primary)", margin: "8px 0 0" }}>
                 {summary.totalEvents} 条
@@ -904,7 +905,7 @@ export default function CalendarPage() {
           <Col xs={24} xl={16}>
             <Card
               className="section-card"
-              bordered={false}
+              variant="borderless"
               title={viewMode === "month" ? "月历总览" : viewMode === "week" ? "周视图" : "日视图"}
             >
               {eventsLoading ? (
@@ -1138,7 +1139,7 @@ export default function CalendarPage() {
                             <div className="today-timeline__dot" />
                             <Card
                               className="today-timeline__card"
-                              bordered={false}
+                              variant="borderless"
                               hoverable
                               onClick={() => openEditModal(entry)}
                             >
@@ -1191,7 +1192,7 @@ export default function CalendarPage() {
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 <Card
                   className="section-card"
-                  bordered={false}
+                  variant="borderless"
                   title={`${toDisplayDate(focusDate)} 的安排`}
                   extra={
                     <Space wrap>
@@ -1209,7 +1210,7 @@ export default function CalendarPage() {
                   </Space>
                 </Card>
 
-                <Card className="section-card" bordered={false} title={`${toDisplayDate(focusDate)} 安排事项`}>
+                <Card className="section-card" variant="borderless" title={`${toDisplayDate(focusDate)} 安排事项`}>
                   {selectedDayEvents.length ? (
                     <div className="today-timeline-scroll" style={{ maxHeight: 320, overflowY: "auto" }}>
                       <div className="today-timeline">
@@ -1219,7 +1220,7 @@ export default function CalendarPage() {
                             <div className="today-timeline__dot" />
                             <Card
                               className="today-timeline__card"
-                              bordered={false}
+                              variant="borderless"
                               hoverable
                               onClick={() => openEditModal(entry)}
                             >
@@ -1244,7 +1245,7 @@ export default function CalendarPage() {
                   )}
                 </Card>
 
-                <Card className="section-card" bordered={false} title="冲突项管理">
+                <Card className="section-card" variant="borderless" title="冲突项管理">
                   {dayConflicts.length ? (
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       {dayConflicts.map((conflict) => (
@@ -1336,7 +1337,7 @@ export default function CalendarPage() {
               <Card
                 key={event.id}
                 size="small"
-                bordered={false}
+                variant="borderless"
                 style={{ background: "rgba(255,255,255,0.04)", cursor: "pointer" }}
                 onClick={() => openEditModal(event)}
               >

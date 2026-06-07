@@ -100,7 +100,7 @@ export default function SystemSettingsPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <SettingOutlined />
@@ -129,7 +129,7 @@ export default function SystemSettingsPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
-          <Card className="section-card" bordered={false}>
+          <Card className="section-card" variant="borderless">
             <Form<SystemSettingsForm>
               form={form}
               layout="vertical"
@@ -171,7 +171,7 @@ export default function SystemSettingsPage() {
           </Card>
         </Col>
         <Col xs={24} xl={10}>
-          <Card className="section-card" bordered={false}>
+          <Card className="section-card" variant="borderless">
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
               <Title level={4} style={{ color: "var(--text-primary)", margin: 0 }}>
                 当前配置

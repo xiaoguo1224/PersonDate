@@ -95,7 +95,7 @@ export default function AgentLogsPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <FileTextOutlined />
@@ -118,7 +118,7 @@ export default function AgentLogsPage() {
           <Spin size="large" tip="正在加载 Agent 日志..." />
         </div>
       ) : (
-        <Card className="section-card" bordered={false}>
+        <Card className="section-card" variant="borderless">
           <Table
             rowKey="id"
             columns={columns}
@@ -161,17 +161,17 @@ export default function AgentLogsPage() {
               <Descriptions.Item label="最终回复">{selectedItem.final_response || "-"}</Descriptions.Item>
             </Descriptions>
 
-            <Card size="small" title="Graph Trace" bordered={false}>
+            <Card size="small" title="Graph Trace" variant="borderless">
               <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                 {JSON.stringify(selectedItem.graph_trace ?? [], null, 2)}
               </pre>
             </Card>
-            <Card size="small" title="Tool Calls" bordered={false}>
+            <Card size="small" title="Tool Calls" variant="borderless">
               <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                 {JSON.stringify(selectedItem.tools_called ?? [], null, 2)}
               </pre>
             </Card>
-            <Card size="small" title="Tool Results" bordered={false}>
+            <Card size="small" title="Tool Results" variant="borderless">
               <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                 {JSON.stringify(selectedItem.tool_results ?? [], null, 2)}
               </pre>

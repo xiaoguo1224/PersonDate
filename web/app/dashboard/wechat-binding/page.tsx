@@ -206,7 +206,7 @@ export default function WechatBindingPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <QrcodeOutlined />
@@ -304,7 +304,7 @@ export default function WechatBindingPage() {
             <Card
               key={identity.id}
               className="section-card"
-              bordered={false}
+              variant="borderless"
               extra={
                 identity.status === "active" ? (
                   <Button danger size="small" icon={<StopOutlined />} onClick={() => void handleUnbind(identity.id)}>
@@ -334,16 +334,16 @@ export default function WechatBindingPage() {
           ))}
         </Space>
       ) : (
-        <Card className="section-card" bordered={false}>
+        <Card className="section-card" variant="borderless">
           <Empty description="当前没有微信绑定记录" />
         </Card>
       )}
 
-      <Card className="section-card" bordered={false} title="通道账号">
+      <Card className="section-card" variant="borderless" title="通道账号">
         {accounts.length ? (
           <Space direction="vertical" size={10} style={{ width: "100%" }}>
             {accounts.map((account) => (
-              <Card key={account.id} size="small" bordered={false} style={{ background: "var(--surface-secondary)" }}>
+              <Card key={account.id} size="small" variant="borderless" style={{ background: "var(--surface-secondary)" }}>
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
                   <Space wrap>
                     <Text strong>{account.account_id}</Text>

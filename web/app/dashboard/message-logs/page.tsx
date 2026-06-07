@@ -137,7 +137,7 @@ export default function MessageLogsPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <SwapOutlined />
@@ -153,7 +153,7 @@ export default function MessageLogsPage() {
         </Space>
       </Card>
 
-      <Card className="section-card" bordered={false}>
+      <Card className="section-card" variant="borderless">
         <Form form={form} layout="inline" onFinish={handleSearch}>
           <Form.Item name="conversation_id" label="会话 ID">
             <Input placeholder="输入 conversation_id" allowClear style={{ width: 240 }} />
@@ -186,7 +186,7 @@ export default function MessageLogsPage() {
           <Spin size="large" tip="正在加载消息日志..." />
         </div>
       ) : (
-        <Card className="section-card" bordered={false}>
+        <Card className="section-card" variant="borderless">
           <Table
             rowKey="id"
             dataSource={items}
@@ -225,7 +225,7 @@ export default function MessageLogsPage() {
               <Descriptions.Item label="错误信息">{selectedItem.error_message || "-"}</Descriptions.Item>
               <Descriptions.Item label="内容">{selectedItem.content || "-"}</Descriptions.Item>
             </Descriptions>
-            <Card size="small" title="原始数据" bordered={false}>
+            <Card size="small" title="原始数据" variant="borderless">
               <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                 {JSON.stringify(selectedItem.raw_payload ?? {}, null, 2)}
               </pre>

@@ -151,7 +151,7 @@ export default function InviteCodesPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <QrcodeOutlined />
@@ -174,7 +174,7 @@ export default function InviteCodesPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={8}>
-          <Card className="section-card" bordered={false} title="创建邀请码">
+          <Card className="section-card" variant="borderless" title="创建邀请码">
             <Form
               form={form}
               layout="vertical"
@@ -202,7 +202,7 @@ export default function InviteCodesPage() {
           </Card>
         </Col>
         <Col xs={24} xl={16}>
-          <Card className="section-card" bordered={false} title="邀请码列表">
+          <Card className="section-card" variant="borderless" title="邀请码列表">
             {loading ? (
               <InviteCodesLoading />
             ) : codes.length ? (
@@ -211,7 +211,7 @@ export default function InviteCodesPage() {
                   <Card
                     key={item.id}
                     size="small"
-                    bordered={false}
+                    variant="borderless"
                     style={{ background: "rgba(255,255,255,0.04)" }}
                     extra={
                       item.status === "active" ? (

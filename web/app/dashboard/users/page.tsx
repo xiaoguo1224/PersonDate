@@ -170,7 +170,7 @@ export default function UsersPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <TeamOutlined />
@@ -199,7 +199,7 @@ export default function UsersPage() {
             <Col xs={24} lg={12} key={user.id}>
               <Card
                 className="section-card"
-                bordered={false}
+                variant="borderless"
                 extra={
                   <Space wrap>
                     <Button size="small" onClick={() => void openBindings(user)} icon={<ClusterOutlined />}>
@@ -263,7 +263,7 @@ export default function UsersPage() {
         ) : bindings.length ? (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             {bindings.map((identity) => (
-              <Card key={identity.id} size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
+              <Card key={identity.id} size="small" variant="borderless" style={{ background: "rgba(255,255,255,0.04)" }}>
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
                   <Space wrap>
                     <Text strong>{identity.channel}</Text>

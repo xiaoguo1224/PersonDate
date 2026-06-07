@@ -99,7 +99,7 @@ export default function AccountPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <SettingOutlined />
@@ -115,7 +115,7 @@ export default function AccountPage() {
       {error ? <Alert type="error" showIcon message="加载设置失败" description={error} /> : null}
 
       <Row gutter={[16, 16]}>
-        <Card className="section-card" bordered={false} style={{ width: "100%" }}>
+        <Card className="section-card" variant="borderless" style={{ width: "100%" }}>
           <Form
             form={form}
             layout="vertical"
@@ -166,7 +166,7 @@ export default function AccountPage() {
         </Card>
       </Row>
 
-      <Card className="section-card" bordered={false}>
+      <Card className="section-card" variant="borderless">
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
           <Text strong>说明</Text>
           <Text className="muted-text">

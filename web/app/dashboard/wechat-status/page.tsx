@@ -83,7 +83,7 @@ export default function WechatStatusPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <ThunderboltOutlined />
@@ -109,7 +109,7 @@ export default function WechatStatusPage() {
           <Row gutter={[16, 16]}>
             {summaryCards.map((card) => (
               <Col key={card.label} xs={24} sm={12} xl={8}>
-                <Card className="section-card" bordered={false}>
+                <Card className="section-card" variant="borderless">
                   <Space direction="vertical" size={4}>
                     <Text className="muted-text">{card.label}</Text>
                     <Tag color={card.color}>{String(card.value)}</Tag>
@@ -119,7 +119,7 @@ export default function WechatStatusPage() {
             ))}
           </Row>
 
-          <Card className="section-card" bordered={false} title="最近入站消息">
+          <Card className="section-card" variant="borderless" title="最近入站消息">
             {data.recent_inbound_messages.length ? (
               <Timeline
                 items={data.recent_inbound_messages.map((item) => ({
@@ -141,7 +141,7 @@ export default function WechatStatusPage() {
             )}
           </Card>
 
-          <Card className="section-card" bordered={false} title="最近出站消息">
+          <Card className="section-card" variant="borderless" title="最近出站消息">
             {data.recent_outbound_messages.length ? (
               <Timeline
                 items={data.recent_outbound_messages.map((item) => ({

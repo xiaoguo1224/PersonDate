@@ -383,7 +383,7 @@ function TodayPageView({
         <div className="today-main">
 
           <div className="today-summary-grid">
-            <Card className="section-card today-summary-card" bordered={false}>
+            <Card className="section-card today-summary-card" variant="borderless">
               <div className="today-summary-card__icon">
                 <CalendarOutlined />
               </div>
@@ -395,7 +395,7 @@ function TodayPageView({
                 <Text className="muted-text">已排定的时间块</Text>
               </div>
             </Card>
-            <Card className="section-card today-summary-card" bordered={false}>
+            <Card className="section-card today-summary-card" variant="borderless">
               <div className="today-summary-card__icon">
                 <CheckCircleOutlined />
               </div>
@@ -407,7 +407,7 @@ function TodayPageView({
                 <Text className="muted-text">等待安排的任务</Text>
               </div>
             </Card>
-            <Card className="section-card today-summary-card" bordered={false}>
+            <Card className="section-card today-summary-card" variant="borderless">
               <div className="today-summary-card__icon">
                 <WarningOutlined />
               </div>
@@ -419,7 +419,7 @@ function TodayPageView({
                 <Text className="muted-text">需要处理的冲突</Text>
               </div>
             </Card>
-            <Card className="section-card today-summary-card" bordered={false}>
+            <Card className="section-card today-summary-card" variant="borderless">
               <div className="today-summary-card__icon">
                 <BellOutlined />
               </div>
@@ -433,7 +433,7 @@ function TodayPageView({
             </Card>
           </div>
 
-          <Card className="section-card today-panel" bordered={false}>
+          <Card className="section-card today-panel" variant="borderless">
             <div className="today-panel__header today-timeline__header">
               <div>
                 <Title level={4} className="today-panel__title">
@@ -457,7 +457,7 @@ function TodayPageView({
                     <div key={entry.id} className="today-timeline__item">
                       <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
                       <div className="today-timeline__dot" />
-                      <Card className="today-timeline__card" bordered={false}>
+                      <Card className="today-timeline__card" variant="borderless">
                         <div className="today-timeline__head">
                           <Text strong className="today-timeline__title">
                             {entry.title}
@@ -504,7 +504,7 @@ function TodayPageView({
 
         <div className="today-sidebar">
           <div className="today-sidebar__main">
-            <Card className="section-card today-panel today-assistant-card" bordered={false}>
+            <Card className="section-card today-panel today-assistant-card" variant="borderless">
               <div className="today-assistant__header">
                 <div>
                   <Title level={4} className="today-panel__title today-assistant__title">
@@ -590,7 +590,7 @@ function TodayPageView({
           </div>
 
           <div className="today-sidebar__foot">
-            <Card className="section-card today-panel" bordered={false}>
+            <Card className="section-card today-panel" variant="borderless">
               <SectionHeader title={`冲突事项 (${conflictRows.length})`} extra={<Button type="text" onClick={onNavigateConflicts}>全部</Button>} />
               {conflictRows.length ? (
                 <div className="today-conflict-list">
@@ -623,7 +623,7 @@ function TodayPageView({
               </Button>
             </Card>
 
-            <Card className="section-card today-panel" bordered={false}>
+            <Card className="section-card today-panel" variant="borderless">
               <SectionHeader title={`提醒任务 (${reminderRows.length})`} extra={<Button type="text" onClick={onNavigateReminders}>全部</Button>} />
               {reminderRows.length ? (
                 <div className="today-reminder-list">
