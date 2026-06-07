@@ -494,7 +494,7 @@ function buildWeekTimelineDays(weekDays: Dayjs[], events: ScheduledItem[], timeZ
 function CalendarLoading() {
   return (
     <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载日历数据..." />
+      <Spin size="large" />
     </div>
   );
 }
@@ -796,7 +796,6 @@ export default function CalendarPage() {
   const heroTags = [
     { color: "cyan", label: `${summary.totalEvents} 条安排` },
     { color: "orange", label: `${summary.visibleEvents} 条当前视图` },
-    { color: "gold", label: `${summary.totalEvents} 条安排` },
     { color: "green", label: "已加载" },
   ];
 
@@ -1269,7 +1268,7 @@ export default function CalendarPage() {
           title={editingEvent ? "编辑安排" : "新建安排"}
           open={modalOpen}
           onCancel={closeModal}
-          destroyOnClose
+          destroyOnHidden
           okText={editingEvent ? "保存修改" : "创建安排"}
           cancelText="取消"
           confirmLoading={submitting}
