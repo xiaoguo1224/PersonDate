@@ -75,7 +75,7 @@ export default function ConflictsPage() {
   const handleResolve = async (id: string) => {
     if (!accessToken) return;
     try {
-      await requestJson(`/api/conflicts/${id}/resolve`, { method: "POST" }, accessToken);
+      await requestJson(`/api/conflicts/${id}/resolve`, { method: "PATCH" }, accessToken);
       message.success("冲突已解决");
       fetchConflicts(page);
     } catch (err) {
