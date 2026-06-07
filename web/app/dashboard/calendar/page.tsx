@@ -96,6 +96,83 @@ function toDateKey(value: Dayjs) {
   return value.format("YYYY-MM-DD");
 }
 
+function buildDemoCalendarEvents(focusDate: Dayjs): ScheduledItem[] {
+  const base = focusDate.startOf("day");
+  const at = (hour: number, minute: number) => base.hour(hour).minute(minute).second(0).millisecond(0).toISOString();
+  return [
+    {
+      id: "demo-cal-1",
+      title: "团队站会",
+      description: "每日同步进展",
+      start_time: at(9, 0),
+      end_time: at(9, 30),
+      timezone: "Asia/Shanghai",
+      location: "会议室 A",
+      source: "manual",
+      source_task_id: null,
+      status: "active",
+      sort_order: 1,
+      remind_before_minutes: 10,
+    },
+    {
+      id: "demo-cal-2",
+      title: "需求评审会",
+      description: "评审 Q3 需求方案",
+      start_time: at(10, 0),
+      end_time: at(11, 30),
+      timezone: "Asia/Shanghai",
+      location: "会议室 B",
+      source: "manual",
+      source_task_id: null,
+      status: "active",
+      sort_order: 2,
+      remind_before_minutes: 15,
+    },
+    {
+      id: "demo-cal-3",
+      title: "午餐",
+      description: "休息",
+      start_time: at(12, 0),
+      end_time: at(13, 0),
+      timezone: "Asia/Shanghai",
+      location: "",
+      source: "manual",
+      source_task_id: null,
+      status: "active",
+      sort_order: 3,
+      remind_before_minutes: 0,
+    },
+    {
+      id: "demo-cal-4",
+      title: "代码审查",
+      description: "审查 PR #128",
+      start_time: at(14, 0),
+      end_time: at(15, 0),
+      timezone: "Asia/Shanghai",
+      location: "工位",
+      source: "manual",
+      source_task_id: null,
+      status: "active",
+      sort_order: 4,
+      remind_before_minutes: 5,
+    },
+    {
+      id: "demo-cal-5",
+      title: "写周报",
+      description: "总结本周工作",
+      start_time: at(16, 0),
+      end_time: at(17, 0),
+      timezone: "Asia/Shanghai",
+      location: "",
+      source: "manual",
+      source_task_id: null,
+      status: "active",
+      sort_order: 5,
+      remind_before_minutes: 10,
+    },
+  ];
+}
+
 function toDisplayDate(value: Dayjs) {
   return value.format("YYYY年M月D日");
 }
@@ -444,6 +521,7 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [dayViewMode, setDayViewMode] = useState<"timeline" | "gantt">("timeline");
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
+  const demoEvents = useMemo(() => buildDemoCalendarEvents(focusDate), [focusDate]);
   const [events, setEvents] = useState<ScheduledItem[]>([]);
   const [dayConflicts, setDayConflicts] = useState<ScheduledItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -459,6 +537,7 @@ export default function CalendarPage() {
 
   const fetchEvents = useCallback(async () => {
     if (!accessToken) {
+      setEvents(sortEvents(demoEvents));
       setEventsLoading(false);
       return;
     }
@@ -480,8 +559,8 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (!accessToken) {
+      setEvents(sortEvents(demoEvents));
       setEventsLoading(false);
-      setEventsError("请先登录后查看安排总览");
       return;
     }
     if (timezoneLoading) {
@@ -1165,7 +1244,20 @@ export default function CalendarPage() {
                   )}
                 </Card>
 
-                <Card className="section-card" bordered={false} title="安排项管理"><Empty description="已完成迁移" /></Card>
+                <Card className="section-card" bordered={false} title="冲突项管理">
+                  {dayConflicts.length ? (
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      {dayConflicts.map((conflict) => (
+                        <div key={conflict.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text ellipsis style={{ maxWidth: 180 }}>{conflict.title}</Text>
+                          <Tag color="red">冲突</Tag>
+                        </div>
+                      ))}
+                    </Space>
+                  ) : (
+                    <Text className="muted-text">当前选中日期无冲突</Text>
+                  )}
+                </Card>
               </Space>
             </div>
           </Col>
