@@ -272,6 +272,7 @@ export default function StarfieldEffect({
         zIndex: 0,
         opacity: 0,
         willChange: "transform, opacity",
+        background: "linear-gradient(180deg, #020210 0%, #050515 30%, #030312 60%, #010108 100%)",
       }}
       aria-hidden="true"
     >

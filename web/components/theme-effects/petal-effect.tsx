@@ -291,6 +291,7 @@ export default function SakuraEffect({
         zIndex: 0,
         opacity: 0,
         willChange: "transform, opacity",
+        background: "linear-gradient(180deg, #FFB7C5 0%, #FFC0CB 20%, #FFE4E9 50%, #fff0f5 100%)",
       }}
       aria-hidden="true"
     >
