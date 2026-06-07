@@ -14,7 +14,6 @@ import {
   Col,
   ConfigProvider,
   DatePicker,
-  Divider,
   Empty,
   Form,
   Input,
@@ -38,9 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { requestJson } from "@/lib/api";
 import {
-  completeScheduledItem,
   confirmDayDrafts,
   createScheduledItem,
   deleteScheduledItem,
@@ -96,8 +93,6 @@ type WeekTimelineDay = {
   dayKey: string;
   segments: WeekTimelineEventSegment[];
 };
-
-type DayTimelineEntry = ScheduledItem;
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 const WEEK_TIMELINE_HOUR_HEIGHT = 64;
@@ -199,16 +194,6 @@ function getEventColor(status: string) {
     return "green";
   }
   return "cyan";
-}
-
-function getPlanColor(status: string) {
-  if (status === "confirmed") {
-    return "green";
-  }
-  if (status === "draft") {
-    return "gold";
-  }
-  return "blue";
 }
 
 function getEventDotColor(status: string) {
@@ -340,7 +325,6 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<ScheduledItem[]>([]);
-  const [dayPlan, setDayPlan] = useState<ScheduledItem | null>(null);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);

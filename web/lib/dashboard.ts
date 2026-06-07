@@ -251,62 +251,6 @@ export async function cancelReminder(id: string): Promise<void> {
   await requestJson(`/api/reminders/${id}/cancel`, { method: "POST" });
 }
 
-// ── 历史遗留（即将废弃） ───────────────────────────────────
-
-export async function loadCalendarEvents(
-  start: string,
-  end: string
-): Promise<ScheduledItem[]> {
-  return loadScheduledItems({ start_time: start, end_time: end });
-}
-
-export async function loadDayPlan(
-  _date: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  return null;
-}
-
-export async function generateDayPlan(
-  _date: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  return null;
-}
-
-export async function confirmDayPlan(_id: string): Promise<void> {}
-
-export async function createPlanItem(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _data: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  return null;
-}
-
-export async function updatePlanItem(
-  _id: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _data: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  return null;
-}
-
-export async function completePlanItem(_id: string): Promise<void> {}
-
-export async function deletePlanItem(_id: string): Promise<void> {}
-
-export async function createCalendarEvent(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _data: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  return null;
-}
-
-export async function deleteCalendarEvent(_id: string): Promise<void> {}
-
 // ── Agent 消息 ──────────────────────────────────────────
 
 export type AgentMessageResponse = {
