@@ -1209,9 +1209,9 @@ export default function CalendarPage() {
                   </Space>
                 </Card>
 
-                <Card className="section-card" bordered={false} title={`${toDisplayDate(focusDate)} 安排事项`} style={{ overflow: "hidden" }}>
+                <Card className="section-card" bordered={false} title={`${toDisplayDate(focusDate)} 安排事项`}>
                   {selectedDayEvents.length ? (
-                    <div className="today-timeline-scroll" style={{ maxHeight: 320 }}>
+                    <div className="today-timeline-scroll" style={{ maxHeight: 320, overflowY: "auto" }}>
                       <div className="today-timeline">
                         {selectedDayEvents.map((entry) => (
                           <div key={entry.id} className="today-timeline__item">
