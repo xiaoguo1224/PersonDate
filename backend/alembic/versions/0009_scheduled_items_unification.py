@@ -8,9 +8,10 @@ Create Date: 2026-06-06
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0009_scheduled_items_unification"

@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
 from app.core.config import get_settings
-from app.schemas.wechat import WechatInboundRequest, WechatInboundResponse
 from app.models import ChannelIdentity, WechatAccount
+from app.schemas.wechat import WechatInboundRequest, WechatInboundResponse
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.user_service import UserService
 from app.services.wechat_channel_service import WechatChannelService

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, PropertyMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,7 +9,6 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.models import ChannelIdentity, ReminderJob, ReminderStatus
 from app.workers.reminder_worker import ReminderWorker
-from wechat_channel.ilink_client import ILinkClient
 
 
 class FakeIlinkClient:

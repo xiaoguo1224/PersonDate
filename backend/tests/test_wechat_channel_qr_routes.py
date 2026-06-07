@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +10,6 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.models import WechatAccount, WechatLoginSession
-from app.services.wechat_channel_service import WechatChannelService
 
 
 def _build_channel_client():
@@ -173,7 +170,6 @@ class TestLoginAutoConfirm:
 
     def test_poll_triggers_auto_confirm_on_confirmed(self, monkeypatch):
         """轮询 GET /me/wechat-login-sessions/{id} 时，iLink 返回 confirmed 则自动确认。"""
-        from app.api.routes import wechat as wechat_routes
 
         # Mock channel client
         class FakeChannelClient:
@@ -193,14 +189,13 @@ class TestLoginAutoConfirm:
         )
 
         # Build app
-        from app.api.deps import get_db, get_current_user
+        from app.api.deps import get_db
+        from app.core.config import get_settings
         from app.main import create_app
-        from app.models.user import User
         from app.schemas.auth import LoginRequest
+        from app.schemas.setup import OwnerInitRequest
         from app.services.auth_service import AuthService
         from app.services.setup_service import SetupService
-        from app.schemas.setup import OwnerInitRequest
-        from app.core.config import get_settings
 
         engine = create_engine(
             "sqlite+pysqlite:///:memory:",
@@ -223,11 +218,11 @@ class TestLoginAutoConfirm:
         # Seed owner + member
         settings = get_settings()
         setup = SetupService(session)
-        owner = setup.create_owner(OwnerInitRequest(
+        setup.create_owner(OwnerInitRequest(
             display_name="主用户", email="owner@example.com",
         ))
         from app.services.user_service import UserService
-        member = UserService(session).create_user(
+        UserService(session).create_user(
             username="member1", password="member123", role="member",
         )
         session.commit()
@@ -287,9 +282,7 @@ class TestLoginAutoConfirm:
 
     def test_poll_marks_expired_on_ilink_expired(self, monkeypatch):
         """轮询时 iLink 返回 expired，session 被标记为 expired。"""
-        from app.api.routes import wechat as wechat_routes
 
-        confirm_count = 0
 
         class FakeChannelClient:
             def get_channel_qr_code(self):
@@ -303,12 +296,12 @@ class TestLoginAutoConfirm:
         )
 
         from app.api.deps import get_db
-        from app.main import create_app
         from app.core.config import get_settings
-        from app.schemas.setup import OwnerInitRequest
-        from app.services.setup_service import SetupService
+        from app.main import create_app
         from app.schemas.auth import LoginRequest
+        from app.schemas.setup import OwnerInitRequest
         from app.services.auth_service import AuthService
+        from app.services.setup_service import SetupService
 
         engine = create_engine(
             "sqlite+pysqlite:///:memory:",

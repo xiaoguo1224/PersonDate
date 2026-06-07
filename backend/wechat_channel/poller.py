@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 import secrets
 import threading
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from app.models import WechatChannelInboundMessage
 from wechat_channel.ilink_client import ILinkClient, ILinkSessionExpired

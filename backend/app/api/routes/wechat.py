@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import SchedulePlanningGraph
 from app.api.deps import get_current_user, get_db, require_owner
+from app.core.wechat_channel import build_wechat_channel_client
 from app.models import (
     ChannelIdentity,
     ChannelMessageLog,
@@ -34,7 +35,6 @@ from app.schemas.wechat import (
     WechatSendTextResponse,
     WechatStatusResponse,
 )
-from app.core.wechat_channel import build_wechat_channel_client
 from app.services.wechat_channel_adapter import WechatChannelAdapter
 from app.services.wechat_channel_service import WechatChannelService
 

@@ -7,8 +7,9 @@ Create Date: 2026-06-05 00:00:00.000000
 """
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0002_enrich_wechat_message_logs"

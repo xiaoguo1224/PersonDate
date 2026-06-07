@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -25,8 +24,8 @@ from app.schemas.wechat_channel import (
     WechatSendTypingRequest,
     WechatSendTypingResponse,
 )
-from wechat_channel.ilink_client import ILinkError
 from app.services.wechat_channel_service import WechatChannelService
+from wechat_channel.ilink_client import ILinkError
 
 router = APIRouter(tags=["wechat-channel"])
 
@@ -264,6 +263,7 @@ def generate_qr_code(
     from io import BytesIO
 
     import qrcode
+
     from wechat_channel.ilink_client import ILinkClient, ILinkError
 
     try:

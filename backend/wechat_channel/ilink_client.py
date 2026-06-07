@@ -9,7 +9,6 @@ from typing import Any
 
 import httpx
 
-
 ILINK_API_BASE = "https://ilinkai.weixin.qq.com"
 
 

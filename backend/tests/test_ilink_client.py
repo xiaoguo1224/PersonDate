@@ -8,7 +8,7 @@ import pytest
 import respx
 from httpx import Response
 
-from wechat_channel.ilink_client import ILinkClient, ILinkError, QRResult, QRStatus, UpdatesResult
+from wechat_channel.ilink_client import ILinkClient, ILinkError, QRResult, UpdatesResult
 
 
 @pytest.fixture
