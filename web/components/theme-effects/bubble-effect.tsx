@@ -216,7 +216,6 @@ export default function CloudEffect({
         zIndex: 0,
         opacity: 0,
         willChange: "transform, opacity",
-        background: "linear-gradient(180deg, #87CEEB 0%, #B0E0E6 30%, #E0F0FF 60%, #f0f7ff 100%)",
       }}
       aria-hidden="true"
     >

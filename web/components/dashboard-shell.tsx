@@ -104,7 +104,7 @@ function ThemeSwitcher() {
   const { themeName, setThemeName } = useTheme();
   const themes: { name: ThemeName; color: string; label: string }[] = [
     { name: "blue-white", color: "#1677ff", label: "蓝白" },
-    { name: "black-gold", color: "#d4a853", label: "黑金" },
+    { name: "black-gold", color: "#191102", label: "黑金" },
     { name: "pink", color: "#e84393", label: "粉" },
   ];
   return (
