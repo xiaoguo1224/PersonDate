@@ -656,7 +656,7 @@ a {
   flex-direction: column;
   gap: 12px;
   padding-top: 4px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid var(--border-color);
 }
 
 .agent-chat-composer .ant-input-textarea {
@@ -2242,7 +2242,7 @@ h1, h2, h3, h4, h5, h6 {
   max-width: min(760px, calc(100% - 56px));
   padding: 12px 14px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--glass-border);
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
 }
 
@@ -3294,7 +3294,7 @@ body {
   min-height: 76px;
   padding: 10px 10px 8px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.96);
 }
 
@@ -3352,7 +3352,7 @@ body {
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(248, 250, 252, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--border-color);
 }
 
 .today-assistant {
@@ -3432,7 +3432,7 @@ body {
   max-width: min(760px, calc(100% - 56px));
   padding: 12px 14px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--glass-border);
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
 }
 
@@ -3488,7 +3488,7 @@ body {
   flex-direction: column;
   gap: 12px;
   padding-top: 4px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid var(--border-color);
 }
 
 .agent-chat-composer .ant-input-textarea {
@@ -3722,7 +3722,7 @@ body {
 }
 
 .today-page--refined .today-fact + .today-fact {
-  border-left: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 1px solid var(--glass-border);
 }
 
 .today-page--refined .today-fact__label {
@@ -3774,7 +3774,7 @@ body {
   align-items: start;
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--border-color);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.92)),
     rgba(255, 255, 255, 0.92);
@@ -4057,7 +4057,7 @@ body {
 .today-page--refined .today-timeline__card {
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--border-color);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.94)),
     rgba(255, 255, 255, 0.92);
@@ -4423,7 +4423,7 @@ body {
   gap: 12px;
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--border-color);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.94)),
     rgba(255, 255, 255, 0.92);
@@ -4520,7 +4520,7 @@ body {
   min-height: 72px;
   padding: 10px 10px 8px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.96);
 }
 
