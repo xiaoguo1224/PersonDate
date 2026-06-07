@@ -11,84 +11,113 @@ interface SakuraEffectProps {
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 15,
-  medium: 20,
-  high: 25,
+  low: 25,
+  medium: 40,
+  high: 60,
 };
 
-const PETAL_COLORS = ["#e84393", "#fd79a8", "#fab1a0", "#ffc0cb"];
+const PETAL_COLORS = [
+  "#FFB7C5",
+  "#FFC0CB",
+  "#FF69B4",
+  "#FF1493",
+  "#FFD1DC",
+  "#fff0f5",
+];
 
 function SakuraTree() {
-  const trunkColor = "#5D4037";
-  const crownColors = [
-    "rgba(255, 182, 193, 0.5)",
-    "rgba(255, 192, 203, 0.45)",
-    "rgba(253, 121, 168, 0.35)",
-    "rgba(232, 67, 147, 0.25)",
-    "rgba(255, 218, 225, 0.5)",
-  ];
+  const trunkColor = "#4A3728";
+  const branchColor = "#5D4037";
 
   const crownCircles = [
-    { left: -60, top: -180, size: 160 },
-    { left: 10, top: -220, size: 180 },
-    { left: 70, top: -180, size: 150 },
-    { left: -30, top: -140, size: 140 },
-    { left: 40, top: -150, size: 130 },
-    { left: -10, top: -200, size: 170 },
-    { left: 50, top: -210, size: 140 },
-    { left: -50, top: -160, size: 120 },
+    { left: -120, top: -350, size: 250 },
+    { left: 0, top: -420, size: 280 },
+    { left: 120, top: -350, size: 240 },
+    { left: -80, top: -280, size: 220 },
+    { left: 60, top: -300, size: 200 },
+    { left: -40, top: -380, size: 260 },
+    { left: 80, top: -400, size: 230 },
+    { left: -100, top: -320, size: 210 },
+    { left: 40, top: -340, size: 190 },
+    { left: -60, top: -400, size: 240 },
+    { left: 100, top: -370, size: 220 },
+    { left: -20, top: -360, size: 250 },
+  ];
+
+  const crownColors = [
+    "rgba(255, 183, 197, 0.45)",
+    "rgba(255, 192, 203, 0.4)",
+    "rgba(255, 105, 180, 0.3)",
+    "rgba(255, 20, 147, 0.2)",
+    "rgba(255, 209, 220, 0.5)",
+    "rgba(255, 240, 245, 0.55)",
   ];
 
   return (
     <div
       style={{
         position: "fixed",
-        left: "5%",
+        left: "-2%",
         bottom: 0,
-        width: 200,
-        height: 350,
+        width: 500,
+        height: 600,
         pointerEvents: "none",
         zIndex: 0,
       }}
     >
-      {/* 树干 */}
+      {/* 主树干 */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
           left: "50%",
           transform: "translateX(-50%)",
-          width: 24,
-          height: 200,
+          width: 36,
+          height: 320,
           backgroundColor: trunkColor,
-          borderRadius: "8px 8px 12px 12px",
+          borderRadius: "12px 12px 16px 16px",
         }}
       />
-      {/* 树枝 */}
+      {/* 分叉枝干 1 */}
       <div
         style={{
           position: "absolute",
-          bottom: 120,
+          bottom: 200,
           left: "50%",
-          width: 60,
-          height: 8,
-          backgroundColor: trunkColor,
-          borderRadius: 4,
-          transform: "translateX(-60%) rotate(-25deg)",
+          width: 80,
+          height: 12,
+          backgroundColor: branchColor,
+          borderRadius: 6,
+          transform: "translateX(-70%) rotate(-30deg)",
           transformOrigin: "right center",
         }}
       />
+      {/* 分叉枝干 2 */}
       <div
         style={{
           position: "absolute",
-          bottom: 150,
+          bottom: 250,
           left: "50%",
-          width: 50,
-          height: 7,
-          backgroundColor: trunkColor,
-          borderRadius: 4,
-          transform: "translateX(0%) rotate(20deg)",
+          width: 65,
+          height: 10,
+          backgroundColor: branchColor,
+          borderRadius: 6,
+          transform: "translateX(0%) rotate(25deg)",
           transformOrigin: "left center",
+        }}
+      />
+      {/* 分叉枝干 3 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 170,
+          left: "50%",
+          width: 70,
+          height: 10,
+          backgroundColor: branchColor,
+          borderRadius: 6,
+          transform: "translateX(-30%) rotate(-15deg)",
+          transformOrigin: "right center",
         }}
       />
       {/* 树冠 */}
@@ -135,29 +164,29 @@ export default function SakuraEffect({
 
       const vh = window.innerHeight;
 
-      // 树冠区域的起始 x 范围（屏幕左侧 5% + 树冠偏移）
-      const treeCenterVw = 15;
-      const treeSpreadVw = 8;
+      // 树冠区域的起始 x 范围
+      const treeCenterVw = 12;
+      const treeSpreadVw = 10;
 
       petals.forEach((petal) => {
-        const size = gsap.utils.random(8, 20);
+        const size = gsap.utils.random(6, 15);
         const color =
           PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)];
         const startXVw = gsap.utils.random(
           treeCenterVw - treeSpreadVw,
           treeCenterVw + treeSpreadVw
         );
-        const startYVh = gsap.utils.random(15, 40);
-        const duration = gsap.utils.random(8, 16);
+        const startYVh = gsap.utils.random(10, 40);
+        const duration = gsap.utils.random(6, 14);
         const delay = gsap.utils.random(0, 10);
-        const swayRange = gsap.utils.random(40, 100);
+        const swayRange = gsap.utils.random(40, 120);
 
         gsap.set(petal, {
           x: `${startXVw}vw`,
           y: `${startYVh}vh`,
           width: size,
           height: size * 0.65,
-          opacity: gsap.utils.random(0.5, 0.85),
+          opacity: gsap.utils.random(0.5, 0.9),
           backgroundColor: color,
           borderRadius: "50% 0 50% 0",
           rotation: gsap.utils.random(0, 360),
@@ -200,17 +229,18 @@ export default function SakuraEffect({
         });
 
         gsap.to(petal, {
-          rotation: `+=${gsap.utils.random(270, 540)}`,
-          duration: gsap.utils.random(4, 8),
+          rotation: `+=${gsap.utils.random(270, 720)}`,
+          duration: gsap.utils.random(3, 8),
           repeat: -1,
           ease: "none",
           delay,
         });
 
-        if (performance !== "low") {
+        // high 性能时花瓣有呼吸效果
+        if (performance === "high") {
           gsap.to(petal, {
-            scale: gsap.utils.random(0.8, 1.15),
-            duration: gsap.utils.random(3, 6),
+            scale: gsap.utils.random(0.7, 1.2),
+            duration: gsap.utils.random(2, 5),
             repeat: -1,
             yoyo: true,
             ease: "sine.inOut",
