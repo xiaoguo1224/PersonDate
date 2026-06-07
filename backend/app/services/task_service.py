@@ -11,6 +11,9 @@ from app.models.enums import ScheduledItemStatus, ScheduledItemSource, TaskSched
 from app.models.scheduled_item import ScheduledItem
 
 
+_UNSET = object()
+
+
 class TaskService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -68,8 +71,9 @@ class TaskService:
 
     def update_task(self, task: TaskItem, **changes: object) -> TaskItem:
         for key, value in changes.items():
-            if value is not None:
-                setattr(task, key, value)
+            if value is _UNSET:
+                continue
+            setattr(task, key, value)
         return task
 
     def complete_task(self, task: TaskItem) -> TaskItem:
@@ -172,8 +176,8 @@ class TaskService:
                     status=ScheduledItemStatus.ACTIVE.value,
                 )
                 created.append(item)
-
-            elif task.time_type == TaskTimeType.FLEXIBLE:
+            else:
+                # time_type 为 flexible 或 None 时，自动排到空闲时段
                 slot = self._find_next_free_slot(user_id, d, mins, timezone)
                 if slot:
                     item = si_service.create(

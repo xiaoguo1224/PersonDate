@@ -23,6 +23,7 @@ from app.tools.schemas import (
     CreateScheduledItemArgs,
     CreateTaskArgs,
     DeleteScheduledItemArgs,
+    DeleteTaskArgs,
     DetectConflictsArgs,
     FindFreeSlotsArgs,
     PlanTasksIntoDayArgs,
@@ -248,20 +249,30 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
         from datetime import time as dt_time
+        from app.services.task_service import _UNSET
         payload = UpdateTaskArgs.model_validate(args)
         service = TaskService(session)
         task = service.get_task(user_id, payload.task_id)
         if task is None:
             return ToolResult(success=False, error="任务不存在")
 
-        sched_time = None
-        sched_end_time = None
+        sched_time = _UNSET
+        sched_end_time = _UNSET
         if payload.scheduled_time:
             parts = payload.scheduled_time.split(":")
             sched_time = dt_time(int(parts[0]), int(parts[1]))
         if payload.scheduled_end_time:
             parts = payload.scheduled_end_time.split(":")
             sched_end_time = dt_time(int(parts[0]), int(parts[1]))
+
+        SCHEDULE_FIELDS = {
+            "schedule_type", "start_date", "end_date",
+            "duration_days", "time_type", "scheduled_time",
+            "scheduled_end_time", "estimated_minutes",
+        }
+        schedule_changed = any(
+            getattr(payload, field) is not None for field in SCHEDULE_FIELDS
+        )
 
         task = service.update_task(
             task,
@@ -279,9 +290,9 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
             scheduled_end_time=sched_end_time,
         )
 
-        # 同步排期
+        # 同步排期：只在排期字段变更时触发
         items = []
-        if task.schedule_type:
+        if schedule_changed and task.schedule_type:
             items = service.sync_task_to_scheduled_items(task, user_id)
         elif payload.title is not None:
             si_service = ScheduledItemService(session)
@@ -303,7 +314,20 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         if task is None:
             return ToolResult(success=False, error="任务不存在")
         service.complete_task(task)
+        session.commit()
         return ToolResult(data=_task_to_dict(task), message="任务已完成")
+
+    def delete_task(
+        args: dict[str, Any], user_id: str, conversation_id: str, session: Session
+    ) -> ToolResult:
+        payload = DeleteTaskArgs.model_validate(args)
+        service = TaskService(session)
+        task = service.get_task(user_id, payload.task_id)
+        if task is None:
+            return ToolResult(success=False, error="任务不存在")
+        service.delete_task(task)
+        session.commit()
+        return ToolResult(data={"id": task.id}, message="任务已删除")
 
     def analyze_day(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
@@ -438,6 +462,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     registry.register(ToolSpec("query_tasks", QueryTasksArgs, query_tasks))
     registry.register(ToolSpec("update_task", UpdateTaskArgs, update_task))
     registry.register(ToolSpec("complete_task", CompleteTaskArgs, complete_task))
+    registry.register(ToolSpec("delete_task", DeleteTaskArgs, delete_task))
     registry.register(ToolSpec("analyze_day", AnalyzeDayArgs, analyze_day))
     registry.register(ToolSpec("find_free_slots", FindFreeSlotsArgs, find_free_slots))
     registry.register(ToolSpec("plan_tasks_into_day", PlanTasksIntoDayArgs, plan_tasks_into_day))

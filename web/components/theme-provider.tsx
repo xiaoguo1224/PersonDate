@@ -33,6 +33,7 @@ const themeConfigs: Record<ThemeName, ThemeDef> = {
     token: {
       colorPrimary: "#1677ff",
       borderRadius: 8,
+      fontFamily: 'var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", sans-serif',
     },
     cssVars: {
       "--bg-primary": "#ffffff",

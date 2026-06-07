@@ -6,15 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, loadTaskScheduledItems, type ScheduledItem, type TaskItem } from "@/lib/dashboard";
+import { formatDateTime, loadTaskScheduledItems, type ScheduledItem, type TaskItem, type TaskListResponse } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
-
-type TaskListResponse = {
-  items: TaskItem[];
-};
 
 type TaskStatus = "all" | "pending" | "completed";
 
@@ -487,9 +483,9 @@ export default function TasksPage() {
                       </>
                     )}
                     {tt === "flexible" && (
-                      <Form.Item name="estimated_minutes" label="预估时长（分钟）">
-                        <InputNumber min={1} max={1440} style={{ width: "100%" }} addonAfter="分钟" />
-                      </Form.Item>
+                      <Text className="muted-text" style={{ fontSize: 12 }}>
+                        弹性时间将根据上方的「预估时长」自动排到空闲时段
+                      </Text>
                     )}
                   </>
                 );

@@ -107,35 +107,43 @@ def update_task(
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
 
-    # 检测是否需要重新生成排期
-    schedule_changed = any(
-        getattr(payload, field) is not None
-        for field in (
-            "schedule_type", "start_date", "end_date",
-            "duration_days", "time_type", "scheduled_time",
-            "scheduled_end_time", "estimated_minutes",
-        )
+    # 排期相关字段：只要其中一个被显式传入（包括 null），就标记为变更
+    SCHEDULE_FIELDS = (
+        "schedule_type", "start_date", "end_date",
+        "duration_days", "time_type", "scheduled_time",
+        "scheduled_end_time", "estimated_minutes",
     )
-    title_changed = payload.title is not None
 
+    payload_dict = payload.model_dump(exclude_unset=True)
+    schedule_changed = any(field in payload_dict for field in SCHEDULE_FIELDS)
+    title_changed = "title" in payload_dict
+
+    # 用 _UNSET 填充未传入的字段，使 update_task 能区分"未传入"和"传入 None"
+    _UNSET = object()
     task = service.update_task(
         task,
-        title=payload.title,
-        description=payload.description,
-        estimated_minutes=payload.estimated_minutes,
-        deadline=payload.deadline,
-        priority=payload.priority,
-        schedule_type=payload.schedule_type,
-        start_date=payload.start_date,
-        end_date=payload.end_date,
-        duration_days=payload.duration_days,
-        time_type=payload.time_type,
-        scheduled_time=payload.scheduled_time,
-        scheduled_end_time=payload.scheduled_end_time,
+        title=payload_dict.get("title", _UNSET),
+        description=payload_dict.get("description", _UNSET),
+        estimated_minutes=payload_dict.get("estimated_minutes", _UNSET),
+        deadline=payload_dict.get("deadline", _UNSET),
+        priority=payload_dict.get("priority", _UNSET),
+        schedule_type=payload_dict.get("schedule_type", _UNSET),
+        start_date=payload_dict.get("start_date", _UNSET),
+        end_date=payload_dict.get("end_date", _UNSET),
+        duration_days=payload_dict.get("duration_days", _UNSET),
+        time_type=payload_dict.get("time_type", _UNSET),
+        scheduled_time=payload_dict.get("scheduled_time", _UNSET),
+        scheduled_end_time=payload_dict.get("scheduled_end_time", _UNSET),
     )
 
-    if schedule_changed and task.schedule_type:
-        service.sync_task_to_scheduled_items(task, current_user.id)
+    if schedule_changed:
+        if task.schedule_type:
+            service.sync_task_to_scheduled_items(task, current_user.id)
+        else:
+            # schedule_type 被清除，删除所有关联排期
+            si_service = ScheduledItemService(db)
+            for item in si_service.list_by_task_id(current_user.id, task.id):
+                si_service.soft_delete(item)
     elif title_changed:
         si_service = ScheduledItemService(db)
         for item in si_service.list_by_task_id(current_user.id, task.id):

@@ -83,6 +83,10 @@ class CompleteTaskArgs(BaseModel):
     task_id: str
 
 
+class DeleteTaskArgs(BaseModel):
+    task_id: str
+
+
 class AnalyzeDayArgs(BaseModel):
     plan_date: date
 

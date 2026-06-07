@@ -187,31 +187,32 @@ export async function loadTasks(status?: string, accessToken?: string): Promise<
   return resp.items;
 }
 
-export async function createTask(data: TaskCreatePayload): Promise<TaskItem> {
+export async function createTask(data: TaskCreatePayload, accessToken?: string): Promise<TaskItem> {
   return requestJson<TaskItem>("/api/tasks", {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, accessToken);
 }
 
 export async function updateTask(
   id: string,
-  data: Partial<TaskItem>
+  data: Partial<TaskItem>,
+  accessToken?: string,
 ): Promise<TaskItem> {
   return requestJson<TaskItem>(`/api/tasks/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
-  });
+  }, accessToken);
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  await requestJson(`/api/tasks/${id}`, { method: "DELETE" });
+export async function deleteTask(id: string, accessToken?: string): Promise<void> {
+  await requestJson(`/api/tasks/${id}`, { method: "DELETE" }, accessToken);
 }
 
-export async function completeTask(id: string): Promise<TaskItem> {
+export async function completeTask(id: string, accessToken?: string): Promise<TaskItem> {
   return requestJson<TaskItem>(`/api/tasks/${id}/complete`, {
     method: "PATCH",
-  });
+  }, accessToken);
 }
 
 export async function loadTaskScheduledItems(

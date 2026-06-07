@@ -2,6 +2,7 @@
 
 import {
   CalendarOutlined,
+  ExpandOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -174,6 +175,26 @@ function sortEvents<T extends SortableTimelineItem>(items: T[]) {
     }
     return left.title.localeCompare(right.title, "zh-CN");
   });
+}
+
+function isPastTime(value: string, referenceTime = Date.now()) {
+  return new Date(value).getTime() < referenceTime;
+}
+
+function getTimelineStatusLabel(
+  entry: { status?: string; start_time: string; end_time?: string | null },
+  referenceTime = Date.now(),
+) {
+  if (entry.status === "completed" || entry.status === "cancelled" || entry.status === "skipped") {
+    return entry.status === "completed" ? "已完成" : entry.status === "cancelled" ? "已取消" : "已跳过";
+  }
+  if (isPastTime(entry.end_time ?? entry.start_time, referenceTime)) {
+    return "已结束";
+  }
+  if (!isPastTime(entry.start_time, referenceTime)) {
+    return "待开始";
+  }
+  return "进行中";
 }
 
 function getEventDotColor(status: string) {
@@ -421,6 +442,7 @@ export default function CalendarPage() {
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [dayViewMode, setDayViewMode] = useState<"timeline" | "gantt">("timeline");
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<ScheduledItem[]>([]);
   const [dayConflicts, setDayConflicts] = useState<ScheduledItem[]>([]);
@@ -1016,22 +1038,69 @@ export default function CalendarPage() {
                   </Text>
                 </Space>
               ) : selectedDayTimelineEntries.length ? (
-                <GanttChart
-                  items={selectedDayTimelineEntries.map((e) => ({
-                    id: e.id,
-                    title: e.title,
-                    start_time: e.start_time,
-                    end_time: e.end_time,
-                    type: "event" as const,
-                  }))}
-                  baseDate={focusDate.format("YYYY-MM-DD")}
-                  timezone={timezone}
-                  maxHeight={520}
-                  onEventClick={(item) => {
-                    const event = selectedDayTimelineEntries.find((e) => e.id === item.id);
-                    if (event) openEditModal(event);
-                  }}
-                />
+                <div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                    <Segmented
+                      size="small"
+                      value={dayViewMode}
+                      onChange={(val) => setDayViewMode(val as "timeline" | "gantt")}
+                      options={[
+                        { label: "时间轴", value: "timeline" },
+                        { label: "甘特图", value: "gantt" },
+                      ]}
+                    />
+                  </div>
+                  {dayViewMode === "timeline" ? (
+                    <div className="today-timeline-scroll">
+                      <div className="today-timeline">
+                        {selectedDayTimelineEntries.map((entry) => (
+                          <div key={entry.id} className="today-timeline__item">
+                            <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
+                            <div className="today-timeline__dot" />
+                            <Card
+                              className="today-timeline__card"
+                              bordered={false}
+                              hoverable
+                              onClick={() => openEditModal(entry)}
+                            >
+                              <div className="today-timeline__head">
+                                <Text strong className="today-timeline__title">
+                                  {entry.title}
+                                </Text>
+                                <Tag color="blue">
+                                  安排 · {getTimelineStatusLabel(entry)}
+                                </Tag>
+                              </div>
+                              <Text className="today-timeline__meta">
+                                {formatRange(entry.start_time, entry.end_time, timezone)}
+                              </Text>
+                              {entry.location ? (
+                                <Text className="today-timeline__meta">{entry.location}</Text>
+                              ) : null}
+                            </Card>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <GanttChart
+                      items={selectedDayTimelineEntries.map((e) => ({
+                        id: e.id,
+                        title: e.title,
+                        start_time: e.start_time,
+                        end_time: e.end_time,
+                        type: "event" as const,
+                      }))}
+                      baseDate={focusDate.format("YYYY-MM-DD")}
+                      timezone={timezone}
+                      maxHeight={520}
+                      onEventClick={(item) => {
+                        const event = selectedDayTimelineEntries.find((e) => e.id === item.id);
+                        if (event) openEditModal(event);
+                      }}
+                    />
+                  )}
+                </div>
               ) : (
                 <EmptyPanel title="这一天还没有安排" />
               )}
@@ -1061,38 +1130,36 @@ export default function CalendarPage() {
                   </Space>
                 </Card>
 
-                <Card className="section-card" bordered={false} title="当日安排" style={{ overflow: "hidden" }}>
+                <Card className="section-card" bordered={false} title={`${toDisplayDate(focusDate)} 安排事项`} style={{ overflow: "hidden" }}>
                   {selectedDayEvents.length ? (
-                    <>
-                      <GanttChart
-                        items={selectedDayEvents.map((e) => ({
-                          id: e.id,
-                          title: e.title,
-                          start_time: e.start_time,
-                          end_time: e.end_time,
-                          type: "event" as const,
-                        }))}
-                        baseDate={focusDate.format("YYYY-MM-DD")}
-                        timezone={timezone}
-                        maxHeight={400}
-                        onEventClick={(item) => {
-                          const event = selectedDayEvents.find((e) => e.id === item.id);
-                          if (event) openEditModal(event);
-                        }}
-                      />
-                      <Space wrap style={{ marginTop: 12 }}>
-                        {selectedDayEvents.map((event) => (
-                          <Button
-                            key={event.id}
-                            size="small"
-                            style={{ marginBottom: 4 }}
-                            onClick={() => openEditModal(event)}
-                          >
-                            <Text ellipsis style={{ maxWidth: 120 }}>{event.title}</Text>
-                          </Button>
+                    <div className="today-timeline-scroll" style={{ maxHeight: 320 }}>
+                      <div className="today-timeline">
+                        {selectedDayEvents.map((entry) => (
+                          <div key={entry.id} className="today-timeline__item">
+                            <div className="today-timeline__time">{formatClock(entry.start_time, timezone)}</div>
+                            <div className="today-timeline__dot" />
+                            <Card
+                              className="today-timeline__card"
+                              bordered={false}
+                              hoverable
+                              onClick={() => openEditModal(entry)}
+                            >
+                              <div className="today-timeline__head">
+                                <Text strong className="today-timeline__title">
+                                  {entry.title}
+                                </Text>
+                                <Tag color="blue">
+                                  安排 · {getTimelineStatusLabel(entry)}
+                                </Tag>
+                              </div>
+                              <Text className="today-timeline__meta">
+                                {formatRange(entry.start_time, entry.end_time, timezone)}
+                              </Text>
+                            </Card>
+                          </div>
                         ))}
-                      </Space>
-                    </>
+                      </div>
+                    </div>
                   ) : (
                     <EmptyPanel title="选中日期暂无安排" />
                   )}
