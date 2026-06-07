@@ -46,9 +46,10 @@ def detect_conflicts(
     date: str | None = None,
 ) -> ApiResponse[ConflictListResponse]:
     service = ConflictService(db)
-    items = [_to_item(item) for item in service.detect_day_conflicts(current_user.id)]
+    detected = service.detect_day_conflicts(current_user.id)
     db.commit()
-    return ApiResponse(data=ConflictListResponse(items=items), message="已完成冲突检测")
+    items = [_to_item(item) for item in detected]
+    return ApiResponse(data=ConflictListResponse(items=items, total=len(items), page=1, page_size=len(items)), message="已完成冲突检测")
 
 
 @router.patch("/{conflict_id}/ignore")
