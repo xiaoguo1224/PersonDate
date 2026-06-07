@@ -83,33 +83,31 @@ export async function loadScheduledItems(
   if (params.date) query.set("date", params.date);
   if (params.keyword) query.set("keyword", params.keyword);
   if (params.status) query.set("status", params.status);
-  const resp = await requestJson<{ data: { items: ScheduledItem[] } }>(
+  const resp = await requestJson<{ items: ScheduledItem[] }>(
     `/api/scheduled-items?${query.toString()}`,
     {},
     accessToken,
   );
-  return resp.data.items;
+  return resp.items;
 }
 
 export async function createScheduledItem(
   data: ScheduledItemCreatePayload
 ): Promise<ScheduledItem> {
-  const resp = await requestJson<{ data: ScheduledItem }>("/api/scheduled-items", {
+  return requestJson<ScheduledItem>("/api/scheduled-items", {
     method: "POST",
     body: JSON.stringify(data),
   });
-  return resp.data;
 }
 
 export async function updateScheduledItem(
   id: string,
   data: ScheduledItemUpdatePayload
 ): Promise<ScheduledItem> {
-  const resp = await requestJson<{ data: ScheduledItem }>(
+  return requestJson<ScheduledItem>(
     `/api/scheduled-items/${id}`,
     { method: "PATCH", body: JSON.stringify(data) }
   );
-  return resp.data;
 }
 
 export async function deleteScheduledItem(id: string): Promise<void> {
@@ -117,22 +115,21 @@ export async function deleteScheduledItem(id: string): Promise<void> {
 }
 
 export async function completeScheduledItem(id: string): Promise<ScheduledItem> {
-  const resp = await requestJson<{ data: ScheduledItem }>(
+  return requestJson<ScheduledItem>(
     `/api/scheduled-items/${id}/complete`,
     { method: "PATCH" }
   );
-  return resp.data;
 }
 
 export async function generateDayDrafts(
   planDate: string,
   options?: { include_pending_tasks?: boolean; auto_detect_conflicts?: boolean }
 ): Promise<ScheduledItem[]> {
-  const resp = await requestJson<{ data: { items: ScheduledItem[] } }>(
+  const resp = await requestJson<{ items: ScheduledItem[] }>(
     `/api/scheduled-items/generate/${planDate}`,
     { method: "POST", body: JSON.stringify(options || {}) }
   );
-  return resp.data.items;
+  return resp.items;
 }
 
 export async function confirmDayDrafts(planDate: string): Promise<void> {
@@ -161,29 +158,27 @@ export function formatDateTime(value: string, timeZone?: string) {
 
 export async function loadTasks(status?: string): Promise<TaskItem[]> {
   const query = status ? `?status=${status}` : "";
-  const resp = await requestJson<{ data: { items: TaskItem[] } }>(
+  const resp = await requestJson<{ items: TaskItem[] }>(
     `/api/tasks${query}`
   );
-  return resp.data.items;
+  return resp.items;
 }
 
 export async function createTask(data: TaskCreatePayload): Promise<TaskItem> {
-  const resp = await requestJson<{ data: TaskItem }>("/api/tasks", {
+  return requestJson<TaskItem>("/api/tasks", {
     method: "POST",
     body: JSON.stringify(data),
   });
-  return resp.data;
 }
 
 export async function updateTask(
   id: string,
   data: Partial<TaskItem>
 ): Promise<TaskItem> {
-  const resp = await requestJson<{ data: TaskItem }>(`/api/tasks/${id}`, {
+  return requestJson<TaskItem>(`/api/tasks/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
-  return resp.data;
 }
 
 export async function deleteTask(id: string): Promise<void> {
@@ -191,10 +186,9 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 export async function completeTask(id: string): Promise<TaskItem> {
-  const resp = await requestJson<{ data: TaskItem }>(`/api/tasks/${id}/complete`, {
+  return requestJson<TaskItem>(`/api/tasks/${id}/complete`, {
     method: "PATCH",
   });
-  return resp.data;
 }
 
 // ── 冲突 API ─────────────────────────────────────────────
@@ -216,10 +210,10 @@ export async function loadConflicts(
   status?: string
 ): Promise<ConflictItem[]> {
   const query = status ? `?status=${status}` : "";
-  const resp = await requestJson<{ data: { items: ConflictItem[] } }>(
+  const resp = await requestJson<{ items: ConflictItem[] }>(
     `/api/conflicts${query}`
   );
-  return resp.data.items;
+  return resp.items;
 }
 
 export async function ignoreConflict(id: string): Promise<void> {
@@ -247,10 +241,10 @@ export type ReminderItem = {
 
 export async function loadReminders(status?: string): Promise<ReminderItem[]> {
   const query = status ? `?status=${status}` : "";
-  const resp = await requestJson<{ data: { items: ReminderItem[] } }>(
+  const resp = await requestJson<{ items: ReminderItem[] }>(
     `/api/reminders${query}`
   );
-  return resp.data.items;
+  return resp.items;
 }
 
 export async function cancelReminder(id: string): Promise<void> {
