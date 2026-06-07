@@ -96,6 +96,14 @@ class ReminderService:
         job.status = ReminderStatus.CANCELED.value
         return job
 
+    def reactivate_job(self, job: ReminderJob, new_trigger_time: datetime | None = None) -> ReminderJob:
+        job.status = ReminderStatus.PENDING.value
+        job.retry_count = 0
+        job.error_message = None
+        if new_trigger_time:
+            job.trigger_time = new_trigger_time
+        return job
+
     def fire_due_jobs(self, now: datetime | None = None) -> list[ReminderJob]:
         now = now or datetime.now(UTC)
         stmt = select(ReminderJob).where(

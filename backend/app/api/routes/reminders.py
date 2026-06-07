@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -6,6 +9,10 @@ from app.models import ReminderJob, User
 from app.schemas.common import ApiResponse
 from app.schemas.reminder import ReminderDTO, ReminderListResponse
 from app.services.reminder_service import ReminderService
+
+
+class ReactivateRequest(BaseModel):
+    trigger_time: datetime | None = None
 
 router = APIRouter(prefix="/reminders", tags=["reminders"])
 
@@ -53,3 +60,20 @@ def cancel_reminder(
     service.cancel_job(job)
     db.commit()
     return ApiResponse(data=_to_item(job), message="已取消提醒")
+
+
+@router.patch("/{reminder_id}/reactivate")
+def reactivate_reminder(
+    reminder_id: str,
+    payload: ReactivateRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[ReminderDTO]:
+    service = ReminderService(db)
+    job = service.get_job(current_user.id, reminder_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="提醒不存在")
+    new_trigger_time = payload.trigger_time if payload else None
+    service.reactivate_job(job, new_trigger_time)
+    db.commit()
+    return ApiResponse(data=_to_item(job), message="已重新激活提醒")

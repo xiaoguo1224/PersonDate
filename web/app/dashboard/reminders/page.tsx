@@ -121,6 +121,17 @@ export default function RemindersPage() {
     });
   };
 
+  const handleReactivate = async (reminder: ReminderItem) => {
+    if (!accessToken) return;
+    try {
+      await requestJson(`/api/reminders/${reminder.id}/reactivate`, { method: "PATCH" }, accessToken);
+      message.success("提醒已重新激活");
+      fetchReminders(page);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "操作失败");
+    }
+  };
+
   const filteredReminders = useMemo(() => {
     if (!filterDate) return reminders;
     const dateKey = filterDate.format("YYYY-MM-DD");
@@ -249,6 +260,15 @@ export default function RemindersPage() {
                         onClick={() => void handleCancel(reminder)}
                       >
                         取消提醒
+                      </Button>
+                    ) : null}
+                    {reminder.status === "canceled" ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => void handleReactivate(reminder)}
+                      >
+                        重新激活
                       </Button>
                     ) : null}
                   </Space>
