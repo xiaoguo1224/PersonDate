@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Modal, Pagination, Row, Space, Spin, Tag, Typography, message } from "antd";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Pagination, Row, Space, Spin, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -31,6 +31,7 @@ export default function RemindersPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const { modal, message } = App.useApp();
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +103,7 @@ export default function RemindersPage() {
 
   const handleCancel = async (reminder: ReminderItem) => {
     if (!accessToken) return;
-    Modal.confirm({
+    modal.confirm({
       title: "取消提醒",
       content: `确定要取消"${reminder.title}"的提醒吗？`,
       okText: "取消提醒",
@@ -138,7 +139,7 @@ export default function RemindersPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <span className="hero-kicker">
             <BellOutlined />
@@ -157,20 +158,22 @@ export default function RemindersPage() {
         </Space>
       </Card>
 
-      <Card className="section-card" bordered={false} title="系统默认设置">
+      <Card className="section-card" variant="borderless" title="系统默认设置">
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
           <Text className="muted-text">
             所有新建安排的默认提前提醒时间
           </Text>
           <Space>
-            <InputNumber
-              min={0}
-              max={120}
-              value={defaultRemindBefore}
-              onChange={(v) => setDefaultRemindBefore(v ?? 0)}
-              addonAfter="分钟"
-              style={{ width: 160 }}
-            />
+            <Space.Compact>
+              <InputNumber
+                min={0}
+                max={120}
+                value={defaultRemindBefore}
+                onChange={(v) => setDefaultRemindBefore(v ?? 0)}
+                style={{ width: 120 }}
+              />
+              <span style={{ padding: "0 8px", lineHeight: "32px" }}>分钟</span>
+            </Space.Compact>
             <Button
               type="primary"
               size="small"
@@ -183,7 +186,7 @@ export default function RemindersPage() {
         </Space>
       </Card>
 
-      <Card className="section-card" bordered={false}>
+      <Card className="section-card" variant="borderless">
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap>
             <DatePicker
@@ -214,7 +217,7 @@ export default function RemindersPage() {
         <Row gutter={[16, 16]}>
           {filteredReminders.map((reminder) => (
             <Col xs={24} lg={12} key={reminder.id}>
-              <Card className="section-card" bordered={false}>
+              <Card className="section-card" variant="borderless">
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   <Space wrap>
                     <Text strong>{reminder.title}</Text>
@@ -261,7 +264,7 @@ export default function RemindersPage() {
       )}
 
       {total > pageSize && (
-        <Card className="section-card" bordered={false}>
+        <Card className="section-card" variant="borderless">
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Pagination
               current={page}
