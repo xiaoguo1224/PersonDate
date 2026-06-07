@@ -211,12 +211,13 @@ class ConflictService:
         seen: set[tuple[str, str, tuple[str, str] | None]] = set()
         unique_conflicts: list[ScheduleConflict] = []
         for conflict in conflicts:
-            if conflict.status == ConflictStatus.OPEN.value and not self._has_active_related_items(
-                user_id,
-                conflict.related_item_ids,
-                now=now,
-            ):
-                continue
+            # 只对 open 状态的冲突检查关联项是否活跃
+            # 如果关联项已结束，自动标记为 resolved
+            if conflict.status == ConflictStatus.OPEN.value:
+                if not self._has_active_related_items(user_id, conflict.related_item_ids, now=now):
+                    conflict.status = ConflictStatus.RESOLVED.value
+                    conflict.resolved_at = now
+                    continue
             pair_key = self._pair_key(conflict.related_item_ids)
             key = (conflict.conflict_type, conflict.status, pair_key)
             if key in seen:
