@@ -1,12 +1,12 @@
 "use client";
 
-import { CheckCircleOutlined, ClockCircleOutlined, RocketOutlined } from "@ant-design/icons";
-import { Alert, Card, Empty, List, Space, Spin, Tag, Typography } from "antd";
+import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Empty, List, Modal, Segmented, Space, Spin, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, type TaskItem } from "@/lib/dashboard";
+import { formatDateTime, loadScheduledItems, type ScheduledItem, type TaskItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -14,6 +14,8 @@ const { Title, Paragraph, Text } = Typography;
 type TaskListResponse = {
   items: TaskItem[];
 };
+
+type TaskStatus = "all" | "pending" | "completed";
 
 function getPriorityColor(priority: string) {
   if (priority === "high") return "red";
@@ -28,26 +30,6 @@ function getStatusColor(status: string) {
   return "orange";
 }
 
-function TasksLoading() {
-  return (
-    <div className="dashboard-empty">
-      <Spin size="large" tip="正在加载待办..." />
-    </div>
-  );
-}
-
-function TasksError({ message }: Readonly<{ message: string }>) {
-  return <Alert type="error" showIcon message="加载待办失败" description={message} />;
-}
-
-function TaskEmpty() {
-  return (
-    <div className="dashboard-empty">
-      <Empty description="当前没有任务数据" />
-    </div>
-  );
-}
-
 export default function TasksPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
@@ -55,36 +37,82 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TaskStatus>("all");
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
+  const [scheduledSlots, setScheduledSlots] = useState<ScheduledItem[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsModalOpen, setSlotsModalOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchTasks = (status?: string) => {
     if (!accessToken) {
       setLoading(false);
       setError("请先登录后查看待办");
       return;
     }
-    let alive = true;
     setLoading(true);
     setError(null);
-    requestJson<TaskListResponse>("/api/tasks", {}, accessToken)
+    const query = status ? `?status=${status}` : "";
+    requestJson<TaskListResponse>(`/api/tasks${query}`, {}, accessToken)
       .then((result) => {
-        if (alive) {
-          setTasks(result.items);
-        }
+        setTasks(result.items);
       })
       .catch((caughtError: unknown) => {
-        if (alive) {
-          setError(caughtError instanceof Error ? caughtError.message : "未知错误");
-        }
+        setError(caughtError instanceof Error ? caughtError.message : "未知错误");
       })
       .finally(() => {
-        if (alive) {
-          setLoading(false);
-        }
+        setLoading(false);
       });
-    return () => {
-      alive = false;
-    };
-  }, [accessToken]);
+  };
+
+  useEffect(() => {
+    fetchTasks(filter === "all" ? undefined : filter);
+  }, [accessToken, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleComplete = async (taskId: string) => {
+    if (!accessToken) return;
+    try {
+      await requestJson(`/api/tasks/${taskId}/complete`, { method: "PATCH" }, accessToken);
+      message.success("任务已完成");
+      fetchTasks(filter === "all" ? undefined : filter);
+    } catch (caughtError: unknown) {
+      message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!accessToken) return;
+    Modal.confirm({
+      title: "确认删除",
+      content: "确定要删除该任务吗？",
+      okText: "删除",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await requestJson(`/api/tasks/${taskId}`, { method: "DELETE" }, accessToken);
+          message.success("任务已删除");
+          fetchTasks(filter === "all" ? undefined : filter);
+        } catch (caughtError: unknown) {
+          message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
+        }
+      },
+    });
+  };
+
+  const handleViewSchedule = async (task: TaskItem) => {
+    setSelectedTask(task);
+    setSlotsModalOpen(true);
+    setSlotsLoading(true);
+    try {
+      const items = await loadScheduledItems({ keyword: task.title }, accessToken);
+      const slots = items.filter((item) => item.source_task_id === task.id || item.title === task.title);
+      setScheduledSlots(slots);
+    } catch {
+      setScheduledSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
 
   const summary = useMemo(() => {
     const activeTasks = tasks.filter((task) => task.status !== "completed" && task.status !== "deleted");
@@ -98,6 +126,12 @@ export default function TasksPage() {
     };
   }, [tasks]);
 
+  const filterOptions = [
+    { label: "全部", value: "all" as TaskStatus },
+    { label: "待处理", value: "pending" as TaskStatus },
+    { label: "已完成", value: "completed" as TaskStatus },
+  ];
+
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" bordered={false}>
@@ -108,7 +142,7 @@ export default function TasksPage() {
           </span>
           <Title style={{ color: "var(--text-primary)", margin: 0 }}>待办总览</Title>
           <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            这里已经接入后端待办列表。后续可以在此基础上加入创建、编辑、完成和自动排程入口。
+            管理你的任务：查看、完成、删除，以及查看任务在日历中的排期。
           </Paragraph>
           <Space wrap>
             <Tag color="cyan">{summary.total} 个任务</Tag>
@@ -119,12 +153,22 @@ export default function TasksPage() {
         </Space>
       </Card>
 
-      {error ? <TasksError message={error} /> : null}
+      <Segmented<TaskStatus>
+        options={filterOptions}
+        value={filter}
+        onChange={(value) => setFilter(value)}
+      />
+
+      {error ? (
+        <Alert type="error" showIcon message="加载待办失败" description={error} />
+      ) : null}
 
       {loading ? (
-        <TasksLoading />
+        <div className="dashboard-empty">
+          <Spin size="large" tip="正在加载..." />
+        </div>
       ) : tasks.length ? (
-        <Card className="section-card" bordered={false} title="任务列表">
+        <Card className="section-card" bordered={false} title={filter === "completed" ? "已完成任务" : "任务列表"}>
           <List
             itemLayout="vertical"
             dataSource={tasks}
@@ -143,7 +187,36 @@ export default function TasksPage() {
                         <Tag icon={<ClockCircleOutlined />}>{task.estimated_minutes} 分钟</Tag>
                       ) : null}
                       {task.deadline ? <Tag color="cyan">截止 {formatDateTime(task.deadline, timezone)}</Tag> : null}
-                      {task.status !== "completed" ? <Tag icon={<CheckCircleOutlined />}>待完成</Tag> : null}
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<CalendarOutlined />}
+                        onClick={() => void handleViewSchedule(task)}
+                      >
+                        查看排期
+                      </Button>
+                    </Space>
+                    <Space>
+                      {task.status !== "completed" && task.status !== "deleted" ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<CheckCircleOutlined />}
+                          onClick={() => void handleComplete(task.id)}
+                        >
+                          完成
+                        </Button>
+                      ) : null}
+                      {task.status !== "deleted" ? (
+                        <Button
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => void handleDelete(task.id)}
+                        >
+                          删除
+                        </Button>
+                      ) : null}
                     </Space>
                   </Space>
                 </Card>
@@ -152,8 +225,41 @@ export default function TasksPage() {
           />
         </Card>
       ) : (
-        <TaskEmpty />
+        <div className="dashboard-empty">
+          <Empty description="当前没有任务数据" />
+        </div>
       )}
+
+      <Modal
+        title={selectedTask ? `排期 - ${selectedTask.title}` : "排期"}
+        open={slotsModalOpen}
+        onCancel={() => setSlotsModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        {slotsLoading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : scheduledSlots.length ? (
+          <List
+            dataSource={scheduledSlots}
+            renderItem={(slot) => (
+              <List.Item>
+                <Space>
+                  <CalendarOutlined />
+                  <Text>
+                    {formatDateTime(slot.start_time, timezone)}
+                    {slot.end_time ? ` - ${formatDateTime(slot.end_time, timezone)}` : ""}
+                  </Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="暂无该任务的排期" />
+        )}
+      </Modal>
     </Space>
   );
 }
