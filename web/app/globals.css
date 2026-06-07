@@ -3929,7 +3929,7 @@ body {
 
 /* ── 垂直时间轴（可滚动） ── */
 .today-page--refined .today-timeline-scroll {
-  max-height: 520px;
+  max-height: 380px;
   overflow-y: auto;
   margin-bottom: 4px;
 }
@@ -4158,6 +4158,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .today-page--refined .today-task-item,
