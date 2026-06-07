@@ -35,6 +35,9 @@ import dayjs, { type Dayjs } from "dayjs";
 import "dayjs/locale/zh-cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import {
@@ -223,6 +226,124 @@ function getWeekEventTheme(status: string) {
     accent: "#7dd3fc",
     background: "linear-gradient(180deg, rgba(219, 234, 254, 0.96), rgba(255, 255, 255, 0.98))",
   };
+}
+
+function WeekEventCard({
+  segment,
+  dayKey,
+  day,
+  theme,
+  openEditModal,
+  setFocusDate,
+}: {
+  segment: WeekTimelineEventSegment;
+  dayKey: string;
+  day: Dayjs;
+  theme: ReturnType<typeof getWeekEventTheme>;
+  openEditModal: (event: ScheduledItem) => void;
+  setFocusDate: (d: Dayjs) => void;
+}) {
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  useGSAP(() => {
+    if (!cardRef.current) return;
+    if (isHovered) {
+      gsap.to(cardRef.current, {
+        scale: 1.08,
+        y: -4,
+        zIndex: 100,
+        boxShadow: "0 20px 48px rgba(0,0,0,0.35)",
+        duration: 0.25,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+      if (contentRef.current) {
+        gsap.to(contentRef.current, {
+          maxHeight: 200,
+          opacity: 1,
+          duration: 0.2,
+          ease: "power1.out",
+        });
+      }
+    } else {
+      gsap.to(cardRef.current, {
+        scale: 1,
+        y: 0,
+        zIndex: 1,
+        boxShadow: "0 10px 26px rgba(0,0,0,0.2)",
+        duration: 0.3,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+      if (contentRef.current) {
+        gsap.to(contentRef.current, {
+          maxHeight: segment.height < 60 ? 0 : 20,
+          opacity: segment.height < 60 ? 0 : 1,
+          duration: 0.2,
+          ease: "power1.out",
+        });
+      }
+    }
+  }, { dependencies: [isHovered], scope: cardRef });
+
+  const clickHandler = useCallback((eventClick: React.MouseEvent) => {
+    eventClick.stopPropagation();
+    setFocusDate(day);
+    openEditModal(segment.event);
+  }, [day, openEditModal, segment.event, setFocusDate]);
+
+  return (
+    <button
+      ref={cardRef}
+      type="button"
+      className="calendar-week-event"
+      onClick={clickHandler}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        top: segment.top,
+        height: Math.max(segment.height, isHovered ? segment.height + 24 : segment.height),
+        left: `calc(${(segment.laneIndex / segment.laneCount) * 100}% + 4px)`,
+        width: `calc(${100 / segment.laneCount}% - 8px)`,
+        borderColor: theme.accent,
+        background: theme.background,
+        zIndex: isHovered ? 100 : 1,
+      }}
+    >
+      <span
+        className="calendar-week-event__accent"
+        style={{ background: theme.accent }}
+      />
+      <Space direction="vertical" size={2} style={{ width: "100%", overflow: "hidden" }}>
+        <Text strong ellipsis={!isHovered} className="calendar-week-event__title">
+          {segment.event.title}
+        </Text>
+        <Text className="calendar-week-event__time">
+          {segment.startLabel} - {segment.endLabel}
+        </Text>
+        <div ref={contentRef} style={{ maxHeight: segment.height < 60 ? 0 : 20, overflow: "hidden", opacity: segment.height < 60 ? 0 : 1 }}>
+          {segment.event.location ? (
+            <Text className="calendar-week-event__location" ellipsis={!isHovered}>
+              {segment.event.location}
+            </Text>
+          ) : null}
+          {segment.event.description ? (
+            <Text className="calendar-week-event__location" ellipsis={!isHovered}>
+              {segment.event.description}
+            </Text>
+          ) : null}
+        </div>
+      </Space>
+      {segment.laneCount > 1 && segment.laneIndex === segment.laneCount - 1 && (
+        <span
+          className="calendar-week-event__stack"
+          style={{ background: theme.accent }}
+        />
+      )}
+    </button>
+  );
 }
 
 function buildWeekTimelineDays(weekDays: Dayjs[], events: ScheduledItem[], timeZone: string): WeekTimelineDay[] {
@@ -890,47 +1011,17 @@ export default function CalendarPage() {
                             >
                               <div className="calendar-week-column__grid" />
                               <div className="calendar-week-column__events">
-                                {segments.map((segment) => {
-                                  const theme = getWeekEventTheme(segment.event.status);
-                                  return (
-                                    <button
-                                      key={`${segment.event.id}-${dayKey}-${segment.startLabel}`}
-                                      type="button"
-                                      className="calendar-week-event"
-                                      onClick={(eventClick) => {
-                                        eventClick.stopPropagation();
-                                        setFocusDate(day);
-                                        openEditModal(segment.event);
-                                      }}
-                                      style={{
-                                        top: segment.top,
-                                        height: segment.height,
-                                        left: `calc(${(segment.laneIndex / segment.laneCount) * 100}% + 4px)`,
-                                        width: `calc(${100 / segment.laneCount}% - 8px)`,
-                                        borderColor: theme.accent,
-                                        background: theme.background,
-                                      }}
-                                    >
-                                      <span
-                                        className="calendar-week-event__accent"
-                                        style={{ background: theme.accent }}
-                                      />
-                                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                                        <Text strong ellipsis className="calendar-week-event__title">
-                                          {segment.event.title}
-                                        </Text>
-                                        <Text className="calendar-week-event__time">
-                                          {segment.startLabel} - {segment.endLabel}
-                                        </Text>
-                                        {segment.event.location ? (
-                                          <Text className="calendar-week-event__location" ellipsis>
-                                            {segment.event.location}
-                                          </Text>
-                                        ) : null}
-                                      </Space>
-                                    </button>
-                                  );
-                                })}
+                                {segments.map((segment) => (
+                                  <WeekEventCard
+                                    key={`${segment.event.id}-${dayKey}-${segment.startLabel}`}
+                                    segment={segment}
+                                    dayKey={dayKey}
+                                    day={day}
+                                    theme={getWeekEventTheme(segment.event.status)}
+                                    openEditModal={openEditModal}
+                                    setFocusDate={setFocusDate}
+                                  />
+                                ))}
                               </div>
                             </div>
                           );
