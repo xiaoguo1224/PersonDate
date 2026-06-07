@@ -289,18 +289,18 @@ function getWeekEventTheme(status: string) {
   if (status === "completed") {
     return {
       accent: "#34d399",
-      background: "linear-gradient(180deg, rgba(220, 252, 231, 0.96), rgba(255, 255, 255, 0.98))",
+      background: "linear-gradient(180deg, rgba(220, 252, 231, 0.96), var(--card-inner-bg))",
     };
   }
   if (status === "deleted") {
     return {
       accent: "#94a3b8",
-      background: "linear-gradient(180deg, rgba(241, 245, 249, 0.96), rgba(255, 255, 255, 0.98))",
+      background: "linear-gradient(180deg, rgba(241, 245, 249, 0.96), var(--card-inner-bg))",
     };
   }
   return {
     accent: "#7dd3fc",
-    background: "linear-gradient(180deg, rgba(219, 234, 254, 0.96), rgba(255, 255, 255, 0.98))",
+    background: "linear-gradient(180deg, rgba(219, 234, 254, 0.96), var(--card-inner-bg))",
   };
 }
 
@@ -974,7 +974,7 @@ export default function CalendarPage() {
                                   ? "linear-gradient(135deg, rgba(191, 219, 254, 0.96), rgba(59, 130, 246, 0.85))"
                                   : isToday
                                     ? "rgba(254, 243, 199, 0.9)"
-                                    : "rgba(255, 255, 255, 0.92)",
+                                    : "var(--card-inner-bg)",
                                 color: isSelected ? "#06111f" : "var(--text-primary)",
                               }}
                             >
