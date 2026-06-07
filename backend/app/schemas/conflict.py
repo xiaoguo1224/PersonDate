@@ -18,3 +18,6 @@ class ConflictDTO(BaseModel):
 
 class ConflictListResponse(BaseModel):
     items: list[ConflictDTO]
+    total: int
+    page: int
+    page_size: int

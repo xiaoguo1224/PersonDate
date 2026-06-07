@@ -13,7 +13,12 @@ class ReminderDTO(BaseModel):
     status: str
     retry_count: int
     max_retries: int
+    error_message: str | None = None
+    fired_at: datetime | None = None
 
 
 class ReminderListResponse(BaseModel):
     items: list[ReminderDTO]
+    total: int
+    page: int
+    page_size: int

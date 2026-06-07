@@ -11,3 +11,12 @@ class ApiResponse(BaseModel, Generic[T]):
     success: bool = True
     data: T | None = None
     message: str | None = None
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[T]
+    total: int
+    page: int
+    page_size: int
