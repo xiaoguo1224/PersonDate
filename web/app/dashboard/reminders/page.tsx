@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Modal, Row, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Modal, Pagination, Row, Space, Spin, Tag, Typography, message } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -9,17 +9,21 @@ import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import { formatClock, formatDateTime, type ReminderItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
+import type { UserSettingsResponse } from "@/lib/types";
 
 const { Title, Paragraph, Text } = Typography;
 
 type ReminderListResponse = {
   items: ReminderItem[];
+  total: number;
+  page: number;
+  page_size: number;
 };
 
 function getStatusColor(status: string) {
   if (status === "fired") return "green";
   if (status === "failed") return "red";
-  if (status === "cancelled") return "default";
+  if (status === "canceled") return "default";
   return "orange";
 }
 
@@ -33,40 +37,50 @@ export default function RemindersPage() {
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
   const [savingDefault, setSavingDefault] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const fetchReminders = useCallback(() => {
+  const fetchReminders = useCallback((p?: number, ps?: number) => {
     if (!accessToken) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    requestJson<ReminderListResponse>("/api/reminders?status=pending", {}, accessToken)
+    const currentPage = p ?? page;
+    const currentPageSize = ps ?? pageSize;
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("page_size", String(currentPageSize));
+    requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
       .then((result) => {
         setReminders(result.items);
+        setTotal(result.total);
       })
       .catch((caughtError: unknown) => {
         setError(caughtError instanceof Error ? caughtError.message : "未知错误");
       })
       .finally(() => setLoading(false));
-  }, [accessToken]);
+  }, [accessToken, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
       return;
     }
-    fetchReminders();
+    setPage(1);
+    fetchReminders(1);
   }, [accessToken, fetchReminders]);
 
   useEffect(() => {
     if (!accessToken) return;
-    requestJson<{ data: { default_remind_before_minutes?: number } }>(
+    requestJson<UserSettingsResponse>(
       "/api/me/settings",
       {},
       accessToken,
     ).then((result) => {
-      const mins = result.data?.default_remind_before_minutes;
-      if (mins !== undefined) setDefaultRemindBefore(mins);
+      const mins = result.default_remind_before_minutes;
+      if (mins !== undefined && mins !== null) setDefaultRemindBefore(mins);
     }).catch(() => {});
   }, [accessToken]);
 
@@ -96,9 +110,9 @@ export default function RemindersPage() {
       cancelText: "保持开启",
       onOk: async () => {
         try {
-          await requestJson(`/api/reminders/${reminder.id}/cancel`, { method: "POST" }, accessToken);
+          await requestJson(`/api/reminders/${reminder.id}/cancel`, { method: "PATCH" }, accessToken);
           message.success("提醒已取消");
-          fetchReminders();
+          fetchReminders(page);
         } catch (err) {
           message.error(err instanceof Error ? err.message : "操作失败");
         }
@@ -211,7 +225,17 @@ export default function RemindersPage() {
                     触发时间：{formatDateTime(reminder.trigger_time, timezone)}
                     {" "}({formatClock(reminder.trigger_time, timezone)})
                   </Text>
-                  <Text className="muted-text">会话：{reminder.conversation_id}</Text>
+                  {reminder.fired_at ? (
+                    <Text className="muted-text">
+                      触发于：{formatDateTime(reminder.fired_at, timezone)}
+                    </Text>
+                  ) : null}
+                  {reminder.error_message ? (
+                    <Text type="danger" className="muted-text">
+                      错误：{reminder.error_message}
+                    </Text>
+                  ) : null}
+                  <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
                   <Space wrap>
                     <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
                     <Tag>目标 {reminder.target_id}</Tag>
@@ -234,6 +258,25 @@ export default function RemindersPage() {
         <div className="dashboard-empty">
           <Empty description={filterDate ? `${filterDate.format("YYYY-MM-DD")} 无提醒` : "当前没有提醒任务"} />
         </div>
+      )}
+
+      {total > pageSize && (
+        <Card className="section-card" bordered={false}>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              showSizeChanger
+              showTotal={(t) => `共 ${t} 条`}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+                fetchReminders(p, ps);
+              }}
+            />
+          </div>
+        </Card>
       )}
     </Space>
   );

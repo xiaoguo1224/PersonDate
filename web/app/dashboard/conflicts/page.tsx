@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, DatePicker, Empty, List, Modal, Segmented, Space, Spin, Tag, Typography, message } from "antd";
+import { Card, DatePicker, Empty, List, Modal, Pagination, Segmented, Space, Spin, Tag, Typography, message } from "antd";
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -34,28 +34,38 @@ export default function ConflictsPage() {
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const fetchConflicts = useCallback(() => {
+  const fetchConflicts = useCallback((p?: number, ps?: number) => {
     if (!accessToken) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    const statusParam = statusFilter === "all" ? "" : `?status=${statusFilter}`;
-    requestJson<{ items: ConflictItem[] }>(`/api/conflicts${statusParam}`, {}, accessToken)
+    const currentPage = p ?? page;
+    const currentPageSize = ps ?? pageSize;
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    params.set("page", String(currentPage));
+    params.set("page_size", String(currentPageSize));
+    requestJson<{ items: ConflictItem[]; total: number }>(`/api/conflicts?${params}`, {}, accessToken)
       .then((result) => {
         setConflicts(result.items);
+        setTotal(result.total);
       })
       .catch(() => setConflicts([]))
       .finally(() => setLoading(false));
-  }, [accessToken, statusFilter]);
+  }, [accessToken, statusFilter, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
       return;
     }
-    fetchConflicts();
+    setPage(1);
+    fetchConflicts(1);
   }, [accessToken, fetchConflicts]);
 
   const handleResolve = async (id: string) => {
@@ -63,7 +73,7 @@ export default function ConflictsPage() {
     try {
       await requestJson(`/api/conflicts/${id}/resolve`, { method: "POST" }, accessToken);
       message.success("冲突已解决");
-      fetchConflicts();
+      fetchConflicts(page);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "操作失败");
     }
@@ -74,7 +84,7 @@ export default function ConflictsPage() {
     try {
       await requestJson(`/api/conflicts/${id}/ignore`, { method: "POST" }, accessToken);
       message.success("冲突已忽略");
-      fetchConflicts();
+      fetchConflicts(page);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "操作失败");
     }
@@ -165,6 +175,7 @@ export default function ConflictsPage() {
           <List
             itemLayout="vertical"
             dataSource={filteredConflicts}
+            pagination={false}
             renderItem={(conflict) => (
               <List.Item key={conflict.id}>
                 <Card size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -202,6 +213,22 @@ export default function ConflictsPage() {
               </List.Item>
             )}
           />
+          {total > pageSize && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={total}
+                showSizeChanger
+                showTotal={(t) => `共 ${t} 条`}
+                onChange={(p, ps) => {
+                  setPage(p);
+                  setPageSize(ps);
+                  fetchConflicts(p, ps);
+                }}
+              />
+            </div>
+          )}
         </Card>
       ) : (
         <div className="dashboard-empty">
