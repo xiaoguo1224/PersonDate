@@ -156,10 +156,12 @@ export function formatDateTime(value: string, timeZone?: string) {
 
 // ── 任务 API ─────────────────────────────────────────────
 
-export async function loadTasks(status?: string): Promise<TaskItem[]> {
+export async function loadTasks(status?: string, accessToken?: string): Promise<TaskItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: TaskItem[] }>(
-    `/api/tasks${query}`
+    `/api/tasks${query}`,
+    {},
+    accessToken,
   );
   return resp.items;
 }
@@ -207,11 +209,14 @@ export type ConflictItem = {
 };
 
 export async function loadConflicts(
-  status?: string
+  status?: string,
+  accessToken?: string,
 ): Promise<ConflictItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: ConflictItem[] }>(
-    `/api/conflicts${query}`
+    `/api/conflicts${query}`,
+    {},
+    accessToken,
   );
   return resp.items;
 }
@@ -239,10 +244,12 @@ export type ReminderItem = {
   conversation_id?: string | null;
 };
 
-export async function loadReminders(status?: string): Promise<ReminderItem[]> {
+export async function loadReminders(status?: string, accessToken?: string): Promise<ReminderItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: ReminderItem[] }>(
-    `/api/reminders${query}`
+    `/api/reminders${query}`,
+    {},
+    accessToken,
   );
   return resp.items;
 }
@@ -294,9 +301,9 @@ export async function loadTodayDashboard(accessToken?: string, timezone?: string
   const today = getTodayDateKey(timezone);
   const [events, tasks, conflicts, reminders] = await Promise.all([
     loadScheduledItems({ date: today }, accessToken),
-    loadTasks(),
-    loadConflicts("open"),
-    loadReminders("pending"),
+    loadTasks(undefined, accessToken),
+    loadConflicts("open", accessToken),
+    loadReminders("pending", accessToken),
   ]);
   return { events, tasks, conflicts, reminders };
 }
