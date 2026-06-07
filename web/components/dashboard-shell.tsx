@@ -155,7 +155,7 @@ export function DashboardShell({
   if (loading || !session) {
     return (
       <div className="app-shell dashboard-shell dashboard-shell--loading">
-        <Spin size="large" tip="正在进入驾驶舱..." />
+        <Spin size="large" />
       </div>
     );
   }

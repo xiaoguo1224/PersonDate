@@ -240,7 +240,7 @@ export default function TasksPage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" bordered={false}>
+      <Card className="section-card dashboard-hero" variant="borderless">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span className="hero-kicker">
@@ -279,14 +279,14 @@ export default function TasksPage() {
           <Spin size="large" tip="正在加载..." />
         </div>
       ) : tasks.length ? (
-        <Card className="section-card" bordered={false} title={filter === "completed" ? "已完成任务" : "任务列表"}>
+        <Card className="section-card" variant="borderless" title={filter === "completed" ? "已完成任务" : "任务列表"}>
           <List
             itemLayout="vertical"
             dataSource={tasks}
             pagination={false}
             renderItem={(task: TaskItem) => (
               <List.Item key={task.id}>
-                <Card size="small" bordered={false} style={{ background: "rgba(255,255,255,0.04)" }}>
+                <Card size="small" variant="borderless" style={{ background: "rgba(255,255,255,0.04)" }}>
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
                     <Space wrap>
                       <Text strong>{task.title}</Text>

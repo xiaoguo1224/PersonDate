@@ -2,7 +2,7 @@
 
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePerformance, type PerformanceLevel } from "./use-performance";
 
 interface BubbleEffectProps {
@@ -24,7 +24,12 @@ export default function BubbleEffect({
 }: BubbleEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const performance = usePerformance();
-  const count = COUNT_MAP[performance];
+  const [mounted, setMounted] = useState(false);
+  const count = mounted ? COUNT_MAP[performance] : COUNT_MAP.medium;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useGSAP(
     () => {
