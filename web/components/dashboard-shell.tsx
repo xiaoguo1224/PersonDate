@@ -21,6 +21,7 @@ import {
   UserOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
+import type { MenuProps } from "antd";
 import { Avatar, Badge, Button, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
@@ -32,9 +33,10 @@ import type { UserRole } from "@/lib/types";
 type NavigationItem = {
   key: string;
   label: string;
-  href: string;
+  href?: string;
   icon: React.ReactNode;
   roles: UserRole[];
+  children?: NavigationItem[];
 };
 
 const { Header, Sider, Content } = Layout;
@@ -46,26 +48,54 @@ const navigation: NavigationItem[] = [
   { key: "/dashboard/tasks", label: "任务", href: "/dashboard/tasks", icon: <CheckSquareOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/conflicts", label: "冲突事项", href: "/dashboard/conflicts", icon: <WarningOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/reminders", label: "提醒任务", href: "/dashboard/reminders", icon: <BellOutlined />, roles: ["owner", "member"] },
-  { key: "/dashboard/agent-logs", label: "Agent 日志", href: "/dashboard/agent-logs", icon: <FileTextOutlined />, roles: ["owner", "member"] },
+  { key: "logs", label: "日志", icon: <FileTextOutlined />, roles: ["owner", "member"], children: [
+    { key: "/dashboard/agent-logs", label: "Agent 日志", icon: <FileTextOutlined />, roles: ["owner", "member"] },
+    { key: "/dashboard/message-logs", label: "消息日志", icon: <MessageOutlined />, roles: ["owner"] },
+    { key: "/dashboard/wechat-outbound", label: "出站队列", icon: <InboxOutlined />, roles: ["owner"] },
+  ]},
   { key: "/dashboard/wechat-binding", label: "微信绑定", href: "/dashboard/wechat-binding", icon: <QrcodeOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/account", label: "我的账号设置", href: "/dashboard/account", icon: <UserOutlined />, roles: ["owner", "member"] },
   { key: "/dashboard/users", label: "用户管理", href: "/dashboard/users", icon: <TeamOutlined />, roles: ["owner"] },
   { key: "/dashboard/invite-codes", label: "邀请码管理", href: "/dashboard/invite-codes", icon: <DatabaseOutlined />, roles: ["owner"] },
-  { key: "/dashboard/settings", label: "系统设置", href: "/dashboard/settings", icon: <SettingOutlined />, roles: ["owner"] },
+  { key: "settings", label: "设置", icon: <SettingOutlined />, roles: ["owner"], children: [
+    { key: "/dashboard/settings", label: "系统设置", icon: <SettingOutlined />, roles: ["owner"] },
+    { key: "/dashboard/model-config", label: "模型配置", icon: <RobotOutlined />, roles: ["owner"] },
+    { key: "/dashboard/notification-settings", label: "通知设置", icon: <BellOutlined />, roles: ["owner", "member"] },
+  ]},
   { key: "/dashboard/wechat-status", label: "微信通道状态", href: "/dashboard/wechat-status", icon: <ClusterOutlined />, roles: ["owner"] },
-  { key: "/dashboard/message-logs", label: "全局消息日志", href: "/dashboard/message-logs", icon: <MessageOutlined />, roles: ["owner"] },
-  { key: "/dashboard/wechat-outbound", label: "微信出站队列", href: "/dashboard/wechat-outbound", icon: <InboxOutlined />, roles: ["owner"] },
-  { key: "/dashboard/model-config", label: "模型配置", href: "/dashboard/model-config", icon: <RobotOutlined />, roles: ["owner"] },
 ];
 
-function getMenuItems(role: UserRole) {
-  return navigation
-    .filter((item) => item.roles.includes(role))
-    .map((item) => ({
+type MenuItem = NonNullable<MenuProps["items"]>[number];
+
+function menuItemToAntD(item: NavigationItem, role: UserRole): MenuItem {
+  if (item.children) {
+    const visibleChildren = item.children
+      .filter((child) => child.roles.includes(role))
+      .map((child) => ({
+        key: child.key,
+        icon: child.icon,
+        label: child.label,
+      }));
+    if (visibleChildren.length === 0) return null;
+    return {
       key: item.key,
       icon: item.icon,
       label: item.label,
-    }));
+      children: visibleChildren,
+    } as MenuItem;
+  }
+  if (!item.roles.includes(role)) return null;
+  return {
+    key: item.key,
+    icon: item.icon,
+    label: item.label,
+  } as MenuItem;
+}
+
+function getMenuItems(role: UserRole) {
+  return navigation
+    .map((item) => menuItemToAntD(item, role))
+    .filter((item): item is MenuItem => item !== null);
 }
 
 function getHeaderDateLabel(timeZone: string) {
@@ -139,7 +169,7 @@ function DashboardShellContent({
   children: React.ReactNode;
   displayName: string;
   logout: () => void;
-  menuItems: { key: string; icon: React.ReactNode; label: string }[];
+  menuItems: MenuProps["items"];
   pathname: string;
   router: ReturnType<typeof useRouter>;
   sessionRole: UserRole;
