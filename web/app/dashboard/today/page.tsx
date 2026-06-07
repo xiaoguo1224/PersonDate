@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import GanttChart from "@/components/gantt-chart";
 import {
   createScheduledItem,
   formatRange,
@@ -118,67 +119,6 @@ function getTimelineStatusLabel(
   return "进行中";
 }
 
-type GanttRow = {
-  id: string;
-  title: string;
-  start_time: string;
-  end_time: string;
-  status?: string;
-  location?: string | null;
-  startLabel: string;
-  endLabel: string;
-  barLeft: number;
-  barWidth: number;
-};
-
-function buildGanttRows(
-  items: Array<{
-    id: string;
-    title: string;
-    start_time: string;
-    end_time?: string | null;
-    status?: string;
-    location?: string | null;
-  }>,
-  selectedDate: Dayjs,
-  timezone: string,
-) {
-  const dayStart = selectedDate.startOf("day");
-  const nextDayStart = dayStart.add(1, "day");
-  const totalMinutes = 24 * 60;
-
-  return sortTimelineEntries(items)
-    .map((item) => {
-      const start = dayjs(item.start_time);
-      const rawEnd = dayjs(item.end_time ?? item.start_time);
-      const end = rawEnd.isAfter(start) ? rawEnd : start.add(60, "minute");
-
-      if (end.isBefore(dayStart) || start.isAfter(nextDayStart)) {
-        return null;
-      }
-
-      const clampedStart = start.isBefore(dayStart) ? dayStart : start;
-      const clampedEnd = end.isAfter(nextDayStart) ? nextDayStart : end;
-      const startMinutes = Math.max(0, clampedStart.diff(dayStart, "minute", true));
-      const durationMinutes = Math.max(15, clampedEnd.diff(clampedStart, "minute", true));
-      const barLeft = Math.min(100, (startMinutes / totalMinutes) * 100);
-      const barWidth = Math.min(100 - barLeft, Math.max(2.5, (durationMinutes / totalMinutes) * 100));
-
-      return {
-        id: item.id,
-        title: item.title,
-        start_time: item.start_time,
-        end_time: item.end_time ?? item.start_time,
-        status: item.status,
-        location: item.location,
-        startLabel: formatClock(item.start_time, timezone),
-        endLabel: formatClock(item.end_time ?? item.start_time, timezone),
-        barLeft,
-        barWidth,
-      } as GanttRow;
-    })
-    .filter((item): item is GanttRow => item !== null);
-}
 
 function buildDemoDashboardData(planDate: string): DemoDashboard {
   const base = dayjs(planDate);
@@ -380,6 +320,7 @@ type TodayPageViewProps = Readonly<{
   onRefresh: () => void;
   onOpenEventModal: () => void;
   onViewConflict: (conflict: ConflictItem) => void;
+  planDate: string;
 }>;
 
 function TodayPageView({
@@ -408,13 +349,21 @@ function TodayPageView({
   onRefresh,
   onOpenEventModal,
   onViewConflict,
+  planDate,
 }: TodayPageViewProps) {
   const conflictRows = viewData.conflicts;
   const reminderRows = viewData.reminders;
   const [ganttModalOpen, setGanttModalOpen] = useState(false);
-  const ganttRows = useMemo(
-    () => buildGanttRows(combinedTimeline, selectedDate, timezone),
-    [combinedTimeline, selectedDate, timezone],
+  const ganttItems = useMemo(
+    () => combinedTimeline.map((item) => ({
+      id: item.id,
+      title: item.title,
+      start_time: item.start_time,
+      end_time: item.end_time,
+      status: item.status,
+      type: "event" as const,
+    })),
+    [combinedTimeline],
   );
 
   return (
@@ -541,7 +490,12 @@ function TodayPageView({
               width={960}
               destroyOnClose
             >
-              <GanttChartAnimated rows={ganttRows} />
+              <GanttChart
+                items={ganttItems}
+                baseDate={planDate}
+                timezone={timezone}
+                maxHeight={280}
+              />
             </Modal>
           </Card>
         </div>
@@ -733,50 +687,6 @@ function SectionHeader({
   );
 }
 
-function GanttChartAnimated({ rows }: Readonly<{ rows: GanttRow[] }>) {
-  const ganttRef = useRef<HTMLDivElement | null>(null);
-
-  useGSAP(
-    () => {
-      gsap.from(ganttRef.current?.querySelectorAll(".today-gantt__bar") ?? [], {
-        scaleX: 0,
-        transformOrigin: "left center",
-        duration: 0.5,
-        stagger: 0.06,
-        ease: "power3.out",
-        clearProps: "scaleX",
-      });
-    },
-    { scope: ganttRef, dependencies: [] },
-  );
-
-  return (
-    <div ref={ganttRef} className="today-gantt">
-      <div className="today-gantt__axis">
-        <span>00:00</span>
-        <span>06:00</span>
-        <span>12:00</span>
-        <span>18:00</span>
-        <span>24:00</span>
-      </div>
-      <div className="today-gantt__bars">
-        {rows.map((row) => (
-          <div key={row.id} className="today-gantt__track">
-            <div className="today-gantt__grid" />
-            <div
-              className="today-gantt__bar"
-              style={{ left: `${row.barLeft}%`, width: `${Math.max(row.barWidth, 3)}%` }}
-              title={`${row.title}\n${row.startLabel} - ${row.endLabel}`}
-            >
-              <span className="today-gantt__bar-title">{row.title}</span>
-              <span className="today-gantt__bar-time">{row.startLabel}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function TodayPage() {
   const { session } = useAuth();
@@ -1049,6 +959,7 @@ export default function TodayPage() {
         onRefresh={refreshData}
         onOpenEventModal={openEventModal}
         onViewConflict={handleViewConflict}
+        planDate={planDate}
       />
 
       <Modal

@@ -4166,6 +4166,125 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* ── 通用甘特图组件 ────────────────────────── */
+.gantt-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.gantt-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 2px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 1200px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-primary);
+}
+
+.gantt-chart__body {
+  position: relative;
+  min-width: 1200px;
+  min-height: 60px;
+}
+
+.gantt-chart__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gantt-chart__hour-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.gantt-chart__track {
+  position: relative;
+  height: 40px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.05) 0,
+      rgba(148, 163, 184, 0.05) 1px,
+      transparent 1px,
+      transparent 4.166%
+    ),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.4), rgba(255, 255, 255, 0.6));
+  border: 1px solid rgba(148, 163, 184, 0.06);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.gantt-chart__track:hover {
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  min-width: 8px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  overflow: hidden;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
+  transition: box-shadow 0.15s, filter 0.15s;
+  z-index: 1;
+}
+
+.gantt-bar:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  filter: brightness(1.08);
+  z-index: 2;
+}
+
+.gantt-bar__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.gantt-bar__time {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.02em;
+}
+
+.gantt-chart__empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
 .today-page--refined .today-task-list,
 .today-page--refined .today-highlight-list,
 .today-page--refined .today-conflict-list,

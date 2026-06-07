@@ -40,6 +40,7 @@ import gsap from "gsap";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import GanttChart from "@/components/gantt-chart";
 import {
   confirmDayDrafts,
   createScheduledItem,
@@ -1094,60 +1095,38 @@ export default function CalendarPage() {
                   </Space>
                 </Card>
 
-                <Card className="section-card" bordered={false} title="当日安排">
+                <Card className="section-card" bordered={false} title="当日安排" style={{ overflow: "hidden" }}>
                   {selectedDayEvents.length ? (
-                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                      {selectedDayEvents.map((event) => (
-                        <Card
-                          key={event.id}
-                          size="small"
-                          bordered={false}
-                          style={{
-                            background: "rgba(255,255,255,0.04)",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => openEditModal(event)}
-                          extra={
-                            <Space>
-                              <Button
-                                size="small"
-                                icon={<EditOutlined />}
-                                onClick={(eventClick) => {
-                                  eventClick.stopPropagation();
-                                  openEditModal(event);
-                                }}
-                              >
-                                编辑
-                              </Button>
-                              <Button
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                                onClick={(eventClick) => {
-                                  eventClick.stopPropagation();
-                                  handleDelete(event);
-                                }}
-                              >
-                                删除
-                              </Button>
-                            </Space>
-                          }
-                        >
-                          <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                            <Space wrap>
-                              <Text strong>{event.title}</Text>
-                              <Tag color={getEventColor(event.status)}>{event.status}</Tag>
-                              {event.location ? <Tag>{event.location}</Tag> : null}
-                            </Space>
-                            <Text className="muted-text">
-                              {formatRange(event.start_time, event.end_time, timezone)} · 提醒{" "}
-                              {event.remind_before_minutes ?? 0} 分钟
-                            </Text>
-                            {event.description ? <Text className="muted-text">{event.description}</Text> : null}
-                          </Space>
-                        </Card>
-                      ))}
-                    </Space>
+                    <>
+                      <GanttChart
+                        items={selectedDayEvents.map((e) => ({
+                          id: e.id,
+                          title: e.title,
+                          start_time: e.start_time,
+                          end_time: e.end_time,
+                          type: "event" as const,
+                        }))}
+                        baseDate={focusDate.format("YYYY-MM-DD")}
+                        timezone={timezone}
+                        maxHeight={400}
+                        onEventClick={(item) => {
+                          const event = selectedDayEvents.find((e) => e.id === item.id);
+                          if (event) openEditModal(event);
+                        }}
+                      />
+                      <Space wrap style={{ marginTop: 12 }}>
+                        {selectedDayEvents.map((event) => (
+                          <Button
+                            key={event.id}
+                            size="small"
+                            style={{ marginBottom: 4 }}
+                            onClick={() => openEditModal(event)}
+                          >
+                            <Text ellipsis style={{ maxWidth: 120 }}>{event.title}</Text>
+                          </Button>
+                        ))}
+                      </Space>
+                    </>
                   ) : (
                     <EmptyPanel title="选中日期暂无安排" />
                   )}
