@@ -18,6 +18,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Row,
   Segmented,
   Space,
