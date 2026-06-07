@@ -11,9 +11,9 @@ interface CloudEffectProps {
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 5,
-  medium: 7,
-  high: 10,
+  low: 8,
+  medium: 12,
+  high: 18,
 };
 
 interface CloudDef {
@@ -21,17 +21,36 @@ interface CloudDef {
   y: number;
   opacity: number;
   speedFactor: number;
+  layer: "high" | "mid" | "low";
 }
 
 function generateCloudDefs(count: number): CloudDef[] {
   return Array.from({ length: count }, (_, i) => {
-    const size = gsap.utils.random(120, 280);
-    const speedFactor = 1 - (size - 120) / 200;
+    const size = gsap.utils.random(150, 350);
+    const speedFactor = 1 - (size - 150) / 300;
+    const layerRoll = Math.random();
+    const layer: CloudDef["layer"] =
+      layerRoll < 0.3 ? "high" : layerRoll < 0.65 ? "mid" : "low";
+
     return {
       size,
-      y: gsap.utils.random(5, 70),
-      opacity: gsap.utils.random(0.5, 0.85),
-      speedFactor: gsap.utils.random(0.4, 0.6) + speedFactor * 0.4,
+      y: layer === "high"
+        ? gsap.utils.random(5, 25)
+        : layer === "mid"
+          ? gsap.utils.random(25, 50)
+          : gsap.utils.random(50, 75),
+      opacity: layer === "high"
+        ? gsap.utils.random(0.6, 0.8)
+        : layer === "mid"
+          ? gsap.utils.random(0.7, 0.85)
+          : gsap.utils.random(0.8, 0.9),
+      speedFactor:
+        layer === "high"
+          ? gsap.utils.random(0.8, 1.2)
+          : layer === "mid"
+            ? gsap.utils.random(0.5, 0.8)
+            : gsap.utils.random(0.3, 0.5),
+      layer,
     };
   });
 }
@@ -105,7 +124,7 @@ export default function CloudEffect({
   const performance = usePerformance();
   const [mounted, setMounted] = useState(false);
   const count = mounted ? COUNT_MAP[performance] : COUNT_MAP.medium;
-  const [cloudDefs] = useState(() => generateCloudDefs(10));
+  const [cloudDefs] = useState(() => generateCloudDefs(18));
 
   useEffect(() => {
     setMounted(true);
@@ -125,7 +144,7 @@ export default function CloudEffect({
         const def = cloudDefs[i];
         if (!def) return;
 
-        const baseDuration = gsap.utils.random(30, 60);
+        const baseDuration = gsap.utils.random(20, 40);
         const duration = baseDuration / def.speedFactor;
         const delay = gsap.utils.random(0, duration);
 
@@ -142,6 +161,7 @@ export default function CloudEffect({
           delay,
         });
 
+        // high 性能时云朵有轻微垂直漂浮
         if (performance === "high") {
           gsap.to(cloud, {
             y: `+=${gsap.utils.random(-15, 15)}`,
