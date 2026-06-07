@@ -1,8 +1,7 @@
 "use client";
 
-import { App, Card, DatePicker, Empty, Input, List, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
+import { App, Card, Empty, Input, List, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
 import { CheckOutlined, CloseOutlined, SearchOutlined } from "@ant-design/icons";
-import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -33,7 +32,6 @@ export default function ConflictsPage() {
   const { modal, message } = App.useApp();
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -105,13 +103,10 @@ export default function ConflictsPage() {
   };
 
   const filteredConflicts = useMemo(() => {
-    if (!filterDate) return conflicts;
-    const dateKey = filterDate.format("YYYY-MM-DD");
-    return conflicts.filter((c) => {
-      const detectedKey = dayjs(c.detected_at).format("YYYY-MM-DD");
-      return detectedKey === dateKey;
-    });
-  }, [conflicts, filterDate]);
+    // 冲突按状态和关键词过滤，不按日期过滤
+    // 因为冲突的日期由关联的安排项决定，而不是检测时间
+    return conflicts;
+  }, [conflicts]);
 
   const summary = useMemo(() => {
     const high = conflicts.filter((item) => item.severity === "high").length;
@@ -149,20 +144,6 @@ export default function ConflictsPage() {
       <Card className="section-card" variant="borderless">
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap>
-            <DatePicker
-              placeholder="按日期筛选"
-              allowClear
-              value={filterDate}
-              onChange={(value) => setFilterDate(value)}
-              style={{ minWidth: 180 }}
-            />
-            {filterDate && (
-              <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
-                日期：{filterDate.format("YYYY-MM-DD")}
-              </Tag>
-            )}
-          </Space>
-          <Space wrap>
             <Segmented<StatusFilter>
               options={statusOptions}
               value={statusFilter}
@@ -184,7 +165,7 @@ export default function ConflictsPage() {
           <Spin size="large" />
         </div>
       ) : filteredConflicts.length ? (
-        <Card className="section-card" variant="borderless" title={filterDate ? `${filterDate.format("YYYY-MM-DD")} 的冲突` : "冲突列表"}>
+        <Card className="section-card" variant="borderless" title="冲突列表">
           <List
             itemLayout="vertical"
             dataSource={filteredConflicts}
