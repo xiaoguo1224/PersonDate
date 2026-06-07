@@ -160,7 +160,7 @@ export default function WechatBindingPage() {
     }
   };
 
-  const handleCopySessionId = async () => {
+  const handleCopySessionId = async () => { // eslint-disable-line @typescript-eslint/no-unused-vars
     if (!loginSession) {
       return;
     }
@@ -265,6 +265,7 @@ export default function WechatBindingPage() {
       >
         <Space direction="vertical" size={16} style={{ width: "100%", alignItems: "center", textAlign: "center" }}>
           {loginSession?.qr_img_content ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={`data:image/png;base64,${loginSession.qr_img_content}`}
               alt="微信扫码"

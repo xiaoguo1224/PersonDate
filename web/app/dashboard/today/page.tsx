@@ -266,7 +266,7 @@ function buildDemoDashboardData(planDate: string): DemoDashboard {
     },
   ];
 
-  const planItems: Array<Record<string, unknown>> = [
+  const planItems: Array<Record<string, unknown>> = [  // eslint-disable-line @typescript-eslint/no-unused-vars
     {
       id: "demo-plan-1",
       title: "API自动化测试 安排 A",
@@ -389,7 +389,6 @@ function TodayPageView({
   loading,
   timezone,
   summary,
-  progressPercent,
   viewData,
   combinedTimeline,
   selectedDate,
@@ -819,7 +818,7 @@ export default function TodayPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, planDate, timezoneLoading]);
+  }, [accessToken, planDate, timezone, timezoneLoading]);
 
   useEffect(() => {
     void fetchData();
@@ -833,17 +832,6 @@ export default function TodayPage() {
     conflictsCount: viewData.conflicts.length,
     remindersCount: viewData.reminders.length,
   }), [viewData]);
-  const sortedEvents = useMemo(
-    () => [...viewData.events].sort((left, right) => dayjs(left.start_time).valueOf() - dayjs(right.start_time).valueOf()),
-    [viewData.events],
-  );
-  const sortedReminders = useMemo(
-    () =>
-      [...viewData.reminders].sort(
-        (left, right) => dayjs(left.trigger_time).valueOf() - dayjs(right.trigger_time).valueOf(),
-      ),
-    [viewData.reminders],
-  );
   const combinedTimeline = useMemo(() => {
     const entries = viewData.events.map((event) => ({
       id: event.id,
@@ -864,6 +852,9 @@ export default function TodayPage() {
 
   const nextEvent =
     viewData.events.find((event) => !isPastTime(event.end_time ?? event.start_time)) ?? null;
+  const sortedReminders = [...viewData.reminders].sort(
+    (left, right) => dayjs(left.trigger_time).valueOf() - dayjs(right.trigger_time).valueOf(),
+  );
   const nextReminder = sortedReminders.find((reminder) => !isPastTime(reminder.trigger_time)) ?? null;
 
   const refreshData = useCallback(() => {

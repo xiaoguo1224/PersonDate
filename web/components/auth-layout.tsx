@@ -4,7 +4,7 @@ import {
   ArrowRightOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import { Button, Divider, Space, Typography } from "antd";
+import { Button, Divider, Typography } from "antd";
 
 const { Title, Text } = Typography;
 

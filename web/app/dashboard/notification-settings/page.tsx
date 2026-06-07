@@ -1,13 +1,13 @@
 "use client";
 
 import { BellOutlined, SaveOutlined } from "@ant-design/icons";
-import { Button, Card, Col, Form, Input, Row, Space, Spin, Switch, Tag, Typography, message } from "antd";
+import { Button, Card, Col, Form, Input, Row, Space, Spin, Switch, Typography, message } from "antd";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { requestJson } from "@/lib/api";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Paragraph } = Typography;
 
 type NotificationForm = {
   daily_plan_push_enabled: boolean;

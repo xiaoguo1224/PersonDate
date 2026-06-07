@@ -326,7 +326,6 @@ export default function CalendarPage() {
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const [events, setEvents] = useState<ScheduledItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
-  const [planLoading, setPlanLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -362,14 +361,9 @@ export default function CalendarPage() {
     }
   }, [accessToken, viewMode, focusDate]);
 
-  const fetchDayPlan = useCallback(async () => {
-    setPlanLoading(false);
-  }, []);
-
   useEffect(() => {
     if (!accessToken) {
       setEventsLoading(false);
-      setPlanLoading(false);
       setEventsError("请先登录后查看安排总览");
       return;
     }
@@ -378,16 +372,6 @@ export default function CalendarPage() {
     }
     void fetchEvents();
   }, [accessToken, fetchEvents, timezoneLoading]);
-
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-    if (timezoneLoading) {
-      return;
-    }
-    void fetchDayPlan();
-  }, [accessToken, fetchDayPlan, timezoneLoading]);
 
   const viewRange = useMemo(() => getViewRange(viewMode, focusDate), [focusDate, viewMode]);
   const visibleEvents = useMemo(
@@ -481,41 +465,6 @@ export default function CalendarPage() {
     form.resetFields();
   }, [form]);
 
-  const openCreatePlanItemModal = useCallback(
-    (initialDate?: Dayjs) => {
-      const baseDate = (initialDate ?? focusDate).hour(9).minute(0).second(0).millisecond(0);
-      planItemForm.setFieldsValue({
-        title: "",
-        item_type: "manual",
-        start_time: baseDate,
-        end_time: baseDate.add(1, "hour"),
-        status: "planned",
-        is_flexible: true,
-        sort_order: 0,
-      });
-      setEditingPlanItem(null);
-      setPlanItemModalOpen(true);
-    },
-    [focusDate, planItemForm],
-  );
-
-  const openEditPlanItemModal = useCallback(
-    (item: PlanItemFormValues) => {
-      setEditingPlanItem(item);
-      planItemForm.setFieldsValue({
-        title: item.title,
-        item_type: item.item_type,
-        start_time: dayjs(item.start_time),
-        end_time: dayjs(item.end_time),
-        status: item.status,
-        is_flexible: item.is_flexible,
-        sort_order: item.sort_order ?? 0,
-      });
-      setPlanItemModalOpen(true);
-    },
-    [planItemForm],
-  );
-
   const closePlanItemModal = useCallback(() => {
     setPlanItemModalOpen(false);
     setEditingPlanItem(null);
@@ -523,46 +472,15 @@ export default function CalendarPage() {
   }, [planItemForm]);
 
   const refreshData = useCallback(async () => {
-    await Promise.all([fetchEvents(), fetchDayPlan()]);
-  }, [fetchDayPlan, fetchEvents]);
+    await fetchEvents();
+  }, [fetchEvents]);
 
   const handlePlanItemSubmit = useCallback(
-    async (values: PlanItemFormValues) => {
-      if (!accessToken) {
-        return;
-      }
-      if (values.end_time.isBefore(values.start_time)) {
-        messageApi.error("结束时间不能早于开始时间");
-        return;
-      }
-      const payload: Record<string, unknown> = {
-        plan_date: toDateKey(focusDate),
-        title: values.title.trim(),
-        item_type: values.item_type,
-        start_time: values.start_time.toISOString(),
-        end_time: values.end_time.toISOString(),
-        status: values.status,
-        is_flexible: values.is_flexible,
-        sort_order: values.sort_order ?? 0,
-      };
-
+    async (_values: Record<string, unknown>) => {
       messageApi.warning("安排项管理已迁移，请在安排列表中操作。");
       closePlanItemModal();
-      setPlanItemSubmitting(false);
     },
     [closePlanItemModal, messageApi],
-  );
-
-  const handleCompletePlanItem = useCallback( async () => {
-      messageApi.warning("安排项管理已迁移，请在安排列表中操作。");
-    },
-    [messageApi],
-  );
-
-  const handleDeletePlanItem = useCallback( () => {
-      messageApi.warning("安排项管理已迁移，请在安排列表中操作。");
-    },
-    [messageApi],
   );
 
   const handleSubmit = useCallback(
@@ -647,7 +565,7 @@ export default function CalendarPage() {
     } finally {
       setPlanSubmitting(false);
     }
-  }, [accessToken, focusDate, messageApi]);
+  }, [accessToken, fetchEvents, focusDate, messageApi]);
 
   const handleConfirmPlan = useCallback(async () => {
     if (!accessToken) {
@@ -663,7 +581,7 @@ export default function CalendarPage() {
     } finally {
       setPlanSubmitting(false);
     }
-  }, [accessToken, focusDate, messageApi]);
+  }, [accessToken, fetchEvents, focusDate, messageApi]);
 
   const heroTags = [
     { color: "cyan", label: `${summary.totalEvents} 条安排` },
