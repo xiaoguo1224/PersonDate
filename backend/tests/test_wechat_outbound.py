@@ -4,13 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_db
 from app.core.config import get_settings
-from app.db.base import Base
 from app.main import create_app
 from app.models import (
     ChannelIdentity,
@@ -20,53 +15,12 @@ from app.models import (
     WechatChannelOutboundMessage,
 )
 from app.schemas.auth import LoginRequest
-from app.schemas.setup import OwnerInitRequest
 from app.services.auth_service import AuthService
-from app.services.setup_service import SetupService
 from app.services.wechat_channel_service import WechatChannelService
 from wechat_channel.ilink_client import ILinkClient
 
 
-def _build_client():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
-
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    return app, session
-
-
-def _login_owner(session) -> str:
-    settings = get_settings()
-    setup = SetupService(session)
-    setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
-    )
-    session.commit()
-    auth = AuthService(session)
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
-    session.commit()
-    return token
-
-
-def _make_owner_account_and_identity(session):
-    """Create an owner user, active WechatAccount and ChannelIdentity in one shot."""
+def _make_owner_account_and_identity(db_session):
     user = User(
         username="owner_test",
         display_name="Owner",
@@ -74,8 +28,8 @@ def _make_owner_account_and_identity(session):
         role="owner",
         status="active",
     )
-    session.add(user)
-    session.flush()
+    db_session.add(user)
+    db_session.flush()
 
     account = WechatAccount(
         owner_user_id=user.id,
@@ -84,7 +38,7 @@ def _make_owner_account_and_identity(session):
         base_url="http://wechat-channel:18789",
         status="active",
     )
-    session.add(account)
+    db_session.add(account)
 
     identity = ChannelIdentity(
         user_id=user.id,
@@ -93,13 +47,12 @@ def _make_owner_account_and_identity(session):
         conversation_id="wx_user_001",
         status="active",
     )
-    session.add(identity)
-    session.flush()
+    db_session.add(identity)
+    db_session.flush()
     return user, account, identity
 
 
 def _mock_ilink_client() -> MagicMock:
-    """Return a MagicMock for ILinkClient with handy defaults."""
     client = MagicMock(spec=ILinkClient)
     client.get_typing_ticket.return_value = None
     client.send_typing.return_value = None
@@ -107,23 +60,12 @@ def _mock_ilink_client() -> MagicMock:
     return client
 
 
-def test_wechat_channel_service_send_text_records_outbound_log() -> None:
-    """Verify send_text creates a ChannelMessageLog with 'sent' status on success."""
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
+def test_wechat_channel_service_send_text_records_outbound_log(db_session) -> None:
+    user, account, identity = _make_owner_account_and_identity(db_session)
 
-    _make_owner_account_and_identity(session)
-
-    session.add(
+    db_session.add(
         ChannelMessageLog(
-            user_id="owner-001",
+            user_id=user.id,
             channel="wechat",
             message_id="wx_in_001",
             conversation_id="wx_user_001",
@@ -136,22 +78,25 @@ def test_wechat_channel_service_send_text_records_outbound_log() -> None:
             status="received",
         )
     )
-    session.commit()
+    db_session.commit()
 
     mock_client = _mock_ilink_client()
     mock_client.send_message.return_value = True
 
-    service = WechatChannelService(session)
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(service, "_get_ilink_client", lambda: mock_client)
-        log = service.send_text(conversation_id="wx_user_001", content="提醒：15:00 开会")
-    session.commit()
+    service = WechatChannelService(db_session)
+
+    def _get_client():
+        return mock_client
+
+    service._get_ilink_client = _get_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：15:00 开会")
+    db_session.commit()
 
     assert log.status == "sent"
     assert log.error_code is None
 
-    stored_log = session.scalar(
-        session.query(ChannelMessageLog).filter_by(id=log.id).statement  # type: ignore[attr-defined]
+    stored_log = db_session.scalar(
+        db_session.query(ChannelMessageLog).filter_by(id=log.id).statement  # type: ignore[attr-defined]
     )
     assert stored_log is not None
     assert stored_log.direction == "outbound"
@@ -159,23 +104,12 @@ def test_wechat_channel_service_send_text_records_outbound_log() -> None:
     assert stored_log.content == "提醒：15:00 开会"
 
 
-def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
-    """Verify send_text creates a failed log when ILinkClient.send_message fails."""
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
+def test_wechat_channel_service_send_text_records_failed_outbound_log(db_session) -> None:
+    user, account, identity = _make_owner_account_and_identity(db_session)
 
-    _make_owner_account_and_identity(session)
-
-    session.add(
+    db_session.add(
         ChannelMessageLog(
-            user_id="owner-001",
+            user_id=user.id,
             channel="wechat",
             message_id="wx_in_002",
             conversation_id="wx_user_001",
@@ -188,37 +122,25 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log() -> None:
             status="received",
         )
     )
-    session.commit()
+    db_session.commit()
 
     mock_client = _mock_ilink_client()
     mock_client.send_message.return_value = False
 
-    service = WechatChannelService(session)
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(service, "_get_ilink_client", lambda: mock_client)
-        log = service.send_text(conversation_id="wx_user_001", content="提醒：16:00 开会")
-    session.commit()
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：16:00 开会")
+    db_session.commit()
 
     assert log.status == "failed"
     assert log.error_code == "SEND_FAILED"
     assert log.error_message == "微信消息发送失败"
 
 
-def test_wechat_channel_service_send_text_creates_outbound_message_on_success() -> None:
-    """Verify send_text also writes a WechatChannelOutboundMessage row on success."""
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
+def test_wechat_channel_service_send_text_creates_outbound_message_on_success(db_session) -> None:
+    owner, account, identity = _make_owner_account_and_identity(db_session)  # noqa: F841
 
-    owner, account, identity = _make_owner_account_and_identity(session)  # noqa: F841
-
-    session.add(
+    db_session.add(
         ChannelMessageLog(
             user_id=owner.id,
             channel="wechat",
@@ -233,21 +155,20 @@ def test_wechat_channel_service_send_text_creates_outbound_message_on_success() 
             status="received",
         )
     )
-    session.commit()
+    db_session.commit()
 
     mock_client = _mock_ilink_client()
     mock_client.send_message.return_value = True
 
-    service = WechatChannelService(session)
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(service, "_get_ilink_client", lambda: mock_client)
-        log = service.send_text(conversation_id="wx_user_001", content="提醒：18:00 开会")
-    session.commit()
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：18:00 开会")
+    db_session.commit()
 
     assert log.status == "sent"
 
-    stored_outbound = session.scalar(
-        session.query(WechatChannelOutboundMessage)
+    stored_outbound = db_session.scalar(
+        db_session.query(WechatChannelOutboundMessage)
         .filter_by(conversation_id="wx_user_001")
         .statement  # type: ignore[attr-defined]
     )
@@ -257,18 +178,7 @@ def test_wechat_channel_service_send_text_creates_outbound_message_on_success() 
     assert stored_outbound.context_token == "ctx_004"
 
 
-def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
-    """dispatch_outbound_messages_once still works (independent of ILinkClient)."""
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-
+def test_wechat_channel_dispatch_updates_outbound_and_message_logs(db_session) -> None:
     owner = User(
         username="owner_001",
         display_name="Owner",
@@ -276,8 +186,8 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
         role="owner",
         status="active",
     )
-    session.add(owner)
-    session.flush()
+    db_session.add(owner)
+    db_session.flush()
     account = WechatAccount(
         owner_user_id=owner.id,
         account_id="wx_account_001",
@@ -285,8 +195,8 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
         base_url="http://wechat-channel:18789",
         status="active",
     )
-    session.add(account)
-    session.add(
+    db_session.add(account)
+    db_session.add(
         ChannelMessageLog(
             user_id=owner.id,
             channel="wechat",
@@ -303,7 +213,7 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
             retry_count=0,
         )
     )
-    session.add(
+    db_session.add(
         WechatChannelOutboundMessage(
             account_id=account.account_id,
             message_id="wx_out_001",
@@ -316,15 +226,15 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
             retry_count=0,
         )
     )
-    session.commit()
+    db_session.commit()
 
-    service = WechatChannelService(session)
+    service = WechatChannelService(db_session)
     processed = service.dispatch_outbound_messages_once()
-    session.commit()
+    db_session.commit()
 
     assert processed == 1
-    outbound_row = session.scalar(
-        session.query(WechatChannelOutboundMessage)
+    outbound_row = db_session.scalar(
+        db_session.query(WechatChannelOutboundMessage)
         .filter_by(message_id="wx_out_001")
         .statement  # type: ignore[attr-defined]
     )
@@ -332,8 +242,8 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
     assert outbound_row.status == "sent"
     assert outbound_row.sent_at is not None
 
-    outbound_log = session.scalar(
-        session.query(ChannelMessageLog)
+    outbound_log = db_session.scalar(
+        db_session.query(ChannelMessageLog)
         .filter_by(message_id="wx_out_001")
         .statement  # type: ignore[attr-defined]
     )
@@ -344,23 +254,12 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs() -> None:
     assert outbound_log.error_message is None
 
 
-def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
-    """Verify send_text retries on transient (TimeoutError) failures."""
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
+def test_wechat_channel_service_send_text_retries_transient_errors(db_session) -> None:
+    user, account, identity = _make_owner_account_and_identity(db_session)
 
-    _make_owner_account_and_identity(session)
-
-    session.add(
+    db_session.add(
         ChannelMessageLog(
-            user_id="owner-001",
+            user_id=user.id,
             channel="wechat",
             message_id="wx_in_003",
             conversation_id="wx_user_001",
@@ -373,7 +272,7 @@ def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
             status="received",
         )
     )
-    session.commit()
+    db_session.commit()
 
     mock_client = _mock_ilink_client()
     mock_client.send_message.side_effect = [
@@ -382,11 +281,10 @@ def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
         True,
     ]
 
-    service = WechatChannelService(session)
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(service, "_get_ilink_client", lambda: mock_client)
-        log = service.send_text(conversation_id="wx_user_001", content="提醒：17:00 开会")
-    session.commit()
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：17:00 开会")
+    db_session.commit()
 
     assert mock_client.send_message.call_count == 3
     assert log.status == "sent"
@@ -394,12 +292,31 @@ def test_wechat_channel_service_send_text_retries_transient_errors() -> None:
     assert log.error_message is None
 
 
-def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:
-    """The /api/admin/wechat/send-test endpoint returns success when ILinkClient succeeds."""
-    app, session = _build_client()
-    owner_token = _login_owner(session)
+def test_admin_send_test_route_returns_send_result(monkeypatch, db_session) -> None:
+    from app.api.deps import get_db
 
-    user = session.query(User).filter_by(role="owner").first()
+    from app.schemas.setup import OwnerInitRequest
+    from app.services.setup_service import SetupService
+
+    app = create_app()
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    settings = get_settings()
+    SetupService(db_session).create_owner(
+        OwnerInitRequest(display_name="主用户", email="owner@example.com")
+    )
+    auth = AuthService(db_session)
+    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
+    db_session.commit()
+
+    user = db_session.query(User).filter_by(role="owner").first()
     assert user is not None
     account = WechatAccount(
         owner_user_id=user.id,
@@ -408,7 +325,7 @@ def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:
         base_url="http://wechat-channel:18789",
         status="active",
     )
-    session.add(account)
+    db_session.add(account)
     identity = ChannelIdentity(
         user_id=user.id,
         channel="wechat",
@@ -416,8 +333,8 @@ def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:
         conversation_id="wx_user_001",
         status="active",
     )
-    session.add(identity)
-    session.commit()
+    db_session.add(identity)
+    db_session.commit()
 
     mock_client = _mock_ilink_client()
     mock_client.send_message.return_value = True
@@ -432,7 +349,7 @@ def test_admin_send_test_route_returns_send_result(monkeypatch) -> None:
     response = client.post(
         "/api/admin/wechat/send-test",
         json={"conversation_id": "wx_user_001", "content": "测试消息"},
-        headers={"Authorization": f"Bearer {owner_token}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200

@@ -2,43 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from app.api.deps import get_db
 from app.core.config import get_settings
-from app.db.base import Base
-from app.main import create_app
 from app.models import ChannelIdentity, User
-from app.schemas.auth import LoginRequest
-from app.schemas.setup import OwnerInitRequest
-from app.services.auth_service import AuthService
-from app.services.setup_service import SetupService
 from app.services.user_service import UserService
-
-
-def _build_client():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    session = SessionLocal()
-    app = create_app()
-
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    return app, session
 
 
 def _auth_headers() -> dict[str, str]:
@@ -46,34 +12,23 @@ def _auth_headers() -> dict[str, str]:
     return {"X-Channel-Token": token} if token else {}
 
 
-def _login(session, username: str, password: str) -> str:  # noqa: ANN001
-    auth = AuthService(session)
-    _, token = auth.login(LoginRequest(username=username, password=password))
-    session.commit()
-    return token
+def _seed_member(db_session):
+    from app.schemas.setup import OwnerInitRequest
+    from app.services.setup_service import SetupService
 
-
-def _seed_users(session):  # noqa: ANN001
     settings = get_settings()
-    setup = SetupService(session)
-    owner = setup.create_owner(
-        OwnerInitRequest(
-            display_name="主用户",
-            email="owner@example.com",
-        )
+    SetupService(db_session).create_owner(
+        OwnerInitRequest(display_name="主用户", email="owner@example.com")
     )
-    member = UserService(session).create_user(
+    member = UserService(db_session).create_user(
         username="member1",
         password="member123",
         role="member",
         display_name="成员一号",
     )
-    session.commit()
-    session.refresh(owner)
-    session.refresh(member)
-    owner_token = _login(session, "admin", settings.admin_password)
-    member_token = _login(session, "member1", "member123")
-    return owner, member, owner_token, member_token
+    db_session.commit()
+    db_session.refresh(member)
+    return member
 
 
 class FakeGraph:
@@ -95,9 +50,9 @@ class FakeGraph:
         return SimpleNamespace(
             success=True,
             final_response="已为你创建安排：开会。",
-            intent="create_event",
-            tool_calls=[{"tool_name": "create_event"}],
-            tool_results=[{"tool_name": "create_event"}],
+            intent="create_scheduled_item",
+            tool_calls=[{"tool_name": "create_scheduled_item"}],
+            tool_results=[{"tool_name": "create_scheduled_item"}],
             pending_state=None,
             graph_trace=[
                 "load_context",
@@ -110,7 +65,7 @@ class FakeGraph:
         )
 
 
-def test_wechat_inbound_binding_success(monkeypatch) -> None:
+def test_wechat_inbound_binding_success(monkeypatch, client, db_session) -> None:
     class _FakeClient:
         def get_channel_qr_code(self) -> dict[str, str]:
             return {"qr_img_content": "base64_fake", "qrcode_id": "qr_test_001"}
@@ -121,10 +76,14 @@ def test_wechat_inbound_binding_success(monkeypatch) -> None:
         "app.api.routes.wechat.build_wechat_channel_client",
         lambda: _FakeClient(),
     )
-    app, session = _build_client()
-    _, member, _, member_token = _seed_users(session)
 
-    client = TestClient(app)
+    member = _seed_member(db_session)
+    from app.services.auth_service import AuthService
+    from app.schemas.auth import LoginRequest
+    auth = AuthService(db_session)
+    _, member_token = auth.login(LoginRequest(username="member1", password="member123"))
+    db_session.commit()
+
     create_response = client.post(
         "/api/me/wechat-login-sessions",
         headers={"Authorization": f"Bearer {member_token}"},
@@ -173,10 +132,7 @@ def test_wechat_inbound_binding_success(monkeypatch) -> None:
     assert identity_response.json()["data"]["items"][0]["channel_user_id"] == "wx_user_member"
 
 
-def test_wechat_inbound_unbound_prompt() -> None:
-    app, _session = _build_client()
-    client = TestClient(app)
-
+def test_wechat_inbound_unbound_prompt(client) -> None:
     response = client.post(
         "/api/wechat/inbound",
         headers=_auth_headers(),
@@ -198,10 +154,9 @@ def test_wechat_inbound_unbound_prompt() -> None:
     assert body["data"]["reply"] == expected_reply
 
 
-def test_wechat_inbound_routes_to_agent_graph(monkeypatch) -> None:
-    app, session = _build_client()
-    _, member, _, _ = _seed_users(session)
-    session.add(
+def test_wechat_inbound_routes_to_agent_graph(monkeypatch, client, db_session) -> None:
+    member = _seed_member(db_session)
+    db_session.add(
         ChannelIdentity(
             user_id=member.id,
             channel="wechat",
@@ -211,10 +166,9 @@ def test_wechat_inbound_routes_to_agent_graph(monkeypatch) -> None:
             status="active",
         )
     )
-    session.commit()
+    db_session.commit()
 
     monkeypatch.setattr("app.api.routes.wechat.SchedulePlanningGraph", FakeGraph)
-    client = TestClient(app)
 
     response = client.post(
         "/api/wechat/inbound",
