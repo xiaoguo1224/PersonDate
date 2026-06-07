@@ -38,11 +38,12 @@ def list_reminders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     status: str | None = None,
+    keyword: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> ApiResponse[ReminderListResponse]:
     service = ReminderService(db)
-    jobs, total = service.list_jobs(current_user.id, status=status, page=page, page_size=page_size)
+    jobs, total = service.list_jobs(current_user.id, status=status, keyword=keyword, page=page, page_size=page_size)
     items = [_to_item(job) for job in jobs]
     return ApiResponse(data=ReminderListResponse(items=items, total=total, page=page, page_size=page_size))
 
@@ -69,11 +70,23 @@ def reactivate_reminder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse[ReminderDTO]:
+    from datetime import UTC, datetime as dt
+
     service = ReminderService(db)
     job = service.get_job(current_user.id, reminder_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="提醒不存在")
+
+    now = dt.now(UTC)
     new_trigger_time = payload.trigger_time if payload else None
+
+    # 如果触发时间已过期，必须提供新的触发时间
+    if job.trigger_time <= now and not new_trigger_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="提醒已过期，请提供新的触发时间"
+        )
+
     service.reactivate_job(job, new_trigger_time)
     db.commit()
     return ApiResponse(data=_to_item(job), message="已重新激活提醒")

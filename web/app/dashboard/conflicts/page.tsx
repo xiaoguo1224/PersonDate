@@ -1,7 +1,7 @@
 "use client";
 
-import { App, Card, DatePicker, Empty, List, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
-import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { App, Card, DatePicker, Empty, Input, List, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
+import { CheckOutlined, CloseOutlined, SearchOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -35,6 +35,8 @@ export default function ConflictsPage() {
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [keyword, setKeyword] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -49,6 +51,7 @@ export default function ConflictsPage() {
     const currentPageSize = ps ?? pageSize;
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
+    if (searchKeyword) params.set("keyword", searchKeyword);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
     requestJson<{ items: ConflictItem[]; total: number }>(`/api/conflicts?${params}`, {}, accessToken)
@@ -58,7 +61,7 @@ export default function ConflictsPage() {
       })
       .catch(() => setConflicts([]))
       .finally(() => setLoading(false));
-  }, [accessToken, statusFilter, page, pageSize]);
+  }, [accessToken, statusFilter, searchKeyword, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -159,11 +162,20 @@ export default function ConflictsPage() {
               </Tag>
             )}
           </Space>
-          <Segmented<StatusFilter>
-            options={statusOptions}
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value)}
-          />
+          <Space wrap>
+            <Segmented<StatusFilter>
+              options={statusOptions}
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+            />
+            <Input.Search
+              placeholder="搜索冲突标题或描述"
+              allowClear
+              enterButton={<SearchOutlined />}
+              style={{ width: 300 }}
+              onSearch={(value) => setSearchKeyword(value)}
+            />
+          </Space>
         </Space>
       </Card>
 

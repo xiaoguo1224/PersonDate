@@ -29,11 +29,12 @@ def list_conflicts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     status: str | None = None,
+    keyword: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> ApiResponse[ConflictListResponse]:
     service = ConflictService(db)
-    conflicts, total = service.list_conflicts(current_user.id, status=status, page=page, page_size=page_size)
+    conflicts, total = service.list_conflicts(current_user.id, status=status, keyword=keyword, page=page, page_size=page_size)
     items = [_to_item(item) for item in conflicts]
     return ApiResponse(data=ConflictListResponse(items=items, total=total, page=page, page_size=page_size))
 

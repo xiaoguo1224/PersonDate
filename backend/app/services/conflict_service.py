@@ -193,6 +193,7 @@ class ConflictService:
         self,
         user_id: str,
         status: str | None = None,
+        keyword: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ScheduleConflict], int]:
@@ -201,6 +202,11 @@ class ConflictService:
         stmt = select(ScheduleConflict).where(ScheduleConflict.user_id == user_id)
         if status:
             stmt = stmt.where(ScheduleConflict.status == status)
+        if keyword:
+            pattern = f"%{keyword}%"
+            stmt = stmt.where(
+                (ScheduleConflict.title.ilike(pattern)) | (ScheduleConflict.description.ilike(pattern))
+            )
         conflicts = list(self.db.scalars(stmt.order_by(ScheduleConflict.created_at.desc())))
         seen: set[tuple[str, str, tuple[str, str] | None]] = set()
         unique_conflicts: list[ScheduleConflict] = []

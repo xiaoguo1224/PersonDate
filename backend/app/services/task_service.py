@@ -60,6 +60,7 @@ class TaskService:
         self,
         user_id: str,
         status: str | None = None,
+        keyword: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[TaskItem], int]:
@@ -69,6 +70,11 @@ class TaskService:
         )
         if status:
             base = base.where(TaskItem.status == status)
+        if keyword:
+            pattern = f"%{keyword}%"
+            base = base.where(
+                (TaskItem.title.ilike(pattern)) | (TaskItem.description.ilike(pattern))
+            )
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
             self.db.scalars(

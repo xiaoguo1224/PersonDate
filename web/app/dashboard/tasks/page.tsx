@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { App, Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Segmented, Space, Spin, Tag, TimePicker, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
@@ -60,6 +60,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskStatus>("all");
+  const [keyword, setKeyword] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -72,7 +74,7 @@ export default function TasksPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const fetchTasks = (status?: string, p?: number, ps?: number) => {
+  const fetchTasks = (status?: string, kw?: string, p?: number, ps?: number) => {
     if (!accessToken) {
       setLoading(false);
       setError("请先登录后查看待办");
@@ -84,6 +86,7 @@ export default function TasksPage() {
     const currentPageSize = ps ?? pageSize;
     const params = new URLSearchParams();
     if (status) params.set("status", status);
+    if (kw) params.set("keyword", kw);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
     requestJson<TaskListResponse>(`/api/tasks?${params}`, {}, accessToken)
@@ -101,15 +104,15 @@ export default function TasksPage() {
 
   useEffect(() => {
     setPage(1);
-    fetchTasks(filter === "all" ? undefined : filter, 1);
-  }, [accessToken, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, 1);
+  }, [accessToken, filter, searchKeyword]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = async (taskId: string) => {
     if (!accessToken) return;
     try {
       await requestJson(`/api/tasks/${taskId}/complete`, { method: "PATCH" }, accessToken);
       message.success("任务已完成");
-      fetchTasks(filter === "all" ? undefined : filter, page);
+      fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, page);
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
     }
@@ -127,7 +130,7 @@ export default function TasksPage() {
         try {
           await requestJson(`/api/tasks/${taskId}`, { method: "DELETE" }, accessToken);
           message.success("任务已删除");
-          fetchTasks(filter === "all" ? undefined : filter, page);
+          fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, page);
         } catch (caughtError: unknown) {
           message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
         }
@@ -210,7 +213,7 @@ export default function TasksPage() {
       }
 
       setFormModalOpen(false);
-      fetchTasks(filter === "all" ? undefined : filter, page);
+      fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, page);
     } catch (caughtError: unknown) {
       if (caughtError instanceof Error && !("errorFields" in (caughtError as { errorFields?: unknown }))) {
         message.error(caughtError instanceof Error ? caughtError.message : "操作失败");
@@ -264,11 +267,20 @@ export default function TasksPage() {
         </Space>
       </Card>
 
-      <Segmented<TaskStatus>
-        options={filterOptions}
-        value={filter}
-        onChange={(value) => setFilter(value)}
-      />
+      <Space wrap>
+        <Segmented<TaskStatus>
+          options={filterOptions}
+          value={filter}
+          onChange={(value) => setFilter(value)}
+        />
+        <Input.Search
+          placeholder="搜索任务标题或描述"
+          allowClear
+          enterButton={<SearchOutlined />}
+          style={{ width: 300 }}
+          onSearch={(value) => setSearchKeyword(value)}
+        />
+      </Space>
 
       {error ? (
         <Alert type="error" showIcon message="加载待办失败" description={error} />
@@ -361,7 +373,7 @@ export default function TasksPage() {
                 onChange={(p, ps) => {
                   setPage(p);
                   setPageSize(ps);
-                  fetchTasks(filter === "all" ? undefined : filter, p, ps);
+                  fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, p, ps);
                 }}
               />
             </div>

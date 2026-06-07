@@ -3716,9 +3716,7 @@ body {
 .today-page--refined .today-fact {
   min-height: 122px;
   padding: 20px 22px 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.96)),
-    rgba(255, 255, 255, 0.96);
+  background: var(--card-bg);
 }
 
 .today-page--refined .today-fact + .today-fact {
@@ -3775,9 +3773,7 @@ body {
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid var(--border-color);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.92)),
-    rgba(255, 255, 255, 0.92);
+  background: var(--card-bg);
 }
 
 .today-page--refined .today-row--compact {
@@ -3785,9 +3781,7 @@ body {
 }
 
 .today-page--refined .today-row--warning {
-  background:
-    linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.96)),
-    rgba(255, 255, 255, 0.92);
+  background: var(--card-bg);
   border-color: rgba(248, 113, 113, 0.16);
 }
 

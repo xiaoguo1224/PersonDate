@@ -72,12 +72,16 @@ class ReminderService:
         self,
         user_id: str,
         status: str | None = None,
+        keyword: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ReminderJob], int]:
         base = select(ReminderJob).where(ReminderJob.user_id == user_id)
         if status:
             base = base.where(ReminderJob.status == status)
+        if keyword:
+            pattern = f"%{keyword}%"
+            base = base.where(ReminderJob.title.ilike(pattern))
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
             self.db.scalars(

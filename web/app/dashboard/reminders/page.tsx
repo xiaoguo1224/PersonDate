@@ -1,7 +1,7 @@
 "use client";
 
-import { BellOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, InputNumber, Pagination, Row, Space, Spin, Tag, Typography } from "antd";
+import { BellOutlined, SearchOutlined } from "@ant-design/icons";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Pagination, Row, Space, Spin, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -36,6 +36,8 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
   const [savingDefault, setSavingDefault] = useState(false);
   const [page, setPage] = useState(1);
@@ -51,6 +53,7 @@ export default function RemindersPage() {
     const currentPage = p ?? page;
     const currentPageSize = ps ?? pageSize;
     const params = new URLSearchParams();
+    if (searchKeyword) params.set("keyword", searchKeyword);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
     requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
@@ -62,7 +65,7 @@ export default function RemindersPage() {
         setError(caughtError instanceof Error ? caughtError.message : "未知错误");
       })
       .finally(() => setLoading(false));
-  }, [accessToken, page, pageSize]);
+  }, [accessToken, searchKeyword, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -123,12 +126,43 @@ export default function RemindersPage() {
 
   const handleReactivate = async (reminder: ReminderItem) => {
     if (!accessToken) return;
-    try {
-      await requestJson(`/api/reminders/${reminder.id}/reactivate`, { method: "PATCH" }, accessToken);
-      message.success("提醒已重新激活");
-      fetchReminders(page);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "操作失败");
+
+    // 检查是否已过期
+    const triggerTime = new Date(reminder.trigger_time);
+    const now = new Date();
+    const isExpired = triggerTime <= now;
+
+    if (isExpired) {
+      // 过期的提醒需要选择新的触发时间
+      modal.confirm({
+        title: "重新激活提醒",
+        content: "该提醒已过期，请设置新的触发时间",
+        okText: "激活",
+        cancelText: "取消",
+        onOk: async () => {
+          // 默认设置为1小时后
+          const newTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+          try {
+            await requestJson(`/api/reminders/${reminder.id}/reactivate`, {
+              method: "PATCH",
+              body: JSON.stringify({ trigger_time: newTime }),
+            }, accessToken);
+            message.success("提醒已重新激活，将在1小时后触发");
+            fetchReminders(page);
+          } catch (err) {
+            message.error(err instanceof Error ? err.message : "操作失败");
+          }
+        },
+      });
+    } else {
+      // 未过期的提醒直接激活
+      try {
+        await requestJson(`/api/reminders/${reminder.id}/reactivate`, { method: "PATCH" }, accessToken);
+        message.success("提醒已重新激活");
+        fetchReminders(page);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "操作失败");
+      }
     }
   };
 
@@ -206,6 +240,13 @@ export default function RemindersPage() {
               value={filterDate}
               onChange={(value) => setFilterDate(value)}
               style={{ minWidth: 180 }}
+            />
+            <Input.Search
+              placeholder="搜索提醒标题"
+              allowClear
+              enterButton={<SearchOutlined />}
+              style={{ width: 300 }}
+              onSearch={(value) => setSearchKeyword(value)}
             />
             {filterDate && (
               <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
