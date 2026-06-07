@@ -241,7 +241,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     ) -> ToolResult:
         payload = QueryTasksArgs.model_validate(args)
         tasks = [
-            _task_to_dict(task) for task in TaskService(session).list_tasks(user_id, payload.status)
+            _task_to_dict(task) for task in TaskService(session).list_tasks(user_id, payload.status)[0]
         ]
         return ToolResult(data=tasks, message="任务查询完成")
 
@@ -338,7 +338,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         items = item_service.list_by_date(user_id, payload.plan_date)
         data = {
             "items": [_item_to_dict(item) for item in items],
-            "tasks": [_task_to_dict(task) for task in task_service.list_tasks(user_id)],
+            "tasks": [_task_to_dict(task) for task in task_service.list_tasks(user_id)[0]],
         }
         return ToolResult(data=data, message="安排分析完成")
 
@@ -393,7 +393,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         if payload.plan_date is not None:
             conflicts = service.detect_day_conflicts(user_id)
         else:
-            conflicts = service.list_conflicts(user_id)
+            conflicts = service.list_conflicts(user_id)[0]
         return ToolResult(data=[c.id for c in conflicts], message="冲突检测完成")
 
     def suggest_reschedule(

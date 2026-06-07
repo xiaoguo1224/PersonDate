@@ -385,7 +385,7 @@ class SchedulePlanningGraph:
         event_id = str(result_data["id"])
         open_conflicts = [
             conflict
-            for conflict in self.conflicts.list_conflicts(state.user_id, ConflictStatus.OPEN.value)
+            for conflict in self.conflicts.list_conflicts(state.user_id, ConflictStatus.OPEN.value)[0]
             if isinstance(conflict.related_item_ids, dict)
             and (
                 conflict.related_item_ids.get("current") == event_id
