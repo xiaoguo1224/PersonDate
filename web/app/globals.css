@@ -2833,7 +2833,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 :root {
-  --bg-primary: #f7fafc;
+  --bg-primary: #f0f7ff;
   --bg-secondary: #edf3fb;
   --surface: rgba(255, 255, 255, 0.86);
   --surface-strong: rgba(255, 255, 255, 0.96);
@@ -2884,6 +2884,7 @@ body {
 
 .dashboard-shell {
   min-height: 100vh;
+  background: var(--shell-bg);
 }
 
 .dashboard-shell--loading {
@@ -2896,7 +2897,7 @@ body {
   flex-direction: column;
   min-height: 100vh;
   padding: 24px 16px 18px;
-  background: var(--sidebar-gradient) !important;
+  background: var(--sidebar-gradient);
   border-inline-end: 1px solid var(--glass-border);
   backdrop-filter: blur(18px);
 }
