@@ -1,9 +1,78 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
+
+_DATETIME_FORMATS = (
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y/%m/%dT%H:%M:%S",
+    "%Y/%m/%dT%H:%M",
+    "%Y/%m/%d %H:%M:%S",
+    "%Y/%m/%d %H:%M",
+)
+
+_DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+)
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        for fmt in _DATETIME_FORMATS:
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+        logger.warning("无法解析 datetime 字符串: %s", value)
+    return None
+
+
+def _parse_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        for fmt in _DATE_FORMATS:
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            pass
+        try:
+            return datetime.fromisoformat(value).date()
+        except ValueError:
+            pass
+        logger.warning("无法解析 date 字符串: %s", value)
+    return None
 
 
 class IntentDecision(BaseModel):
@@ -90,6 +159,18 @@ class MessageExtraction(BaseModel):
     new_start_time: datetime | None = None
     new_end_time: datetime | None = None
     priority: str | None = None
+
+    @field_validator("event_start_time", "event_end_time", "task_deadline", "new_start_time", "new_end_time", mode="before")
+    @classmethod
+    def parse_datetime_field(cls, value: object) -> object:
+        result = _parse_datetime(value)
+        return result if result is not None else value
+
+    @field_validator("query_start_date", "query_end_date", "plan_date", "target_event_date", mode="before")
+    @classmethod
+    def parse_date_field(cls, value: object) -> object:
+        result = _parse_date(value)
+        return result if result is not None else value
 
     @model_validator(mode="before")
     @classmethod
