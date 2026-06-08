@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, formatRange, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
+import { formatDateTime, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -46,10 +46,10 @@ function ConflictTimeDisplay({
   return (
     <Space direction="vertical" size={2} style={{ fontSize: 12 }}>
       <Text className="muted-text">
-        {items.current.title}：{formatRange(items.current.start_time, items.current.end_time, timezone)}
+        {items.current.title}：{formatDateTime(items.current.start_time, timezone)} - {formatDateTime(items.current.end_time, timezone)}
       </Text>
       <Text className="muted-text">
-        {items.other.title}：{formatRange(items.other.start_time, items.other.end_time, timezone)}
+        {items.other.title}：{formatDateTime(items.other.start_time, timezone)} - {formatDateTime(items.other.end_time, timezone)}
       </Text>
     </Space>
   );
