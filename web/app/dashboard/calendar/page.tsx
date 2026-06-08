@@ -621,6 +621,15 @@ export default function CalendarPage() {
     () => selectedDayEvents.filter((e) => conflictItemIds.has(e.id)),
     [selectedDayEvents, conflictItemIds],
   );
+  const conflictDates = useMemo(() => {
+    const dates = new Set<string>();
+    events
+      .filter((event) => event.status !== "deleted" && conflictItemIds.has(event.id))
+      .forEach((event) => {
+        dates.add(getDateKey(event.start_time, timezone));
+      });
+    return dates;
+  }, [events, conflictItemIds, timezone]);
   useEffect(() => {
     if (dayConflicts.length > 0) {
       setDayConflictModalOpen(true);
@@ -993,6 +1002,7 @@ export default function CalendarPage() {
                       const isSelected = key === selectedDateKey;
                       const isToday = key === todayKey;
                       const isOutsideMonth = !current.isSame(focusDate, "month");
+                      const hasConflict = conflictDates.has(key);
                       return (
                         <div
                           key={key}
@@ -1003,6 +1013,7 @@ export default function CalendarPage() {
                             isSelected ? "calendar-month-cell--selected" : "",
                             isToday ? "calendar-month-cell--today" : "",
                             isOutsideMonth ? "calendar-month-cell--outside" : "",
+                            hasConflict ? "calendar-month-cell--conflict" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -1026,7 +1037,9 @@ export default function CalendarPage() {
                                   ? "linear-gradient(135deg, rgba(191, 219, 254, 0.96), rgba(59, 130, 246, 0.85))"
                                   : isToday
                                     ? "rgba(254, 243, 199, 0.9)"
-                                    : "var(--card-inner-bg)",
+                                    : hasConflict
+                                      ? "rgba(254, 200, 200, 0.9)"
+                                      : "var(--card-inner-bg)",
                                 color: isSelected ? "#06111f" : "var(--text-primary)",
                               }}
                             >
@@ -1034,6 +1047,7 @@ export default function CalendarPage() {
                             </span>
                             <Space wrap size={6}>
                               {isToday ? <Tag color="gold">今天</Tag> : null}
+                              {hasConflict ? <Tag color="red">冲突</Tag> : null}
                               {items.length ? <span className="calendar-month-cell__count">{items.length}</span> : null}
                             </Space>
                           </div>
