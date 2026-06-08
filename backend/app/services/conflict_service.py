@@ -5,13 +5,19 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.cache import cache_get, cache_set
+from app.core.cache_invalidator import invalidate_user_conflicts
 
 logger = logging.getLogger(__name__)
-from sqlalchemy.orm import Session
 
 from app.models import ConflictSeverity, ConflictStatus, ConflictType, ScheduleConflict
 from app.models.enums import ScheduledItemStatus
 from app.models.scheduled_item import ScheduledItem
+
+
+_CONFLICTS_TTL = 600  # 10 分钟
 
 
 class ConflictService:
@@ -94,6 +100,7 @@ class ConflictService:
             changed = True
         if changed:
             self.db.flush()
+            invalidate_user_conflicts(user_id)
 
     def _item_sort_key(self, item: ScheduledItem) -> tuple[str, str, str]:
         return (item.start_time.isoformat(), item.end_time.isoformat(), item.id)
@@ -143,6 +150,8 @@ class ConflictService:
             self.db.add(conflict)
             conflicts.append(conflict)
         self.db.flush()
+        if conflicts:
+            invalidate_user_conflicts(user_id)
         logger.info("检测日程冲突 user_id=%s item_id=%s 新增冲突数=%d", user_id, item.id, len(conflicts))
         return conflicts
 
@@ -185,6 +194,8 @@ class ConflictService:
                 self.db.add(conflict)
                 conflicts.append(conflict)
         self.db.flush()
+        if conflicts:
+            invalidate_user_conflicts(user_id)
         logger.info("检测全天冲突 user_id=%s 新增冲突数=%d", user_id, len(conflicts))
         return conflicts
 
@@ -227,6 +238,30 @@ class ConflictService:
         start = (page - 1) * page_size
         return unique_conflicts[start : start + page_size], total
 
+    def list_conflicts_cached(self, user_id: str, status: str | None = None) -> list[dict]:
+        cache_key = f"schedule:user:{user_id}:conflicts:status:{status or 'all'}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+        items, _ = self.list_conflicts(user_id, status=status, page_size=100)
+        result = [
+            {
+                "id": c.id,
+                "conflict_type": c.conflict_type,
+                "severity": c.severity,
+                "title": c.title,
+                "description": c.description,
+                "related_item_ids": c.related_item_ids,
+                "suggestion": c.suggestion,
+                "status": c.status,
+                "detected_at": c.detected_at.isoformat(),
+                "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
+            }
+            for c in items
+        ]
+        cache_set(cache_key, result, _CONFLICTS_TTL)
+        return result
+
     def resolve_conflicts_for_item(self, user_id: str, item_id: str) -> list[ScheduleConflict]:
         stmt = select(ScheduleConflict).where(
             ScheduleConflict.user_id == user_id,
@@ -241,6 +276,8 @@ class ConflictService:
             conflict.resolved_at = datetime.now(UTC)
             resolved_conflicts.append(conflict)
         self.db.flush()
+        if resolved_conflicts:
+            invalidate_user_conflicts(user_id)
         logger.info("解决项目冲突 user_id=%s item_id=%s 解决数=%d", user_id, item_id, len(resolved_conflicts))
         return resolved_conflicts
 
@@ -254,11 +291,13 @@ class ConflictService:
 
     def ignore_conflict(self, conflict: ScheduleConflict) -> ScheduleConflict:
         conflict.status = ConflictStatus.IGNORED.value
+        invalidate_user_conflicts(conflict.user_id)
         logger.info("忽略冲突 user_id=%s conflict_id=%s", conflict.user_id, conflict.id)
         return conflict
 
     def resolve_conflict(self, conflict: ScheduleConflict) -> ScheduleConflict:
         conflict.status = ConflictStatus.RESOLVED.value
         conflict.resolved_at = datetime.now(UTC)
+        invalidate_user_conflicts(conflict.user_id)
         logger.info("解决冲突 user_id=%s conflict_id=%s", conflict.user_id, conflict.id)
         return conflict
