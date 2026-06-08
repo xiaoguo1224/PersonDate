@@ -13,6 +13,7 @@
 | 后端服务 | Python 3.11+ + FastAPI + SQLAlchemy 2.0 + Alembic | 全局核心服务 |
 | Agent 状态流 | LangGraph + OpenAI-compatible SDK + Pydantic v2 | 日程识别、规划、确认、冲突处理 |
 | 数据库 | PostgreSQL | 用户、日程、任务、计划、日志、提醒 |
+| 缓存 | Redis 7+ | 查询缓存、天气缓存、Agent 状态缓存 |
 | 提醒调度 | APScheduler | reminder_job 到点触发 |
 | Web Dashboard | Next.js + React + TypeScript + Ant Design | owner/member 日程驾驶舱 |
 | 微信通道 | openclaw-weixin + 自研 WeChat Channel Adapter | 微信消息接收、回复、提醒 |
@@ -216,6 +217,8 @@ Tool Executor
 Business Services
   ↓
 PostgreSQL
+  ↓
+Redis 缓存层 (写时失效 + TTL 兜底)
   ↓
 APScheduler Reminder Worker
   ↓
@@ -943,6 +946,7 @@ docker build --platform linux/amd64 -t schedule-agent-backend .
 backend
 web
 postgres
+redis
 wechat-channel
 ```
 
@@ -954,6 +958,7 @@ wechat-channel
 
 ```text
 DATABASE_URL
+REDIS_URL
 JWT_SECRET
 LLM_BASE_URL
 LLM_API_KEY

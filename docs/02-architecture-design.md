@@ -11,6 +11,8 @@ LangGraph Agent 状态编排
 +
 PostgreSQL 数据库
 +
+Redis 缓存层
++
 APScheduler 提醒调度
 +
 自研微信通道服务
@@ -57,6 +59,13 @@ Next.js Web Dashboard
           │
           ▼
 ┌──────────────────────────────┐
+│ Redis                        │
+│ 查询缓存层                    │
+│ 写时失效 + TTL 兜底           │
+└─────────┬────────────────────┘
+          │ (cache miss)
+          ▼
+┌──────────────────────────────┐
 │ SchedulePlanningGraph         │
 │ LangGraph 状态流 Agent        │
 │ 意图识别 / 规划 / 确认 / 回复   │
@@ -74,6 +83,13 @@ Next.js Web Dashboard
 │ 用户 / 日程 / 任务 / 计划 / 冲突 │
 └─────────┬────────────────────┘
           │
+          ▼
+┌──────────────────────────────┐
+│ Redis                        │
+│ 查询缓存层                    │
+│ 写时失效 + TTL 兜底           │
+└─────────┬────────────────────┘
+          │ (cache miss)
           ▼
 ┌──────────────────────────────┐
 │ PostgreSQL                    │
@@ -103,6 +119,8 @@ Web 链路：
 Next.js Web Dashboard
   ↓
 FastAPI REST API
+  ↓
+Redis 缓存层 (写时失效 + TTL 兜底)
   ↓
 PostgreSQL
 ```
@@ -202,6 +220,7 @@ Pydantic v2
 SQLAlchemy 2.0
 Alembic
 PostgreSQL
+Redis 7+
 LangGraph
 OpenAI-compatible SDK
 APScheduler
@@ -239,6 +258,7 @@ Docker Compose
 backend
 web-dashboard
 postgres
+redis
 wechat-channel
 ```
 
@@ -473,6 +493,46 @@ WechatChannelService 负责调用微信通道服务的发送能力。
 
 提醒不经过 LLM。
 
+### 6.6 Redis 缓存层
+
+Redis 作为查询缓存层，位于 Business Services 与 PostgreSQL 之间。
+
+缓存覆盖范围：
+
+```text
+日程查询
+任务列表
+冲突记录
+提醒任务
+系统设置
+用户配置
+天气数据
+Agent 状态
+```
+
+缓存策略：
+
+```text
+写时失效：业务服务写入数据库后，主动清除相关缓存键
+TTL 兜底：缓存键设置 10-60 分钟过期，防止脏数据长期驻留
+自动降级：Redis 不可用时，自动降级为直接查询数据库，不影响业务可用性
+```
+
+缓存键命名规范：
+
+```text
+cache:{resource}:{user_id}:{query_hash}
+```
+
+示例：
+
+```text
+cache:events:user123:date_range:2026-06-08
+cache:tasks:user123:status:pending
+cache:settings:global
+cache:weather:city:Shanghai
+```
+
 ## 7. Agent 图流程设计
 
 ### 7.1 总流程
@@ -626,6 +686,9 @@ services:
 
   postgres:
     PostgreSQL
+
+  redis:
+    Redis 缓存层
 
   wechat-channel:
     自研微信通道服务 / 长轮询与消息转发进程

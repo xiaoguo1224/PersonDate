@@ -1018,6 +1018,18 @@ TIMESTAMPTZ 时间
 JSONB 保存 Agent trace / tool results / pending state
 ```
 
+## 15. 性能索引
+
+### v2 新增索引
+
+```text
+ix_scheduled_items_user_start: scheduled_items(user_id, start_time) — 日程查询最高频路径
+ix_task_items_user_status: task_items(user_id, status) — 任务列表按用户 + 状态过滤
+ix_message_logs_conversation_dir_time: channel_message_logs(conversation_id, direction, created_at) — 消息日志查询
+```
+
+以上索引配合 Redis 缓存层使用，写时失效保证一致性，TTL 兜底防止脏数据长期驻留。
+
 核心原则：
 
 1. 所有用户业务数据必须带 user_id。
