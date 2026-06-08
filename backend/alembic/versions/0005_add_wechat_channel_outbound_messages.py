@@ -25,6 +25,15 @@ def _table_exists(table_name: str) -> bool:
     return table_name in inspector.get_table_names()
 
 
+def _index_exists(index_name: str, table_name: str) -> bool:
+    if not _table_exists(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    indexes = [idx["name"] for idx in inspector.get_indexes(table_name)]
+    return index_name in indexes
+
+
 def upgrade() -> None:
     op.alter_column(
         "alembic_version",
@@ -36,59 +45,64 @@ def upgrade() -> None:
     if not _table_exists("wechat_channel_outbound_messages"):
         op.create_table(
             "wechat_channel_outbound_messages",
-        sa.Column("account_id", sa.String(length=255), nullable=False),
-        sa.Column("message_id", sa.String(length=255), nullable=False),
-        sa.Column("to_user_id", sa.String(length=255), nullable=False),
-        sa.Column("conversation_id", sa.String(length=255), nullable=False),
-        sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("context_token", sa.Text(), nullable=True),
-        sa.Column("raw_payload", sa.JSON(), nullable=True),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("retry_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("error_code", sa.String(length=64), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "id",
-            sa.String(length=36),
-            primary_key=True,
-            nullable=False,
-            server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("account_id", "message_id", name="uq_wechat_channel_outbound_message"),
-    )
-    op.create_index(
-        "ix_wechat_channel_outbound_messages_account_id",
-        "wechat_channel_outbound_messages",
-        ["account_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_wechat_channel_outbound_messages_to_user_id",
-        "wechat_channel_outbound_messages",
-        ["to_user_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_wechat_channel_outbound_messages_conversation_id",
-        "wechat_channel_outbound_messages",
-        ["conversation_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_wechat_channel_outbound_messages_status",
-        "wechat_channel_outbound_messages",
-        ["status"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_wechat_channel_outbound_messages_sent_at",
-        "wechat_channel_outbound_messages",
-        ["sent_at"],
-        unique=False,
-    )
+            sa.Column("account_id", sa.String(length=255), nullable=False),
+            sa.Column("message_id", sa.String(length=255), nullable=False),
+            sa.Column("to_user_id", sa.String(length=255), nullable=False),
+            sa.Column("conversation_id", sa.String(length=255), nullable=False),
+            sa.Column("content", sa.Text(), nullable=False),
+            sa.Column("context_token", sa.Text(), nullable=True),
+            sa.Column("raw_payload", sa.JSON(), nullable=True),
+            sa.Column("status", sa.String(length=32), nullable=False),
+            sa.Column("retry_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("error_code", sa.String(length=64), nullable=True),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column(
+                "id",
+                sa.String(length=36),
+                primary_key=True,
+                nullable=False,
+                server_default=sa.text("gen_random_uuid()"),
+            ),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.UniqueConstraint("account_id", "message_id", name="uq_wechat_channel_outbound_message"),
+        )
+    if not _index_exists("ix_wechat_channel_outbound_messages_account_id", "wechat_channel_outbound_messages"):
+        op.create_index(
+            "ix_wechat_channel_outbound_messages_account_id",
+            "wechat_channel_outbound_messages",
+            ["account_id"],
+            unique=False,
+        )
+    if not _index_exists("ix_wechat_channel_outbound_messages_to_user_id", "wechat_channel_outbound_messages"):
+        op.create_index(
+            "ix_wechat_channel_outbound_messages_to_user_id",
+            "wechat_channel_outbound_messages",
+            ["to_user_id"],
+            unique=False,
+        )
+    if not _index_exists("ix_wechat_channel_outbound_messages_conversation_id", "wechat_channel_outbound_messages"):
+        op.create_index(
+            "ix_wechat_channel_outbound_messages_conversation_id",
+            "wechat_channel_outbound_messages",
+            ["conversation_id"],
+            unique=False,
+        )
+    if not _index_exists("ix_wechat_channel_outbound_messages_status", "wechat_channel_outbound_messages"):
+        op.create_index(
+            "ix_wechat_channel_outbound_messages_status",
+            "wechat_channel_outbound_messages",
+            ["status"],
+            unique=False,
+        )
+    if not _index_exists("ix_wechat_channel_outbound_messages_sent_at", "wechat_channel_outbound_messages"):
+        op.create_index(
+            "ix_wechat_channel_outbound_messages_sent_at",
+            "wechat_channel_outbound_messages",
+            ["sent_at"],
+            unique=False,
+        )
 
 
 def downgrade() -> None:

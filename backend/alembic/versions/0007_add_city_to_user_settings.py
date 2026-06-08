@@ -18,11 +18,25 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(table_name: str) -> bool:
+    bind = op.get_bind()
+    return sa.inspect(bind).has_table(table_name)
+
+
+def _column_exists(table_name: str, column_name: str) -> bool:
+    if not _table_exists(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column(
-        "user_settings",
-        sa.Column("city", sa.String(length=128), nullable=True),
-    )
+    if not _column_exists("user_settings", "city"):
+        op.add_column(
+            "user_settings",
+            sa.Column("city", sa.String(length=128), nullable=True),
+        )
 
 
 def downgrade() -> None:
