@@ -8,6 +8,7 @@ Create Date: 2026-06-06 00:00:00.000000
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from alembic import op
 
@@ -18,6 +19,12 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(table_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return table_name in inspector.get_table_names()
+
+
 def upgrade() -> None:
     op.alter_column(
         "alembic_version",
@@ -26,8 +33,9 @@ def upgrade() -> None:
         type_=sa.String(length=64),
         existing_nullable=False,
     )
-    op.create_table(
-        "wechat_channel_outbound_messages",
+    if not _table_exists("wechat_channel_outbound_messages"):
+        op.create_table(
+            "wechat_channel_outbound_messages",
         sa.Column("account_id", sa.String(length=255), nullable=False),
         sa.Column("message_id", sa.String(length=255), nullable=False),
         sa.Column("to_user_id", sa.String(length=255), nullable=False),
