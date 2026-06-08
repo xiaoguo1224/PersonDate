@@ -1154,6 +1154,7 @@ export default function TodayPage() {
         onIgnore={handleConflictIgnore}
         onClose={handleConflictIgnore}
         accessToken={accessToken ?? ""}
+        timezone={timezone}
       />
 
     </>
