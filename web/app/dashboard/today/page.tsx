@@ -25,6 +25,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
 import ConflictResolutionModal from "@/components/conflict-resolution-modal";
+import { useConflicts } from "@/hooks/useConflicts";
+import { useReminders } from "@/hooks/useReminders";
+import { useScheduledItems } from "@/hooks/useScheduledItems";
+import { useTasks } from "@/hooks/useTasks";
 import GanttChart from "@/components/gantt-chart";
 import {
   createScheduledItem,
@@ -33,13 +37,11 @@ import {
   formatRange,
   formatClock,
   getTodayDateKey,
-  loadTodayDashboard,
   sendAgentMessage,
   type ConflictItem,
   type DashboardSummary,
   type ReminderItem,
   type ScheduledItem,
-  type TaskItem,
   type TodayDashboardData,
 } from "@/lib/dashboard";
 
@@ -57,8 +59,6 @@ type ChatMessage = {
   pending?: boolean;
   timestamp: string;
 };
-
-type DemoDashboard = TodayDashboardData;
 
 type CalendarEventFormValues = {
   title: string;
@@ -124,138 +124,6 @@ function getTimelineStatusLabel(
   return "进行中";
 }
 
-
-function buildDemoDashboardData(planDate: string): DemoDashboard {
-  const base = dayjs(planDate);
-  const at = (hour: number, minute: number) => base.hour(hour).minute(minute).second(0).millisecond(0).toISOString();
-  const events = [
-    {
-      id: "demo-event-1",
-      title: "API自动化测试 安排 A",
-      description: "安排",
-      start_time: at(9, 0),
-      end_time: at(10, 0),
-      timezone: "Asia/Shanghai",
-      location: "安排",
-      status: "active",
-      remind_before_minutes: 10,
-    },
-    {
-      id: "demo-event-2",
-      title: "API自动化测试 安排 B",
-      description: "安排",
-      start_time: at(9, 30),
-      end_time: at(10, 30),
-      timezone: "Asia/Shanghai",
-      location: "安排",
-      status: "active",
-      remind_before_minutes: 10,
-    },
-    {
-      id: "demo-event-3",
-      title: "测试日报-提醒功能验证",
-      description: "安排",
-      start_time: at(16, 8),
-      end_time: at(17, 8),
-      timezone: "Asia/Shanghai",
-      location: "安排",
-      status: "active",
-      remind_before_minutes: 5,
-    },
-    {
-      id: "demo-event-4",
-      title: "微信提醒测试",
-      description: "安排",
-      start_time: at(16, 17),
-      end_time: at(17, 17),
-      timezone: "Asia/Shanghai",
-      location: "安排",
-      status: "active",
-      remind_before_minutes: 5,
-    },
-  ];
-
-  const tasks: TaskItem[] = [
-    { id: "demo-task-1", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
-    { id: "demo-task-2", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
-    { id: "demo-task-3", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
-    { id: "demo-task-4", title: "写论文", description: "120 分钟 · pending", estimated_minutes: 120, deadline: at(23, 59), priority: "medium", status: "pending" },
-    { id: "demo-task-5", title: "API自动化测试 任务", description: "120 分钟 · pending · 自动化测试", estimated_minutes: 120, deadline: at(23, 59), priority: "high", status: "pending" },
-  ];
-
-  const conflicts: ConflictItem[] = [
-    {
-      id: "demo-conflict-1",
-      conflict_type: "time_overlap",
-      severity: "high",
-      title: "安排冲突：API自动化测试 安排 A 与 API自动化测试 安排 B",
-      description: "存在时间重叠，建议调整其中一个安排时间，或选择忽略冲突。",
-      related_item_ids: { current: "demo-event-1", other: "demo-event-2" },
-      suggestion: "建议：调整其中一个安排时间，或选择忽略冲突。",
-      status: "open",
-      detected_at: at(8, 52),
-    },
-  ];
-
-  const reminders: ReminderItem[] = [
-    {
-      id: "demo-reminder-1",
-      target_type: "task",
-      target_id: "demo-task-5",
-      title: "拍照",
-      conversation_id: "demo-conversation-1",
-      trigger_time: at(14, 0),
-      status: "pending",
-      retry_count: 0,
-      max_retries: 3,
-    },
-  ];
-
-  const planItems: Array<Record<string, unknown>> = [  // eslint-disable-line @typescript-eslint/no-unused-vars
-    {
-      id: "demo-plan-1",
-      title: "API自动化测试 安排 A",
-      start_time: at(15, 0),
-      end_time: at(16, 0),
-      status: "completed",
-    },
-    {
-      id: "demo-plan-2",
-      title: "API自动化测试 安排 B",
-      start_time: at(15, 30),
-      end_time: at(16, 30),
-      status: "planned",
-    },
-    {
-      id: "demo-plan-3",
-      title: "测试日报-提醒功能验证",
-      start_time: at(16, 8),
-      end_time: at(17, 8),
-      status: "planned",
-    },
-    {
-      id: "demo-plan-4",
-      title: "微信提醒测试",
-      start_time: at(16, 17),
-      end_time: at(17, 17),
-      status: "planned",
-    },
-    {
-      id: "demo-plan-5",
-      title: "API自动化测试 任务",
-      start_time: at(17, 0),
-      end_time: at(19, 0),
-      status: "planned",
-    },
-  ];
-
-  return {
-    events: events as ScheduledItem[],
-    tasks,
-    conflicts,
-    reminders,
-  } as DemoDashboard;
-}
 
 function getConflictColor(severity: string) {
   if (severity === "high") {
@@ -720,16 +588,12 @@ export default function TodayPage() {
   const { session } = useAuth();
   const router = useRouter();
   const accessToken = session?.accessToken;
-  const { timezone, loading: timezoneLoading } = useDashboardTimezone();
+  const { timezone } = useDashboardTimezone();
   const planDate = useMemo(() => getTodayDateKey(timezone), [timezone]);
   const selectedDate = useMemo(() => dayjs(planDate), [planDate]);
-  const demoData = useMemo(() => buildDemoDashboardData(planDate), [planDate]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { message } = App.useApp();
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const [data, setData] = useState<TodayDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState("");
   const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [agentMessages, setAgentMessages] = useState<ChatMessage[]>(() => [createWelcomeMessage()]);
@@ -741,32 +605,19 @@ export default function TodayPage() {
   const [pendingConflicts, setPendingConflicts] = useState<ConflictItem[]>([]);
   const [conflictCurrentItemId, setConflictCurrentItemId] = useState<string>("");
 
-  const fetchData = useCallback(async () => {
-    if (!accessToken) {
-      setLoading(false);
-      setError("请先登录后查看今日安排");
-      return;
-    }
-    if (timezoneLoading) {
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await loadTodayDashboard(accessToken, timezone);
-      setData(result);
-    } catch (caughtError: unknown) {
-      setError(caughtError instanceof Error ? caughtError.message : "未知错误");
-    } finally {
-      setLoading(false);
-    }
-  }, [accessToken, timezone, timezoneLoading]);
+  const { items: events, isLoading: eventsLoading, refresh: refreshEvents } = useScheduledItems({ date: planDate });
+  const { items: tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks();
+  const { items: conflicts, isLoading: conflictsLoading, refresh: refreshConflicts } = useConflicts("open");
+  const { items: reminders, isLoading: remindersLoading, refresh: refreshReminders } = useReminders("pending");
 
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  const loading = eventsLoading || tasksLoading || conflictsLoading || remindersLoading;
 
-  const viewData = data ?? demoData;
+  const viewData: TodayDashboardData = useMemo(() => ({
+    events,
+    tasks,
+    conflicts,
+    reminders,
+  }), [events, tasks, conflicts, reminders]);
 
   const summary = useMemo(() => ({
     eventsCount: viewData.events.length,
@@ -800,8 +651,11 @@ export default function TodayPage() {
   const nextReminder = sortedReminders.find((reminder) => !isPastTime(reminder.trigger_time)) ?? null;
 
   const refreshData = useCallback(() => {
-    void fetchData();
-  }, [fetchData]);
+    refreshEvents();
+    refreshTasks();
+    refreshConflicts();
+    refreshReminders();
+  }, [refreshEvents, refreshTasks, refreshConflicts, refreshReminders]);
 
   const openEventModal = useCallback(() => {
     setEditingEvent(null);
@@ -841,12 +695,12 @@ export default function TodayPage() {
       try {
         await deleteScheduledItem(id, accessToken);
         message.success("安排已删除");
-        await fetchData();
+        refreshData();
       } catch (caughtError: unknown) {
         message.error(caughtError instanceof Error ? caughtError.message : "删除失败");
       }
     },
-    [accessToken, fetchData, message],
+    [accessToken, refreshData, message],
   );
 
   const openEditModal = useCallback(
@@ -899,7 +753,7 @@ export default function TodayPage() {
       }, accessToken);
       setEventModalOpen(false);
       eventForm.resetFields();
-      await fetchData();
+      refreshData();
       if (result.conflicts && result.conflicts.length > 0) {
         setPendingConflicts(result.conflicts);
         setConflictCurrentItemId(result.item.id);
@@ -915,7 +769,7 @@ export default function TodayPage() {
     } finally {
       setEventSubmitting(false);
     }
-  }, [accessToken, eventForm, fetchData, message]);
+  }, [accessToken, eventForm, refreshData, message]);
 
   const handleUpdateEvent = useCallback(async () => {
     if (!accessToken || !editingEvent) {
@@ -937,7 +791,7 @@ export default function TodayPage() {
       setEventModalOpen(false);
       setEditingEvent(null);
       eventForm.resetFields();
-      await fetchData();
+      refreshData();
       if (result.conflicts && result.conflicts.length > 0) {
         setPendingConflicts(result.conflicts);
         setConflictCurrentItemId(result.item.id);
@@ -953,7 +807,7 @@ export default function TodayPage() {
     } finally {
       setEventSubmitting(false);
     }
-  }, [accessToken, editingEvent, eventForm, fetchData, message]);
+  }, [accessToken, editingEvent, eventForm, refreshData, message]);
 
   const handleAgentSubmit = useCallback(async () => {
     if (!accessToken) {
@@ -1002,7 +856,7 @@ export default function TodayPage() {
         message.warning(result.final_response || "Agent 返回了待处理结果");
       }
       setAgentMessage("");
-      await fetchData();
+      refreshData();
     } catch (caughtError: unknown) {
       const errorMessage = caughtError instanceof Error ? caughtError.message : "发送失败";
       setAgentMessages((prev) => [
@@ -1019,7 +873,7 @@ export default function TodayPage() {
     } finally {
       setAgentSubmitting(false);
     }
-  }, [accessToken, agentMessage, fetchData, message]);
+  }, [accessToken, agentMessage, refreshData, message]);
 
   const resetChat = useCallback(() => {
     setAgentMessages([createWelcomeMessage()]);
@@ -1058,7 +912,7 @@ export default function TodayPage() {
     <>
       <TodayPageView
         containerRef={containerRef}
-        error={error}
+        error={null}
         loading={loading}
         timezone={timezone}
         summary={summary}
