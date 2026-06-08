@@ -18,3 +18,4 @@ dist/
 .codex-*.png
 .playwright-mcp/
 .mypy_*/.claude/worktrees/
+docker-push.sh
