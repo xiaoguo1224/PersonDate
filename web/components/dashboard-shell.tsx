@@ -258,6 +258,7 @@ function DashboardShellContent({
 
   const fetchWeatherApiKey = useCallback(async () => {
     if (!accessToken) {
+      setWarmMessage(generateWarmMessage(null));
       return;
     }
     try {
@@ -269,11 +270,13 @@ function DashboardShellContent({
       const weatherSetting = response.items.find((item) => item.key === "WEATHER_API_KEY");
       if (weatherSetting?.is_configured) {
         setWeatherApiKey("configured");
+      } else {
+        setWarmMessage(generateWarmMessage(null));
       }
-    } catch (err) {
-      console.error("获取天气 API Key 失败:", err);
+    } catch {
+      setWarmMessage(generateWarmMessage(null));
     }
-  }, [accessToken]);
+  }, [accessToken, generateWarmMessage]);
 
   const fetchWeather = useCallback(async (latitude: number, longitude: number) => {
     if (!weatherApiKey) {
@@ -402,12 +405,7 @@ function DashboardShellContent({
                     <span>{weather.temperature}°C {weather.description}</span>
                   </span>
                 </>
-              ) : (
-                <span className="dashboard-topbar__weather-item">
-                  <EnvironmentOutlined className="dashboard-topbar__weather-icon" />
-                  <span>定位中...</span>
-                </span>
-              )}
+              ) : null}
               {warmMessage && (
                 <>
                   <span className="dashboard-topbar__weather-divider">|</span>
