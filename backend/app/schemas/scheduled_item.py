@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -56,3 +57,20 @@ class GenerateDayDraftsRequest(BaseModel):
 
 class ConfirmDayDraftsRequest(BaseModel):
     plan_date: date
+
+
+class ConflictInfo(BaseModel):
+    id: str
+    conflict_type: str
+    severity: str
+    title: str
+    description: str | None = None
+    related_item_ids: dict[str, Any] | None = None
+    suggestion: str | None = None
+    status: str
+    detected_at: datetime
+
+
+class ScheduledItemConflictResult(BaseModel):
+    item: ScheduledItemDTO
+    conflicts: list[ConflictInfo] = []

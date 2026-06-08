@@ -7,8 +7,10 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.common import ApiResponse
 from app.schemas.scheduled_item import (
+    ConflictInfo,
     ConfirmDayDraftsRequest,
     GenerateDayDraftsRequest,
+    ScheduledItemConflictResult,
     ScheduledItemCreateRequest,
     ScheduledItemDTO,
     ScheduledItemListResponse,
@@ -19,6 +21,20 @@ from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/scheduled-items", tags=["scheduled_items"])
+
+
+def _to_conflict_info(conflict: object) -> ConflictInfo:
+    return ConflictInfo(
+        id=conflict.id,
+        conflict_type=conflict.conflict_type,
+        severity=conflict.severity,
+        title=conflict.title,
+        description=conflict.description,
+        related_item_ids=conflict.related_item_ids,
+        suggestion=conflict.suggestion,
+        status=conflict.status,
+        detected_at=conflict.detected_at,
+    )
 
 
 def _to_dto(item: object) -> ScheduledItemDTO:
@@ -40,12 +56,12 @@ def _to_dto(item: object) -> ScheduledItemDTO:
     )
 
 
-@router.post("", response_model=ApiResponse[ScheduledItemDTO])
+@router.post("", response_model=ApiResponse[ScheduledItemConflictResult])
 def create_scheduled_item(
     payload: ScheduledItemCreateRequest,
     db: DbSession,
     current_user: CurrentUser,
-) -> ApiResponse[ScheduledItemDTO]:
+) -> ApiResponse[ScheduledItemConflictResult]:
     service = ScheduledItemService(db)
     item = service.create(
         user_id=current_user.id,
@@ -71,18 +87,22 @@ def create_scheduled_item(
             related_ids = conflict.related_item_ids
             if not related_ids:
                 continue
-            # 检查冲突的另一项是否是弹性任务
             other_id = related_ids.get("other") if related_ids.get("current") == item.id else related_ids.get("current")
             if other_id:
                 other_item = service.get(current_user.id, other_id)
                 if other_item and other_item.source_task_id:
                     task = task_service.get_task(current_user.id, other_item.source_task_id)
                     if task and task.time_type == "flexible":
-                        # 尝试重新安排弹性任务
                         task_service.reschedule_conflicted_item(current_user.id, task, other_item)
 
     db.commit()
-    return ApiResponse(data=_to_dto(item), message="安排已创建")
+    return ApiResponse(
+        data=ScheduledItemConflictResult(
+            item=_to_dto(item),
+            conflicts=[_to_conflict_info(c) for c in conflicts],
+        ),
+        message="安排已创建",
+    )
 
 
 @router.get("", response_model=ApiResponse[ScheduledItemListResponse])
@@ -125,13 +145,13 @@ def get_scheduled_item(
     return ApiResponse(data=_to_dto(item))
 
 
-@router.patch("/{item_id}", response_model=ApiResponse[ScheduledItemDTO])
+@router.patch("/{item_id}", response_model=ApiResponse[ScheduledItemConflictResult])
 def update_scheduled_item(
     item_id: str,
     payload: ScheduledItemUpdateRequest,
     db: DbSession,
     current_user: CurrentUser,
-) -> ApiResponse[ScheduledItemDTO]:
+) -> ApiResponse[ScheduledItemConflictResult]:
     service = ScheduledItemService(db)
     item = service.get(current_user.id, item_id)
     if item is None:
@@ -147,8 +167,19 @@ def update_scheduled_item(
         remind_before_minutes=payload.remind_before_minutes,
         status=payload.status,
     )
+
+    # 更新后检测冲突
+    conflict_service = ConflictService(db)
+    conflicts = conflict_service.detect_item_conflicts(current_user.id, item)
+
     db.commit()
-    return ApiResponse(data=_to_dto(item), message="安排已更新")
+    return ApiResponse(
+        data=ScheduledItemConflictResult(
+            item=_to_dto(item),
+            conflicts=[_to_conflict_info(c) for c in conflicts],
+        ),
+        message="安排已更新",
+    )
 
 
 @router.delete("/{item_id}", response_model=ApiResponse)
