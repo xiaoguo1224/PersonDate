@@ -3153,6 +3153,53 @@ body {
   color: var(--text-secondary) !important;
 }
 
+.dashboard-topbar__headline {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-topbar__greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-topbar__weather {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.dashboard-topbar__weather-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-primary);
+}
+
+.dashboard-topbar__weather-icon {
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.dashboard-topbar__weather-divider {
+  color: var(--text-secondary);
+  opacity: 0.4;
+}
+
+.dashboard-topbar__weather-message {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .dashboard-content {
   padding: 24px;
 }

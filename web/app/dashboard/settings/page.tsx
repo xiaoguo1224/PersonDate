@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Col, Form, Input, InputNumber, Row, Space, Spin, Switch, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Spin, Switch, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -15,6 +15,8 @@ type SystemSettingsForm = {
   REMINDER_SCAN_INTERVAL_SECONDS: number;
   DEFAULT_REMIND_BEFORE_MINUTES: number;
   SYSTEM_DAILY_PUSH_ENABLED: boolean;
+  WEATHER_API_PROVIDER: string;
+  WEATHER_API_KEY?: string;
 };
 
 export default function SystemSettingsPage() {
@@ -32,7 +34,9 @@ export default function SystemSettingsPage() {
     const scanInterval = getSettingValue(items, "REMINDER_SCAN_INTERVAL_SECONDS");
     const remindBefore = getSettingValue(items, "DEFAULT_REMIND_BEFORE_MINUTES");
     const dailyPush = getSettingValue(items, "SYSTEM_DAILY_PUSH_ENABLED");
-    return { timezone, scanInterval, remindBefore, dailyPush };
+    const weatherApiProvider = getSettingValue(items, "WEATHER_API_PROVIDER");
+    const weatherApiKey = getSettingValue(items, "WEATHER_API_KEY");
+    return { timezone, scanInterval, remindBefore, dailyPush, weatherApiProvider, weatherApiKey };
   }, [items]);
 
   useEffect(() => {
@@ -57,6 +61,10 @@ export default function SystemSettingsPage() {
           SYSTEM_DAILY_PUSH_ENABLED: Boolean(
             getSettingValue(result.items, "SYSTEM_DAILY_PUSH_ENABLED")?.value ?? false,
           ),
+          WEATHER_API_PROVIDER: String(
+            getSettingValue(result.items, "WEATHER_API_PROVIDER")?.value ?? "openweathermap",
+          ),
+          WEATHER_API_KEY: "",
         });
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");
@@ -74,15 +82,22 @@ export default function SystemSettingsPage() {
     }
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = { ...values };
+      if (!values.WEATHER_API_KEY || !values.WEATHER_API_KEY.trim()) {
+        delete payload.WEATHER_API_KEY;
+      }
       const result = await requestJson<SystemSettingsResponse>(
         "/api/admin/system-settings",
         {
           method: "PATCH",
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         },
         accessToken,
       );
       setItems(result.items);
+      form.setFieldsValue({
+        WEATHER_API_KEY: "",
+      });
       message.success("系统设置已更新");
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "保存失败");
@@ -121,6 +136,12 @@ export default function SystemSettingsPage() {
             </Tag>
             <Tag color={summary.dailyPush?.value ? "green" : "default"}>
               每日推送：{summary.dailyPush?.value ? "开启" : "关闭"}
+            </Tag>
+            <Tag color="cyan">
+              天气源：{summary.weatherApiProvider?.value === "amap" ? "高德地图" : "OpenWeatherMap"}
+            </Tag>
+            <Tag color={summary.weatherApiKey?.is_configured ? "cyan" : "default"}>
+              天气 API Key：{summary.weatherApiKey?.is_configured ? "已配置" : "未配置"}
             </Tag>
           </Space>
         </Space>
@@ -165,6 +186,25 @@ export default function SystemSettingsPage() {
                 <Switch />
               </Form.Item>
 
+              <Form.Item
+                label="天气 API 提供商"
+                name="WEATHER_API_PROVIDER"
+                rules={[{ required: true, message: "请选择天气 API 提供商" }]}
+              >
+                <Select>
+                  <Select.Option value="openweathermap">OpenWeatherMap</Select.Option>
+                  <Select.Option value="amap">高德地图</Select.Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                label="天气 API Key"
+                name="WEATHER_API_KEY"
+                extra="用于获取天气信息。留空表示不修改当前密钥。OpenWeatherMap 和高德地图使用不同的 Key。"
+              >
+                <Input.Password placeholder="输入天气 API Key" autoComplete="new-password" />
+              </Form.Item>
+
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
                 保存系统设置
               </Button>
@@ -189,6 +229,12 @@ export default function SystemSettingsPage() {
                   </Text>
                   <Text className="muted-text">
                     SYSTEM_DAILY_PUSH_ENABLED：{summary.dailyPush?.value ? "true" : "false"}
+                  </Text>
+                  <Text className="muted-text">
+                    WEATHER_API_PROVIDER：{summary.weatherApiProvider?.value === "amap" ? "amap" : "openweathermap"}
+                  </Text>
+                  <Text className="muted-text">
+                    WEATHER_API_KEY：{summary.weatherApiKey?.is_configured ? "已配置" : "未配置"}
                   </Text>
                 </Space>
               </div>

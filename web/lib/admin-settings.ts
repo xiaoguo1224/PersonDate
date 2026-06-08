@@ -20,6 +20,8 @@ export type SystemSettingsFormValues = {
   LLM_BASE_URL?: string;
   LLM_MODEL?: string;
   LLM_API_KEY?: string;
+  WEATHER_API_PROVIDER?: string;
+  WEATHER_API_KEY?: string;
 };
 
 export function getSettingValue(items: SystemSettingItem[], key: string): SystemSettingItem | undefined {

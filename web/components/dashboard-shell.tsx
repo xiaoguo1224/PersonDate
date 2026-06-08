@@ -208,9 +208,12 @@ function DashboardShellContent({
     city: string;
     temperature: number;
     description: string;
+    humidity: number;
+    wind_speed: number;
   } | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [warmMessage, setWarmMessage] = useState("");
+  const [weatherApiKey, setWeatherApiKey] = useState<string | null>(null);
 
   const generateWarmMessage = useCallback((weatherData: typeof weather) => {
     const messages = [
@@ -249,23 +252,37 @@ function DashboardShellContent({
     return messages[randomIndex];
   }, []);
 
+  const fetchWeatherApiKey = useCallback(async () => {
+    try {
+      const response = await requestJson<{ items: Array<{ key: string; is_configured: boolean }> }>(
+        "/api/admin/system-settings",
+      );
+      const weatherSetting = response.items.find((item) => item.key === "WEATHER_API_KEY");
+      if (weatherSetting?.is_configured) {
+        setWeatherApiKey("configured");
+      }
+    } catch (err) {
+      console.error("获取天气 API Key 失败:", err);
+    }
+  }, []);
+
   const fetchWeather = useCallback(async (latitude: number, longitude: number) => {
+    if (!weatherApiKey) {
+      const fallbackMessage = generateWarmMessage(null);
+      setWarmMessage(fallbackMessage);
+      return;
+    }
     setWeatherLoading(true);
     try {
-      const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=YOUR_API_KEY&units=metric&lang=zh_cn`
-      );
-      if (!response.ok) {
-        throw new Error("天气数据获取失败");
-      }
-      const data = await response.json();
-      const weatherData = {
-        city: data.name,
-        temperature: Math.round(data.main.temp),
-        description: data.weather[0].description,
-      };
-      setWeather(weatherData);
-      setWarmMessage(generateWarmMessage(weatherData));
+      const response = await requestJson<{
+        city: string;
+        temperature: number;
+        description: string;
+        humidity: number;
+        wind_speed: number;
+      }>(`/api/weather?lat=${latitude}&lon=${longitude}`);
+      setWeather(response);
+      setWarmMessage(generateWarmMessage(response));
     } catch (err) {
       console.error("获取天气失败:", err);
       const fallbackMessage = generateWarmMessage(null);
@@ -273,7 +290,7 @@ function DashboardShellContent({
     } finally {
       setWeatherLoading(false);
     }
-  }, [generateWarmMessage]);
+  }, [weatherApiKey, generateWarmMessage]);
 
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -296,8 +313,14 @@ function DashboardShellContent({
   }, [fetchWeather, generateWarmMessage]);
 
   useEffect(() => {
-    getLocation();
-  }, [getLocation]);
+    void fetchWeatherApiKey();
+  }, [fetchWeatherApiKey]);
+
+  useEffect(() => {
+    if (weatherApiKey) {
+      getLocation();
+    }
+  }, [weatherApiKey, getLocation]);
 
   return (
     <App>
@@ -333,30 +356,44 @@ function DashboardShellContent({
 
       <Layout className="dashboard-main">
         <Header className="dashboard-topbar">
-          <Space direction="vertical" size={2} className="dashboard-topbar__headline">
-            <Text className="muted-text dashboard-topbar__eyebrow">欢迎回来</Text>
-            <Title level={4} className="dashboard-topbar__title">
-              {preferences.loading ? "正在同步你的时区..." : dateLabel}
-            </Title>
-            <Space size={8} wrap>
+          <div className="dashboard-topbar__headline">
+            <div className="dashboard-topbar__greeting">
+              <Title level={4} className="dashboard-topbar__title">
+                {preferences.loading ? "正在同步你的时区..." : dateLabel}
+              </Title>
+            </div>
+            <div className="dashboard-topbar__weather">
               {weatherLoading ? (
                 <Spin size="small" />
               ) : weather ? (
                 <>
-                  <Tag icon={<EnvironmentOutlined />} color="blue" style={{ margin: 0 }}>{weather.city}</Tag>
-                  <Tag icon={<CloudOutlined />} color="cyan" style={{ margin: 0 }}>{weather.temperature}°C {weather.description}</Tag>
+                  <span className="dashboard-topbar__weather-item">
+                    <EnvironmentOutlined className="dashboard-topbar__weather-icon" />
+                    <span>{weather.city}</span>
+                  </span>
+                  <span className="dashboard-topbar__weather-divider">|</span>
+                  <span className="dashboard-topbar__weather-item">
+                    <CloudOutlined className="dashboard-topbar__weather-icon" />
+                    <span>{weather.temperature}°C {weather.description}</span>
+                  </span>
                 </>
               ) : (
-                <Tag icon={<EnvironmentOutlined />} color="blue" style={{ margin: 0 }}>定位中...</Tag>
+                <span className="dashboard-topbar__weather-item">
+                  <EnvironmentOutlined className="dashboard-topbar__weather-icon" />
+                  <span>定位中...</span>
+                </span>
               )}
               {warmMessage && (
-                <Text className="muted-text" style={{ fontSize: 12 }}>
-                  <SmileOutlined style={{ color: "#fadb14", marginRight: 4 }} />
-                  {warmMessage}
-                </Text>
+                <>
+                  <span className="dashboard-topbar__weather-divider">|</span>
+                  <span className="dashboard-topbar__weather-message">
+                    <SmileOutlined className="dashboard-topbar__weather-icon" />
+                    <span>{warmMessage}</span>
+                  </span>
+                </>
               )}
-            </Space>
-          </Space>
+            </div>
+          </div>
           <Space size={12} wrap className="dashboard-topbar__actions">
             <Button className="dashboard-topbar__button" type="default" icon={<PlusOutlined />} href="/dashboard/calendar">
               快速新建
