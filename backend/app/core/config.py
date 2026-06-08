@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     )
     weather_api_provider: str = Field(default="qweather", alias="WEATHER_API_PROVIDER")
     weather_api_key: str = Field(default="", alias="WEATHER_API_KEY")
+    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
 
 @lru_cache
