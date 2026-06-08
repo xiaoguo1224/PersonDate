@@ -782,28 +782,6 @@ export default function CalendarPage() {
     setConflictCurrentItemId("");
   }, []);
 
-  const handleDelete = useCallback(
-    (event: ScheduledItem) => {
-      if (!accessToken) {
-        return;
-      }
-      modal.confirm({
-        title: "删除安排",
-        content: `确认删除「${event.title}」吗？`,
-        okText: "删除",
-        okButtonProps: { danger: true },
-        cancelText: "取消",
-        centered: true,
-        onOk: async () => {
-          await deleteScheduledItem(event.id, accessToken);
-          messageApi.success("安排已删除");
-          await refreshData();
-        },
-      });
-    },
-    [accessToken, modal, messageApi, refreshData],
-  );
-
   const handleDeleteDirect = useCallback(
     async (event: ScheduledItem) => {
       if (!accessToken) {

@@ -89,6 +89,7 @@ export default function ConflictsPage() {
   const [total, setTotal] = useState(0);
 
   const [selectModalOpen, setSelectModalOpen] = useState(false);
+  const [selectConflict, setSelectConflict] = useState<ConflictItem | null>(null);
   const [conflictItemA, setConflictItemA] = useState<ScheduledItem | null>(null);
   const [conflictItemB, setConflictItemB] = useState<ScheduledItem | null>(null);
   const [selectLoading, setSelectLoading] = useState(false);
