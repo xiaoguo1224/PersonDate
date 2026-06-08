@@ -11,9 +11,14 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.cache import cache_get, cache_set
+from app.core.cache_invalidator import invalidate_system_settings
 from app.core.config import get_settings
 from app.models import SystemSetting
 from app.schemas.system_setting import UpdateSystemSettingsRequest
+
+_SYSTEM_SETTINGS_CACHE_KEY = "schedule:system:settings"
+_SYSTEM_SETTINGS_TTL = 1800  # 30 分钟
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +125,29 @@ class SystemSettingService:
             setting.description = spec.description
             setting.is_sensitive = spec.is_sensitive
         self.db.flush()
+        invalidate_system_settings()
         logger.info("更新系统设置 字段=%s", ",".join(payload.model_fields_set))
         return self.list_settings()
+
+    def list_settings_public(self) -> list[dict[str, Any]]:
+        cached = cache_get(_SYSTEM_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return cached
+        settings = self.list_settings()
+        result = [self.to_public_dict(s) for s in settings]
+        cache_set(_SYSTEM_SETTINGS_CACHE_KEY, result, _SYSTEM_SETTINGS_TTL)
+        return result
+
+    def get_value(self, key: str) -> Any:
+        cached = cache_get(_SYSTEM_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            for item in cached:
+                if item.get("key") == key:
+                    return item.get("value")
+        setting = self.db.scalar(select(SystemSetting).where(SystemSetting.key == key))
+        if setting is None:
+            return None
+        return self._decode_value(setting)
 
     def to_public_dict(self, setting: SystemSetting) -> dict[str, Any]:
         return {
