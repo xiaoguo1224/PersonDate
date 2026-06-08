@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Row, Space, Spin, Switch, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Card, Col, Form, Input, InputNumber, Row, Space, Spin, Switch, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -19,6 +19,7 @@ type SystemSettingsForm = {
 
 export default function SystemSettingsPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const [form] = Form.useForm<SystemSettingsForm>();
   const [items, setItems] = useState<SystemSettingItem[]>([]);

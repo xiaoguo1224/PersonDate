@@ -1,6 +1,6 @@
 "use client";
 
-import { ConfigProvider, theme } from "antd";
+import { App, ConfigProvider, theme } from "antd";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type ThemeName = "blue-white" | "black-gold" | "pink";
@@ -252,7 +252,7 @@ export default function ThemeProvider({
           token: config.token as Record<string, unknown>,
         }}
       >
-        {children}
+        <App>{children}</App>
       </ConfigProvider>
     </ThemeContext.Provider>
   );

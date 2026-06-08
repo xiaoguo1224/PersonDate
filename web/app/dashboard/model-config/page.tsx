@@ -1,7 +1,7 @@
 "use client";
 
 import { RobotOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Form, Input, Row, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Card, Col, Form, Input, Row, Space, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -18,6 +18,7 @@ type ModelConfigForm = {
 
 export default function ModelConfigPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const [form] = Form.useForm<ModelConfigForm>();
   const [items, setItems] = useState<SystemSettingItem[]>([]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { LockOutlined, MailOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Form, Input, message } from "antd";
+import { App, Button, Form, Input } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -21,6 +21,7 @@ type RegisterForm = {
 export default function RegisterPage() {
   const router = useRouter();
   const { session, login } = useAuth();
+  const { message } = App.useApp();
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SaveOutlined } from "@ant-design/icons";
-import { Button, Card, Col, Form, Input, Row, Space, Spin, Switch, Typography, message } from "antd";
+import { App, Button, Card, Col, Form, Input, Row, Space, Spin, Switch, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -17,6 +17,7 @@ type NotificationForm = {
 
 export default function NotificationSettingsPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const [form] = Form.useForm<NotificationForm>();
   const [loading, setLoading] = useState(true);

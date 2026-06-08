@@ -1,7 +1,7 @@
 "use client";
 
 import { LockOutlined, LoginOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Form, Input, Typography, message } from "antd";
+import { App, Button, Form, Input, Typography } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -19,6 +19,7 @@ type LoginForm = {
 export default function LoginPage() {
   const router = useRouter();
   const { session, login } = useAuth();
+  const { message } = App.useApp();
   const [submitting, setSubmitting] = useState(false);
 
   useLoginAnimation();

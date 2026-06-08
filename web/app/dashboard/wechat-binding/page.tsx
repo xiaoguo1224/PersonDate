@@ -1,7 +1,7 @@
 "use client";
 
 import { LoadingOutlined, QrcodeOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Empty, Modal, QRCode, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Card, Empty, Modal, QRCode, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -28,6 +28,7 @@ function getStatusColor(status: string) {
 
 export default function WechatBindingPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const [identities, setIdentities] = useState<ChannelIdentityItem[]>([]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { ClusterOutlined, CheckCircleOutlined, PauseCircleOutlined, TeamOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Modal, Row, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Card, Col, Modal, Row, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -68,6 +68,7 @@ function UsersEmpty() {
 
 export default function UsersPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const isOwner = session?.role === "owner";

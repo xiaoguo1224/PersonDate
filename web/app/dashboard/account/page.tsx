@@ -1,7 +1,7 @@
 "use client";
 
 import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, Typography, message } from "antd";
+import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -25,6 +25,7 @@ function normalizeText(value?: string | null) {
 
 export default function AccountPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const [form] = Form.useForm<SettingsForm>();
   const [loading, setLoading] = useState(true);

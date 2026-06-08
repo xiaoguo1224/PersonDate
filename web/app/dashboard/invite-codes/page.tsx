@@ -1,7 +1,7 @@
 "use client";
 
 import { MinusCircleOutlined, PlusOutlined, QrcodeOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Space, Spin, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -56,6 +56,7 @@ function getStatusColor(status: string) {
 
 export default function InviteCodesPage() {
   const { session } = useAuth();
+  const { message } = App.useApp();
   const { timezone } = useDashboardTimezone();
   const [form] = Form.useForm<InviteCodeCreatePayload>();
   const [codes, setCodes] = useState<InviteCodeItem[]>([]);
