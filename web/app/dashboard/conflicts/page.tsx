@@ -1,12 +1,13 @@
 "use client";
 
-import { App, Card, Empty, Input, List, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
-import { CheckOutlined, CloseOutlined, SearchOutlined } from "@ant-design/icons";
+import { App, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
+import { CheckOutlined, CloseOutlined, EditOutlined, SearchOutlined, SwapOutlined } from "@ant-design/icons";
+import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, type ConflictItem } from "@/lib/dashboard";
+import { formatDateTime, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -25,6 +26,12 @@ function getStatusColor(status: string) {
   return "orange";
 }
 
+type EditFormValues = {
+  title: string;
+  start_time: Dayjs;
+  end_time: Dayjs;
+};
+
 export default function ConflictsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
@@ -38,6 +45,17 @@ export default function ConflictsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+
+  const [selectModalOpen, setSelectModalOpen] = useState(false);
+  const [selectConflict, setSelectConflict] = useState<ConflictItem | null>(null);
+  const [conflictItemA, setConflictItemA] = useState<ScheduledItem | null>(null);
+  const [conflictItemB, setConflictItemB] = useState<ScheduledItem | null>(null);
+  const [selectLoading, setSelectLoading] = useState(false);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ScheduledItem | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm] = Form.useForm<EditFormValues>();
 
   const fetchConflicts = useCallback((p?: number, ps?: number) => {
     if (!accessToken) {
@@ -101,6 +119,59 @@ export default function ConflictsPage() {
       onOk: () => void handleResolve(conflict.id),
     });
   };
+
+  const handleOpenEditModal = useCallback(async (conflict: ConflictItem) => {
+    if (!accessToken) return;
+    const ids = conflict.related_item_ids;
+    if (!ids?.current || !ids?.other) return;
+    setSelectConflict(conflict);
+    setSelectLoading(true);
+    setSelectModalOpen(true);
+    try {
+      const [itemA, itemB] = await Promise.all([
+        loadScheduledItem(ids.current, accessToken).catch(() => null),
+        loadScheduledItem(ids.other, accessToken).catch(() => null),
+      ]);
+      setConflictItemA(itemA);
+      setConflictItemB(itemB);
+    } finally {
+      setSelectLoading(false);
+    }
+  }, [accessToken]);
+
+  const handleSelectEditTarget = useCallback((item: ScheduledItem) => {
+    setEditTarget(item);
+    editForm.setFieldsValue({
+      title: item.title,
+      start_time: dayjs(item.start_time),
+      end_time: dayjs(item.end_time),
+    });
+    setSelectModalOpen(false);
+    setEditModalOpen(true);
+  }, [editForm]);
+
+  const handleEditSubmit = useCallback(async () => {
+    if (!accessToken || !editTarget) return;
+    try {
+      const values = await editForm.validateFields();
+      setEditSubmitting(true);
+      await updateScheduledItem(editTarget.id, {
+        title: values.title.trim(),
+        start_time: values.start_time.toISOString(),
+        end_time: values.end_time.toISOString(),
+      }, accessToken);
+      message.success("时间已修改");
+      setEditModalOpen(false);
+      setEditTarget(null);
+      editForm.resetFields();
+      fetchConflicts(page);
+    } catch (caughtError: unknown) {
+      if (caughtError && typeof caughtError === "object" && "errorFields" in caughtError) return;
+      message.error(caughtError instanceof Error ? caughtError.message : "修改失败");
+    } finally {
+      setEditSubmitting(false);
+    }
+  }, [accessToken, editTarget, editForm, message, fetchConflicts, page]);
 
   const filteredConflicts = useMemo(() => {
     // 冲突按状态和关键词过滤，不按日期过滤
@@ -186,6 +257,13 @@ export default function ConflictsPage() {
                       {conflict.status === "open" ? (
                         <>
                           <Tag
+                            color="blue"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => void handleOpenEditModal(conflict)}
+                          >
+                            <EditOutlined /> 修改时间
+                          </Tag>
+                          <Tag
                             color="green"
                             style={{ cursor: "pointer" }}
                             onClick={() => handleConfirmResolve(conflict)}
@@ -227,6 +305,113 @@ export default function ConflictsPage() {
           <Empty description="当前没有冲突事项" />
         </div>
       )}
+
+      <Modal
+        title="选择要修改的安排"
+        open={selectModalOpen}
+        onCancel={() => {
+          setSelectModalOpen(false);
+          setSelectConflict(null);
+          setConflictItemA(null);
+          setConflictItemB(null);
+        }}
+        footer={null}
+        width={480}
+        destroyOnHidden
+      >
+        {selectLoading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : (
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Text className="muted-text">
+              以下两个安排存在时间重叠，请选择一个修改其时间：
+            </Text>
+            {conflictItemA ? (
+              <Card
+                size="small"
+                hoverable
+                style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)" }}
+                onClick={() => handleSelectEditTarget(conflictItemA)}
+              >
+                <Space>
+                  <SwapOutlined />
+                  <div>
+                    <Text strong>{conflictItemA.title}</Text>
+                    <br />
+                    <Text className="muted-text" style={{ fontSize: 12 }}>
+                      {formatDateTime(conflictItemA.start_time, timezone)} - {formatDateTime(conflictItemA.end_time, timezone)}
+                    </Text>
+                  </div>
+                </Space>
+              </Card>
+            ) : null}
+            {conflictItemB ? (
+              <Card
+                size="small"
+                hoverable
+                style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)" }}
+                onClick={() => handleSelectEditTarget(conflictItemB)}
+              >
+                <Space>
+                  <SwapOutlined />
+                  <div>
+                    <Text strong>{conflictItemB.title}</Text>
+                    <br />
+                    <Text className="muted-text" style={{ fontSize: 12 }}>
+                      {formatDateTime(conflictItemB.start_time, timezone)} - {formatDateTime(conflictItemB.end_time, timezone)}
+                    </Text>
+                  </div>
+                </Space>
+              </Card>
+            ) : null}
+          </Space>
+        )}
+      </Modal>
+
+      <Modal
+        title={`修改时间：${editTarget?.title ?? ""}`}
+        open={editModalOpen}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditTarget(null);
+          editForm.resetFields();
+        }}
+        onOk={() => void handleEditSubmit()}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={editSubmitting}
+        destroyOnHidden
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item label="标题" name="title">
+            <Input disabled />
+          </Form.Item>
+          <Form.Item
+            label="开始时间"
+            name="start_time"
+            rules={[{ required: true, message: "请选择开始时间" }]}
+          >
+            <DatePicker
+              showTime={{ format: "HH:mm" }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+          <Form.Item
+            label="结束时间"
+            name="end_time"
+            rules={[{ required: true, message: "请选择结束时间" }]}
+          >
+            <DatePicker
+              showTime={{ format: "HH:mm" }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   );
 }

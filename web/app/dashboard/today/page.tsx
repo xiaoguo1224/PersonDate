@@ -5,6 +5,8 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   BellOutlined,
+  DeleteOutlined,
+  EditOutlined,
   ExpandOutlined,
   RobotOutlined,
   ReloadOutlined,
@@ -14,7 +16,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { useGSAP } from "@gsap/react";
-import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Space, Spin, Tag, Typography, message } from "antd";
+import { App, Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Space, Spin, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import gsap from "gsap";
 import { useRouter } from "next/navigation";
@@ -22,9 +24,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import ConflictResolutionModal from "@/components/conflict-resolution-modal";
 import GanttChart from "@/components/gantt-chart";
 import {
   createScheduledItem,
+  deleteScheduledItem,
+  updateScheduledItem,
   formatRange,
   formatClock,
   getTodayDateKey,
@@ -288,7 +293,6 @@ function buildEventFormDefaults(baseDate: Dayjs): CalendarEventFormValues {
 
 type TodayPageViewProps = Readonly<{
   containerRef: React.RefObject<HTMLDivElement | null>;
-  contextHolder: React.ReactNode;
   error: string | null;
   loading: boolean;
   timezone: string;
@@ -319,13 +323,14 @@ type TodayPageViewProps = Readonly<{
   onNavigateAgentLogs: () => void;
   onRefresh: () => void;
   onOpenEventModal: () => void;
+  onEditEvent: (item: ScheduledItem) => void;
   onViewConflict: (conflict: ConflictItem) => void;
+  onDeleteEvent: (id: string) => void;
   planDate: string;
 }>;
 
 function TodayPageView({
   containerRef,
-  contextHolder,
   error,
   loading,
   timezone,
@@ -350,7 +355,9 @@ function TodayPageView({
   onNavigateAgentLogs,
   onRefresh,
   onOpenEventModal,
+  onEditEvent,
   onViewConflict,
+  onDeleteEvent,
   planDate,
 }: TodayPageViewProps) {
   const conflictRows = viewData.conflicts;
@@ -370,7 +377,6 @@ function TodayPageView({
 
   return (
     <div ref={containerRef} className="today-page today-page--refined">
-      {contextHolder}
       {error ? (
         <div className="today-page__notice today-animate">
           <Tag color="gold">示意数据</Tag>
@@ -462,9 +468,29 @@ function TodayPageView({
                           <Text strong className="today-timeline__title">
                             {entry.title}
                           </Text>
-                          <Tag color="blue">
-                            安排 · {getTimelineStatusLabel(entry)}
-                          </Tag>
+                          <Space size={4}>
+                            <Tag color="blue">
+                              安排 · {getTimelineStatusLabel(entry)}
+                            </Tag>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() => {
+                                const item = viewData.events.find((e) => e.id === entry.id);
+                                if (item) onEditEvent(item);
+                              }}
+                            />
+                            <Popconfirm
+                              title="确认删除此安排？"
+                              description="删除后不可恢复"
+                              onConfirm={() => onDeleteEvent(entry.id)}
+                              okText="删除"
+                              cancelText="取消"
+                            >
+                              <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                            </Popconfirm>
+                          </Space>
                         </div>
                         <Text className="today-timeline__meta">
                           {formatRange(entry.start_time, entry.end_time, timezone)}
@@ -699,7 +725,7 @@ export default function TodayPage() {
   const selectedDate = useMemo(() => dayjs(planDate), [planDate]);
   const demoData = useMemo(() => buildDemoDashboardData(planDate), [planDate]);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [messageApi, contextHolder] = message.useMessage();
+  const { message } = App.useApp();
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<TodayDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -710,6 +736,10 @@ export default function TodayPage() {
   const [eventForm] = Form.useForm<CalendarEventFormValues>();
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [eventSubmitting, setEventSubmitting] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<ScheduledItem | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [pendingConflicts, setPendingConflicts] = useState<ConflictItem[]>([]);
+  const [conflictCurrentItemId, setConflictCurrentItemId] = useState<string>("");
 
   const fetchData = useCallback(async () => {
     if (!accessToken) {
@@ -774,6 +804,7 @@ export default function TodayPage() {
   }, [fetchData]);
 
   const openEventModal = useCallback(() => {
+    setEditingEvent(null);
     eventForm.setFieldsValue(buildEventFormDefaults(selectedDate));
     setEventModalOpen(true);
   }, [eventForm, selectedDate]);
@@ -796,11 +827,58 @@ export default function TodayPage() {
 
   const handleViewConflict = useCallback(
     (conflict: ConflictItem) => {
-      messageApi.info(`已打开冲突列表：${conflict.title}`);
+      message.info(`已打开冲突列表：${conflict.title}`);
       router.push("/dashboard/conflicts");
     },
-    [messageApi, router],
+    [message, router],
   );
+
+  const handleDeleteEvent = useCallback(
+    async (id: string) => {
+      if (!accessToken) {
+        return;
+      }
+      try {
+        await deleteScheduledItem(id, accessToken);
+        message.success("安排已删除");
+        await fetchData();
+      } catch (caughtError: unknown) {
+        message.error(caughtError instanceof Error ? caughtError.message : "删除失败");
+      }
+    },
+    [accessToken, fetchData, message],
+  );
+
+  const openEditModal = useCallback(
+    (item: ScheduledItem) => {
+      setEditingEvent(item);
+      eventForm.setFieldsValue({
+        title: item.title,
+        description: item.description ?? "",
+        start_time: dayjs(item.start_time),
+        end_time: dayjs(item.end_time),
+        timezone: item.timezone || timezone || DEFAULT_TIMEZONE,
+        location: item.location ?? "",
+        remind_before_minutes: item.remind_before_minutes ?? 0,
+      });
+      setEventModalOpen(true);
+      setConflictModalOpen(false);
+    },
+    [eventForm, timezone],
+  );
+
+  const handleConflictEditItem = useCallback(
+    (item: ScheduledItem) => {
+      openEditModal(item);
+    },
+    [openEditModal],
+  );
+
+  const handleConflictIgnore = useCallback(() => {
+    setConflictModalOpen(false);
+    setPendingConflicts([]);
+    setConflictCurrentItemId("");
+  }, []);
 
   const handleCreateEvent = useCallback(async () => {
     if (!accessToken) {
@@ -810,7 +888,7 @@ export default function TodayPage() {
       const values = await eventForm.validateFields();
       setEventSubmitting(true);
       const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
-      await createScheduledItem({
+      const result = await createScheduledItem({
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
         start_time: values.start_time.toISOString(),
@@ -819,19 +897,63 @@ export default function TodayPage() {
         location: values.location?.trim() ? values.location.trim() : null,
         remind_before_minutes: values.remind_before_minutes ?? 0,
       }, accessToken);
-      messageApi.success("安排已创建");
       setEventModalOpen(false);
       eventForm.resetFields();
       await fetchData();
+      if (result.conflicts && result.conflicts.length > 0) {
+        setPendingConflicts(result.conflicts);
+        setConflictCurrentItemId(result.item.id);
+        setConflictModalOpen(true);
+      } else {
+        message.success("安排已创建");
+      }
     } catch (caughtError: unknown) {
       if (caughtError && typeof caughtError === "object" && "errorFields" in caughtError) {
         return;
       }
-      messageApi.error(caughtError instanceof Error ? caughtError.message : "创建安排失败");
+      message.error(caughtError instanceof Error ? caughtError.message : "创建安排失败");
     } finally {
       setEventSubmitting(false);
     }
-  }, [accessToken, eventForm, fetchData, messageApi]);
+  }, [accessToken, eventForm, fetchData, message]);
+
+  const handleUpdateEvent = useCallback(async () => {
+    if (!accessToken || !editingEvent) {
+      return;
+    }
+    try {
+      const values = await eventForm.validateFields();
+      setEventSubmitting(true);
+      const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
+      const result = await updateScheduledItem(editingEvent.id, {
+        title: values.title.trim(),
+        description: values.description?.trim() ? values.description.trim() : null,
+        start_time: values.start_time.toISOString(),
+        end_time: endTime,
+        timezone: values.timezone,
+        location: values.location?.trim() ? values.location.trim() : null,
+        remind_before_minutes: values.remind_before_minutes ?? 0,
+      }, accessToken);
+      setEventModalOpen(false);
+      setEditingEvent(null);
+      eventForm.resetFields();
+      await fetchData();
+      if (result.conflicts && result.conflicts.length > 0) {
+        setPendingConflicts(result.conflicts);
+        setConflictCurrentItemId(result.item.id);
+        setConflictModalOpen(true);
+      } else {
+        message.success("安排已更新");
+      }
+    } catch (caughtError: unknown) {
+      if (caughtError && typeof caughtError === "object" && "errorFields" in caughtError) {
+        return;
+      }
+      message.error(caughtError instanceof Error ? caughtError.message : "更新安排失败");
+    } finally {
+      setEventSubmitting(false);
+    }
+  }, [accessToken, editingEvent, eventForm, fetchData, message]);
 
   const handleAgentSubmit = useCallback(async () => {
     if (!accessToken) {
@@ -839,7 +961,7 @@ export default function TodayPage() {
     }
     const content = agentMessage.trim();
     if (!content) {
-      messageApi.warning("请输入一句话后再发送给 Agent");
+      message.warning("请输入一句话后再发送给 Agent");
       return;
     }
     setAgentSubmitting(true);
@@ -875,9 +997,9 @@ export default function TodayPage() {
         return next;
       });
       if (result.success) {
-        messageApi.success(result.final_response || "Agent 已处理");
+        message.success(result.final_response || "Agent 已处理");
       } else {
-        messageApi.warning(result.final_response || "Agent 返回了待处理结果");
+        message.warning(result.final_response || "Agent 返回了待处理结果");
       }
       setAgentMessage("");
       await fetchData();
@@ -893,11 +1015,11 @@ export default function TodayPage() {
           timestamp: getChatTimeLabel(),
         },
       ]);
-      messageApi.error(errorMessage);
+      message.error(errorMessage);
     } finally {
       setAgentSubmitting(false);
     }
-  }, [accessToken, agentMessage, fetchData, messageApi]);
+  }, [accessToken, agentMessage, fetchData, message]);
 
   const resetChat = useCallback(() => {
     setAgentMessages([createWelcomeMessage()]);
@@ -936,7 +1058,6 @@ export default function TodayPage() {
     <>
       <TodayPageView
         containerRef={containerRef}
-        contextHolder={contextHolder}
         error={error}
         loading={loading}
         timezone={timezone}
@@ -960,19 +1081,22 @@ export default function TodayPage() {
         onNavigateAgentLogs={handleNavigateAgentLogs}
         onRefresh={refreshData}
         onOpenEventModal={openEventModal}
+        onEditEvent={openEditModal}
         onViewConflict={handleViewConflict}
+        onDeleteEvent={(id) => void handleDeleteEvent(id)}
         planDate={planDate}
       />
 
       <Modal
-        title="新建安排"
+        title={editingEvent ? "编辑安排" : "新建安排"}
         open={eventModalOpen}
         onCancel={() => {
           setEventModalOpen(false);
+          setEditingEvent(null);
           eventForm.resetFields();
         }}
-        onOk={() => void handleCreateEvent()}
-        okText="创建安排"
+        onOk={() => void (editingEvent ? handleUpdateEvent() : handleCreateEvent())}
+        okText={editingEvent ? "保存修改" : "创建安排"}
         cancelText="取消"
         confirmLoading={eventSubmitting}
         destroyOnHidden
@@ -1021,6 +1145,16 @@ export default function TodayPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <ConflictResolutionModal
+        open={conflictModalOpen}
+        conflicts={pendingConflicts}
+        currentItemId={conflictCurrentItemId}
+        onEditItem={handleConflictEditItem}
+        onIgnore={handleConflictIgnore}
+        onClose={handleConflictIgnore}
+        accessToken={accessToken ?? ""}
+      />
 
     </>
   );

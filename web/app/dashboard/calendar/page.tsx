@@ -19,6 +19,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Row,
   Segmented,
   Space,
@@ -37,6 +38,7 @@ import gsap from "gsap";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import ConflictResolutionModal from "@/components/conflict-resolution-modal";
 import GanttChart from "@/components/gantt-chart";
 import { requestJson } from "@/lib/api";
 import {
@@ -50,6 +52,7 @@ import {
   getTodayDateKey,
   loadScheduledItems,
   updateScheduledItem,
+  type ConflictItem,
   type ScheduledItem,
 } from "@/lib/dashboard";
 
@@ -532,6 +535,9 @@ export default function CalendarPage() {
   const [editingEvent, setEditingEvent] = useState<ScheduledItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [pendingConflicts, setPendingConflicts] = useState<ConflictItem[]>([]);
+  const [conflictCurrentItemId, setConflictCurrentItemId] = useState<string>("");
 
   useEffect(() => {
     setFocusDate(dayjs(getTodayDateKey(timezone)));
@@ -704,8 +710,9 @@ export default function CalendarPage() {
       const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
       setSubmitting(true);
       try {
+        let result;
         if (editingEvent) {
-          await updateScheduledItem(editingEvent.id, {
+          result = await updateScheduledItem(editingEvent.id, {
             title: values.title.trim(),
             description: values.description?.trim() || null,
             end_time: endTime,
@@ -714,9 +721,8 @@ export default function CalendarPage() {
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
           }, accessToken);
-          messageApi.success("安排已更新");
         } else {
-          await createScheduledItem({
+          result = await createScheduledItem({
             title: values.title.trim(),
             description: values.description?.trim() || null,
             start_time: values.start_time.toISOString(),
@@ -725,10 +731,16 @@ export default function CalendarPage() {
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
           }, accessToken);
-          messageApi.success("安排已创建");
         }
         closeModal();
         await refreshData();
+        if (result.conflicts && result.conflicts.length > 0) {
+          setPendingConflicts(result.conflicts);
+          setConflictCurrentItemId(result.item.id);
+          setConflictModalOpen(true);
+        } else {
+          messageApi.success(editingEvent ? "安排已更新" : "安排已创建");
+        }
       } catch (caughtError: unknown) {
         messageApi.error(caughtError instanceof Error ? caughtError.message : "保存失败");
       } finally {
@@ -737,6 +749,20 @@ export default function CalendarPage() {
     },
     [accessToken, closeModal, editingEvent, messageApi, refreshData, timezone],
   );
+
+  const handleConflictEditItem = useCallback(
+    (item: ScheduledItem) => {
+      openEditModal(item);
+      setConflictModalOpen(false);
+    },
+    [openEditModal],
+  );
+
+  const handleConflictIgnore = useCallback(() => {
+    setConflictModalOpen(false);
+    setPendingConflicts([]);
+    setConflictCurrentItemId("");
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDelete = useCallback(
@@ -757,6 +783,22 @@ export default function CalendarPage() {
           await refreshData();
         },
       });
+    },
+    [accessToken, messageApi, refreshData],
+  );
+
+  const handleDeleteDirect = useCallback(
+    async (event: ScheduledItem) => {
+      if (!accessToken) {
+        return;
+      }
+      try {
+        await deleteScheduledItem(event.id, accessToken);
+        messageApi.success("安排已删除");
+        await refreshData();
+      } catch (caughtError: unknown) {
+        messageApi.error(caughtError instanceof Error ? caughtError.message : "删除失败");
+      }
     },
     [accessToken, messageApi, refreshData],
   );
@@ -1273,6 +1315,30 @@ export default function CalendarPage() {
           cancelText="取消"
           confirmLoading={submitting}
           onOk={() => void form.submit()}
+          footer={(_, { OkBtn, CancelBtn }) => (
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                {editingEvent && (
+                  <Popconfirm
+                    title="确认删除此安排？"
+                    description="删除后不可恢复"
+                    onConfirm={() => {
+                      void handleDeleteDirect(editingEvent);
+                      closeModal();
+                    }}
+                    okText="删除"
+                    cancelText="取消"
+                  >
+                    <Button danger>删除</Button>
+                  </Popconfirm>
+                )}
+              </div>
+              <Space>
+                <CancelBtn />
+                <OkBtn />
+              </Space>
+            </div>
+          )}
         >
           <Form
             form={form}
@@ -1352,6 +1418,16 @@ export default function CalendarPage() {
             ))}
           </Space>
         </Modal>
+
+        <ConflictResolutionModal
+          open={conflictModalOpen}
+          conflicts={pendingConflicts}
+          currentItemId={conflictCurrentItemId}
+          onEditItem={handleConflictEditItem}
+          onIgnore={handleConflictIgnore}
+          onClose={handleConflictIgnore}
+          accessToken={accessToken ?? ""}
+        />
       </Space>
     </ConfigProvider>
   );
