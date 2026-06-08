@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Pagination, Row, Space, Spin, Tabs, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Modal, Pagination, Row, Space, Spin, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -44,6 +44,9 @@ export default function RemindersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+  const [adjustTarget, setAdjustTarget] = useState<ReminderItem | null>(null);
+  const [adjustValue, setAdjustValue] = useState(0);
+  const [adjusting, setAdjusting] = useState(false);
 
   const fetchReminders = useCallback((p?: number, ps?: number) => {
     if (!accessToken) {
@@ -168,6 +171,29 @@ export default function RemindersPage() {
     }
   };
 
+  const handleAdjustOpen = (reminder: ReminderItem) => {
+    setAdjustTarget(reminder);
+    setAdjustValue(reminder.remind_before_minutes ?? 0);
+  };
+
+  const handleAdjustConfirm = async () => {
+    if (!accessToken || !adjustTarget) return;
+    setAdjusting(true);
+    try {
+      await requestJson(`/api/reminders/${adjustTarget.id}/adjust`, {
+        method: "PATCH",
+        body: JSON.stringify({ remind_before_minutes: adjustValue }),
+      }, accessToken);
+      message.success("提醒时间已调整");
+      setAdjustTarget(null);
+      fetchReminders(page);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "调整失败");
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
   const filteredReminders = useMemo(() => {
     if (!filterDate) return reminders;
     const dateKey = filterDate.format("YYYY-MM-DD");
@@ -205,10 +231,10 @@ export default function RemindersPage() {
         </Space>
       </Card>
 
-      <Card className="section-card" variant="borderless" title="系统默认设置">
+      <Card className="section-card" variant="borderless" title="我的默认提醒设置">
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
           <Text className="muted-text">
-            所有新建安排的默认提前提醒时间
+            新建安排时的默认提前提醒时间（可在账号设置中同步修改）
           </Text>
           <Space>
             <Space.Compact>
@@ -315,9 +341,18 @@ export default function RemindersPage() {
                     <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
                     <Tag color="cyan">{reminder.target_type}</Tag>
                   </Space>
+                  {reminder.original_time ? (
+                    <Text className="muted-text">
+                      原定时间：{formatDateTime(reminder.original_time, timezone)}
+                      {" "}({formatClock(reminder.original_time, timezone)})
+                    </Text>
+                  ) : null}
                   <Text className="muted-text">
                     触发时间：{formatDateTime(reminder.trigger_time, timezone)}
                     {" "}({formatClock(reminder.trigger_time, timezone)})
+                  </Text>
+                  <Text className="muted-text">
+                    提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
                   </Text>
                   {reminder.fired_at ? (
                     <Text className="muted-text">
@@ -334,13 +369,21 @@ export default function RemindersPage() {
                     <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
                     <Tag>目标 {reminder.target_id}</Tag>
                     {reminder.status === "pending" ? (
-                      <Button
-                        danger
-                        size="small"
-                        onClick={() => void handleCancel(reminder)}
-                      >
-                        取消提醒
-                      </Button>
+                      <>
+                        <Button
+                          size="small"
+                          onClick={() => handleAdjustOpen(reminder)}
+                        >
+                          调整提醒时间
+                        </Button>
+                        <Button
+                          danger
+                          size="small"
+                          onClick={() => void handleCancel(reminder)}
+                        >
+                          取消提醒
+                        </Button>
+                      </>
                     ) : null}
                     {reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
                       <Button
@@ -379,6 +422,48 @@ export default function RemindersPage() {
           />
         </div>
       </Card>
+
+      <Modal
+        title="调整提醒提前时间"
+        open={!!adjustTarget}
+        onCancel={() => setAdjustTarget(null)}
+        onOk={() => void handleAdjustConfirm()}
+        confirmLoading={adjusting}
+        okText="确认调整"
+        cancelText="取消"
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Text>安排：{adjustTarget?.title}</Text>
+          {adjustTarget?.original_time ? (
+            <Text className="muted-text">
+              原定时间：{formatDateTime(adjustTarget.original_time, timezone)}
+            </Text>
+          ) : null}
+          <Text className="muted-text">
+            当前提前 {adjustTarget?.remind_before_minutes ?? 0} 分钟提醒
+          </Text>
+          <Space>
+            <Text>提前</Text>
+            <InputNumber
+              min={0}
+              max={1440}
+              value={adjustValue}
+              onChange={(v) => setAdjustValue(v ?? 0)}
+              style={{ width: 100 }}
+            />
+            <Text>分钟提醒</Text>
+          </Space>
+          {adjustTarget?.original_time ? (
+            <Text className="muted-text">
+              调整后触发时间：
+              {formatDateTime(
+                new Date(new Date(adjustTarget.original_time).getTime() - adjustValue * 60 * 1000).toISOString(),
+                timezone,
+              )}
+            </Text>
+          ) : null}
+        </Space>
+      </Modal>
     </Space>
   );
 }

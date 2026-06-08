@@ -576,9 +576,16 @@ function TodayPageView({
                           </Text>
                           <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
                         </div>
-                        <Text className="today-reminder-item__meta">{formatDateTime(reminder.trigger_time, timezone)}</Text>
+                        {reminder.original_time ? (
+                          <Text className="today-reminder-item__meta">
+                            原定：{formatDateTime(reminder.original_time, timezone)}
+                          </Text>
+                        ) : null}
                         <Text className="today-reminder-item__meta">
-                          重试 {reminder.retry_count}/{reminder.max_retries}
+                          触发：{formatDateTime(reminder.trigger_time, timezone)}
+                        </Text>
+                        <Text className="today-reminder-item__meta">
+                          提前 {reminder.remind_before_minutes ?? 0} 分钟
                         </Text>
                       </div>
                     </div>

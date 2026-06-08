@@ -294,7 +294,9 @@ export type ReminderItem = {
   target_type: string;
   target_id: string;
   title: string;
+  original_time?: string | null;
   trigger_time: string;
+  remind_before_minutes: number;
   status: string;
   retry_count?: number;
   max_retries?: number;
