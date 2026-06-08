@@ -25,9 +25,8 @@ interface CloudDef {
 }
 
 function generateCloudDefs(count: number): CloudDef[] {
-  return Array.from({ length: count }, (_, i) => {
+  return Array.from({ length: count }, () => {
     const size = gsap.utils.random(150, 350);
-    const speedFactor = 1 - (size - 150) / 300;
     const layerRoll = Math.random();
     const layer: CloudDef["layer"] =
       layerRoll < 0.3 ? "high" : layerRoll < 0.65 ? "mid" : "low";

@@ -60,7 +60,6 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskStatus>("all");
-  const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);

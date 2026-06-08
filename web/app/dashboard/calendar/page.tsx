@@ -2,7 +2,6 @@
 
 import {
   CalendarOutlined,
-  ExpandOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -565,7 +564,7 @@ export default function CalendarPage() {
     } finally {
       setEventsLoading(false);
     }
-  }, [accessToken, viewMode, focusDate]);
+  }, [accessToken, viewMode, focusDate, demoEvents]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -577,7 +576,7 @@ export default function CalendarPage() {
       return;
     }
     void fetchEvents();
-  }, [accessToken, fetchEvents, timezoneLoading]);
+  }, [accessToken, fetchEvents, timezoneLoading, demoEvents]);
 
   const fetchDayConflicts = useCallback(() => {
     if (!accessToken) return;
@@ -783,7 +782,6 @@ export default function CalendarPage() {
     setConflictCurrentItemId("");
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDelete = useCallback(
     (event: ScheduledItem) => {
       if (!accessToken) {
@@ -803,7 +801,7 @@ export default function CalendarPage() {
         },
       });
     },
-    [accessToken, messageApi, refreshData],
+    [accessToken, modal, messageApi, refreshData],
   );
 
   const handleDeleteDirect = useCallback(

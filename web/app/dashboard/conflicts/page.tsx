@@ -83,14 +83,12 @@ export default function ConflictsPage() {
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
 
   const [selectModalOpen, setSelectModalOpen] = useState(false);
-  const [selectConflict, setSelectConflict] = useState<ConflictItem | null>(null);
   const [conflictItemA, setConflictItemA] = useState<ScheduledItem | null>(null);
   const [conflictItemB, setConflictItemB] = useState<ScheduledItem | null>(null);
   const [selectLoading, setSelectLoading] = useState(false);

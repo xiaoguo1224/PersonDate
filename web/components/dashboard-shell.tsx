@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardPreferencesProvider, useDashboardTimezone } from "@/components/dashboard-preferences";
 import { useTheme } from "@/components/theme-provider";
+import { requestJson } from "@/lib/api";
 import type { UserRole } from "@/lib/types";
 import type { ThemeName } from "@/components/theme-provider";
 
