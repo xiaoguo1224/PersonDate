@@ -83,11 +83,13 @@ def get_updates(
                 detail="微信账号不存在或未绑定",
             )
         _ensure_active_account(account)
-    return service.get_updates(
+    response = service.get_updates(
         bot_token=payload.bot_token,
         account_id=payload.account_id,
         get_updates_buf=payload.get_updates_buf,
     )
+    db.commit()
+    return response
 
 
 @router.post("/ingest", response_model=WechatIngestMessageResponse)

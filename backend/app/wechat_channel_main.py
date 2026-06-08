@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import uvicorn
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
 from app.core.wechat_channel import attach_wechat_channel_client, close_wechat_channel_client
 from wechat_channel.poller import PollerManager
+
+logger = logging.getLogger(__name__)
 
 
 def _start_poller_manager(app: FastAPI) -> PollerManager:
@@ -36,17 +40,54 @@ def _start_poller_manager(app: FastAPI) -> PollerManager:
     return poller_manager
 
 
+def _refresh_poller_manager(app: FastAPI) -> None:
+    """定时刷新 PollerManager，加载新绑定的账号。"""
+    from app.db.session import SessionLocal
+    from app.services.wechat_channel_service import WechatChannelService
+
+    poller_manager: PollerManager | None = getattr(app.state, "poller_manager", None)
+    if poller_manager is None:
+        return
+
+    db = SessionLocal()
+    try:
+        service = WechatChannelService(db)
+        accounts = [
+            (a.account_id, a.bot_token, a.cursor)
+            for a in service.list_active_accounts()
+        ]
+        poller_manager.refresh(accounts)
+    except Exception:
+        logger.exception("刷新 PollerManager 失败")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     attach_wechat_channel_client(app)
 
     # 启动 PollerManager（负责 iLink 长轮询写入 inbound_messages 表）
-    # 不启动 scheduler 中的 WechatChannelPoller（由 backend 的 scheduler 读 DB 处理）
     poller_manager = _start_poller_manager(app)
     app.state.poller_manager = poller_manager
+
+    # 添加定时刷新任务，每 30 秒检查新账号
+    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler.add_job(
+        _refresh_poller_manager,
+        trigger="interval",
+        seconds=30,
+        id="refresh-poller",
+        replace_existing=True,
+        args=[app],
+    )
+    scheduler.start()
+    app.state.poller_scheduler = scheduler
+
     try:
         yield
     finally:
+        scheduler.shutdown(wait=False)
         poller_manager.stop_all()
         close_wechat_channel_client(app)
 

@@ -424,13 +424,12 @@ class WechatChannelService:
                 longpolling_timeout_ms=35000,
             )
 
-        cursor = get_updates_buf or account.cursor or ""
+        # 只查询 pending 状态的消息，避免 cursor 格式不兼容问题
         stmt = select(WechatChannelInboundMessage).where(
             WechatChannelInboundMessage.account_id == account.account_id,
+            WechatChannelInboundMessage.status == "pending",
         )
-        if cursor:
-            stmt = stmt.where(WechatChannelInboundMessage.cursor_token > cursor)
-        stmt = stmt.order_by(WechatChannelInboundMessage.cursor_token.asc()).limit(50)
+        stmt = stmt.order_by(WechatChannelInboundMessage.created_at.asc()).limit(50)
         messages = list(self.db.scalars(stmt))
         if messages:
             delivered_at = datetime.now(UTC)
@@ -442,7 +441,7 @@ class WechatChannelService:
             success=True,
             ret=0,
             messages=[self._to_inbound_item(message) for message in messages],
-            next_cursor=messages[-1].cursor_token if messages else cursor,
+            next_cursor=messages[-1].cursor_token if messages else (get_updates_buf or account.cursor or ""),
             longpolling_timeout_ms=35000,
         )
 
