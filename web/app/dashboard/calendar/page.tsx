@@ -1031,23 +1031,23 @@ export default function CalendarPage() {
                         >
                           <div className="calendar-month-cell__header">
                             <span
-                              className="calendar-month-cell__date"
+                              className={[
+                                "calendar-month-cell__date",
+                                isToday ? "calendar-month-cell__date--today" : "",
+                                hasConflict ? "calendar-month-cell__date--conflict" : "",
+                              ].filter(Boolean).join(" ")}
                               style={{
                                 background: isSelected
                                   ? "linear-gradient(135deg, rgba(191, 219, 254, 0.96), rgba(59, 130, 246, 0.85))"
-                                  : isToday
-                                    ? "rgba(254, 243, 199, 0.9)"
-                                    : hasConflict
-                                      ? "rgba(254, 200, 200, 0.9)"
-                                      : "var(--card-inner-bg)",
-                                color: isSelected ? "#06111f" : "var(--text-primary)",
+                                  : undefined,
+                                color: isSelected ? "#06111f" : undefined,
                               }}
                             >
                               {current.date()}
                             </span>
-                            <Space wrap size={6}>
-                              {isToday ? <Tag color="gold">今天</Tag> : null}
-                              {hasConflict ? <Tag color="red">冲突</Tag> : null}
+                            <Space size={4} align="center">
+                              {isToday ? <span className="calendar-month-cell__badge calendar-month-cell__badge--today">今</span> : null}
+                              {hasConflict ? <span className="calendar-month-cell__badge calendar-month-cell__badge--conflict">!</span> : null}
                               {items.length ? <span className="calendar-month-cell__count">{items.length}</span> : null}
                             </Space>
                           </div>
