@@ -21,14 +21,18 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 
 RUN pnpm build
 
-FROM nginx:alpine AS runner
+FROM node:20-alpine AS runner
 
-COPY --from=builder /app/.next/static /usr/share/nginx/html/_next/static
-COPY --from=builder /app/public /usr/share/nginx/html
-COPY --from=builder /app/.next/server/app/index.html /usr/share/nginx/html/index.html
-COPY --from=builder /app/.next/server/app /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
+
+ENV NODE_ENV=production
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["pnpm", "start", "-H", "0.0.0.0", "-p", "3000"]
