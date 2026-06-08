@@ -79,6 +79,7 @@ class IntentDecision(BaseModel):
     intent: Literal[
         "create_scheduled_item",
         "query_scheduled_items",
+        "query_free_slots",
         "create_task",
         "plan_day",
         "update_scheduled_item",
@@ -126,6 +127,9 @@ class IntentDecision(BaseModel):
             "create schedule": "create_scheduled_item",
             "query_schedule": "query_scheduled_items",
             "query calendar": "query_scheduled_items",
+            "query_free_time": "query_free_slots",
+            "find_free_time": "query_free_slots",
+            "check_availability": "query_free_slots",
             "create_reminder": "ask_user_clarification",
             "ask_clarification": "ask_user_clarification",
             "clarify": "ask_user_clarification",

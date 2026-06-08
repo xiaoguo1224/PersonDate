@@ -71,11 +71,13 @@ class SchedulePlanningGraph:
                 "你是微信智能安排规划 Agent 的意图分类器。"
                 "只输出 JSON，不要输出多余文本。"
                 "请根据用户输入判断 intent。"
-                "可选值：create_scheduled_item, query_scheduled_items, create_task, plan_day, "
-                "update_scheduled_item, delete_scheduled_item, confirm_plan, "
-                "ask_user_clarification, unknown。"
-                "如果用户说“帮我安排一下”“安排一下”“生成计划”“计划一下”，"
+                "可选值：create_scheduled_item, query_scheduled_items, query_free_slots, "
+                "create_task, plan_day, update_scheduled_item, delete_scheduled_item, "
+                "confirm_plan, ask_user_clarification, unknown。"
+                "如果用户说「帮我安排一下」「安排一下」「生成计划」「计划一下」，"
                 "必须返回 plan_day。"
+                "如果用户问「空闲时间」「什么时候有空」「哪些时间段是空的」「空档」，"
+                "必须返回 query_free_slots。"
                 "如果消息同时包含任务时长或任务事项，但明确要求安排计划，"
                 "也不要返回 create_event。"
                 "如果用户明确是在确认或取消待办流程，请优先返回 confirm_plan 或 "
@@ -214,6 +216,9 @@ class SchedulePlanningGraph:
         if intent == "query_scheduled_items":
             self._handle_query_scheduled_items(state)
             return
+        if intent == "query_free_slots":
+            self._handle_query_free_slots(state)
+            return
         if intent == "delete_scheduled_item":
             self._handle_delete_scheduled_item(state)
             return
@@ -230,7 +235,7 @@ class SchedulePlanningGraph:
             self._handle_create_scheduled_item(state)
             return
         if intent == "confirm_plan":
-            state.final_response = "请在待确认的安排草案上下文中回复“确认”或“取消”。"
+            state.final_response = '请在待确认的安排草案上下文中回复"确认"或"取消"。'
             return
         state.final_response = "我没能理解这条消息，请补充时间、事项或目标。"
 
@@ -265,18 +270,18 @@ class SchedulePlanningGraph:
             self._handle_reminder_time_reply(state)
             return
         if state_type == PendingStateType.WAITING_PLAN_CONFIRMATION.value:
-            state.final_response = "请回复“确认”继续，或回复“取消”放弃这份安排草案。"
+            state.final_response = '请回复"确认"继续，或回复"取消"放弃这份安排草案。'
             return
         if state_type == PendingStateType.WAITING_CONFLICT_RESOLUTION.value:
-            state.final_response = "请回复 1、2 或 3 处理冲突，或回复“取消”放弃当前处理。"
+            state.final_response = '请回复 1、2 或 3 处理冲突，或回复"取消"放弃当前处理。'
             return
         if state_type == PendingStateType.WAITING_EVENT_SELECTION.value:
-            state.final_response = "请回复候选编号 1、2 或 3，或回复“取消”结束当前操作。"
+            state.final_response = '请回复候选编号 1、2 或 3，或回复"取消"结束当前操作。'
             return
         if state_type == PendingStateType.WAITING_REMINDER_TIME.value:
-            state.final_response = "请告诉我具体提醒时间，例如“明天下午 3 点提醒我”。"
+            state.final_response = '请告诉我具体提醒时间，例如"明天下午 3 点提醒我"。'
             return
-        state.final_response = "我正在等待你的确认或选择，请回复“确认”“取消”或序号。"
+        state.final_response = '我正在等待你的确认或选择，请回复"确认""取消"或序号。'
 
     def _find_scheduled_item_candidates(
         self,
@@ -354,7 +359,7 @@ class SchedulePlanningGraph:
             state.intent = "ask_user_clarification"
             state.final_response = (
                 extracted.get("clarification_prompt")
-                or "请补充具体时间，例如“明天下午 3 点开会”。"
+                or '请补充具体时间，例如"明天下午 3 点开会"。'
             )
             return
         if end_time is None:
@@ -483,6 +488,45 @@ class SchedulePlanningGraph:
             lines.append(f"{index}. {event['title']} {start_text} - {end_text}")
         state.final_response = "\n".join(lines)
 
+    def _handle_query_free_slots(self, state: AgentState) -> None:
+        extracted = state.extracted or {}
+        target_date = extracted.get("query_start_date") or extracted.get("query_end_date")
+        if target_date is None:
+            target_date = state.current_time.date()
+        result = self.tools.execute(
+            "find_free_slots",
+            {"plan_date": target_date, "timezone": state.timezone},
+            user_id=state.user_id,
+            conversation_id=state.conversation_id,
+        )
+        state.tool_calls.append(
+            {
+                "tool_name": "find_free_slots",
+                "args": {"plan_date": target_date},
+            }
+        )
+        state.tool_results.append(
+            {"tool_name": "find_free_slots", "result": result.model_dump(mode="json")}
+        )
+        slots = result.data or []
+        if not slots:
+            state.final_response = f"{target_date.isoformat()} 没有空闲时间。"
+            return
+        lines = [f"{target_date.isoformat()} 的空闲时间："]
+        user_tz = ZoneInfo(state.timezone)
+        for index, slot in enumerate(slots, start=1):
+            start = datetime.fromisoformat(slot["start_time"]).astimezone(user_tz)
+            end = datetime.fromisoformat(slot["end_time"]).astimezone(user_tz)
+            minutes = slot["duration_minutes"]
+            if minutes >= 60:
+                hours = minutes // 60
+                mins = minutes % 60
+                duration_text = f"{hours}小时" + (f"{mins}分钟" if mins else "")
+            else:
+                duration_text = f"{minutes}分钟"
+            lines.append(f"{index}. {start:%H:%M}-{end:%H:%M} ({duration_text})")
+        state.final_response = "\n".join(lines)
+
     def _handle_create_task(self, state: AgentState) -> None:
         extracted = state.extracted or {}
         minutes = extracted.get("estimated_minutes")
@@ -490,7 +534,7 @@ class SchedulePlanningGraph:
         if minutes is None:
             state.intent = "ask_user_clarification"
             state.final_response = (
-                extracted.get("clarification_prompt") or "请补充任务时长，例如“明天写论文 2 小时”。"
+                extracted.get("clarification_prompt") or '请补充任务时长，例如"明天写论文 2 小时"。'
             )
             return
         result = self.tools.execute(
@@ -539,7 +583,7 @@ class SchedulePlanningGraph:
                 }
                 state.final_response = (
                     f"已创建任务：{title}，预计 {minutes} 分钟。\n"
-                    f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
+                    f'已生成 {target_date.isoformat()} 的安排草案，请回复"确认"或"取消"。'
                 )
                 return
         state.final_response = f"已创建任务：{title}，预计 {minutes} 分钟。"
@@ -601,7 +645,7 @@ class SchedulePlanningGraph:
             "status": pending.status,
         }
         state.final_response = (
-            f"已生成 {target_date.isoformat()} 的安排草案，请回复“确认”或“取消”。"
+            f'已生成 {target_date.isoformat()} 的安排草案，请回复"确认"或"取消"。'
         )
 
     def _handle_update_scheduled_item(self, state: AgentState) -> None:
@@ -647,7 +691,7 @@ class SchedulePlanningGraph:
         new_end = extracted.get("new_end_time")
         if new_start is None:
             state.final_response = (
-                extracted.get("clarification_prompt") or "请补充新的时间，例如“改到 4 点”。"
+                extracted.get("clarification_prompt") or '请补充新的时间，例如"改到 4 点"。'
             )
             return
         if new_end is None:
@@ -677,8 +721,8 @@ class SchedulePlanningGraph:
             state.final_response = update_result.error or "修改安排失败。"
             return
         state.final_response = (
-            f"已将安排“{candidate['title']}”调整到 {new_start:%Y-%m-%d} "
-            f"{_format_clock_time(new_start)}。"
+            f'已将安排「{candidate["title"]}」调整到 {new_start:%Y-%m-%d} '
+            f'{_format_clock_time(new_start)} 到 {_format_clock_time(new_end)}。'
         )
 
     def _handle_delete_scheduled_item(self, state: AgentState) -> None:
@@ -732,7 +776,7 @@ class SchedulePlanningGraph:
         state.tool_results.append(
             {"tool_name": "delete_scheduled_item", "result": delete_result.model_dump(mode="json")}
         )
-        state.final_response = f"已删除安排“{candidate['title']}”。"
+        state.final_response = f'已删除安排「{candidate["title"]}」。'
 
     def _confirm_plan_from_pending(self, state: AgentState) -> None:
         payload = state.pending_state or {}
@@ -873,9 +917,9 @@ class SchedulePlanningGraph:
                 user_id=state.user_id,
                 conversation_id=state.conversation_id,
             )
-            state.final_response = f"已删除安排“{candidate['title']}”。"
+            state.final_response = f'已删除安排「{candidate["title"]}」。'
         elif action == "update_scheduled_item":
-            state.final_response = f"已选中安排“{candidate['title']}”，请继续补充修改内容。"
+            state.final_response = f'已选中安排「{candidate["title"]}」，请继续补充修改内容。'
         self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
         state.pending_state = None
 
