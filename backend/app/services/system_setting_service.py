@@ -31,6 +31,8 @@ SYSTEM_SETTING_SPECS: tuple[SystemSettingSpec, ...] = (
     SystemSettingSpec("LLM_BASE_URL", None, "LLM Base URL"),
     SystemSettingSpec("LLM_MODEL", None, "LLM 模型名称"),
     SystemSettingSpec("LLM_API_KEY", None, "LLM API Key", True),
+    SystemSettingSpec("WEATHER_API_PROVIDER", "openweathermap", "天气 API 提供商 (openweathermap/amap)"),
+    SystemSettingSpec("WEATHER_API_KEY", None, "天气 API Key", True),
 )
 
 
