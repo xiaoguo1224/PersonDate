@@ -347,7 +347,58 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     def find_free_slots(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
+        from datetime import UTC, datetime as dt, time as dt_time
+        from zoneinfo import ZoneInfo
+
+        payload = FindFreeSlotsArgs.model_validate(args)
+        service = ScheduledItemService(session)
+        items = service.list_by_date(user_id, payload.plan_date)
+
+        user_tz = ZoneInfo(payload.timezone)
+        start_parts = payload.workday_start.split(":")
+        end_parts = payload.workday_end.split(":")
+        day_start_local = dt(
+            payload.plan_date.year, payload.plan_date.month, payload.plan_date.day,
+            int(start_parts[0]), int(start_parts[1]), tzinfo=user_tz,
+        )
+        day_end_local = dt(
+            payload.plan_date.year, payload.plan_date.month, payload.plan_date.day,
+            int(end_parts[0]), int(end_parts[1]), tzinfo=user_tz,
+        )
+        day_start = day_start_local.astimezone(UTC)
+        day_end = day_end_local.astimezone(UTC)
+
+        active_items = sorted(
+            [
+                i for i in items
+                if i.status == "active"
+                and i.end_time.astimezone(UTC) > day_start
+                and i.start_time.astimezone(UTC) < day_end
+            ],
+            key=lambda x: x.start_time,
+        )
+
         free_slots: list[dict[str, Any]] = []
+        cursor = day_start
+        for item in active_items:
+            item_start = max(item.start_time.astimezone(UTC), day_start)
+            item_end = min(item.end_time.astimezone(UTC), day_end)
+            if item_start > cursor:
+                slot_minutes = int((item_start - cursor).total_seconds() // 60)
+                free_slots.append({
+                    "start_time": cursor.isoformat(),
+                    "end_time": item_start.isoformat(),
+                    "duration_minutes": slot_minutes,
+                })
+            if item_end > cursor:
+                cursor = item_end
+        if cursor < day_end:
+            slot_minutes = int((day_end - cursor).total_seconds() // 60)
+            free_slots.append({
+                "start_time": cursor.isoformat(),
+                "end_time": day_end.isoformat(),
+                "duration_minutes": slot_minutes,
+            })
         return ToolResult(data=free_slots, message="空闲时间已计算")
 
     def plan_tasks_into_day(
@@ -401,7 +452,63 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     def suggest_reschedule(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
-        return ToolResult(data=args, message="建议稍后补充")
+        from datetime import UTC, datetime as dt, timedelta
+
+        payload = SuggestRescheduleArgs.model_validate(args)
+        conflict_service = ConflictService(session)
+        conflict = conflict_service.get_conflict(user_id, payload.conflict_id)
+        if conflict is None:
+            return ToolResult(success=False, error="冲突不存在")
+        if conflict.status != "open":
+            return ToolResult(success=False, error="冲突已处理")
+
+        related = conflict.related_item_ids or {}
+        item_id_a = related.get("current")
+        item_id_b = related.get("other")
+        if not item_id_a or not item_id_b:
+            return ToolResult(success=False, error="冲突缺少关联安排")
+
+        item_service = ScheduledItemService(session)
+        item_a = item_service.get(user_id, item_id_a)
+        item_b = item_service.get(user_id, item_id_b)
+        if item_a is None or item_b is None:
+            return ToolResult(success=False, error="关联安排不存在")
+
+        conflict_date = item_a.start_time.astimezone(UTC).date()
+        free_slots_result = find_free_slots(
+            {
+                "plan_date": conflict_date,
+                "workday_start": "09:00",
+                "workday_end": "22:00",
+            },
+            user_id=user_id,
+            conversation_id=conversation_id,
+            session=session,
+        )
+        free_slots = free_slots_result.data or []
+
+        suggestions: list[dict[str, Any]] = []
+        for item in [item_a, item_b]:
+            duration = int((item.end_time - item.start_time).total_seconds() // 60)
+            for slot in free_slots:
+                if slot["duration_minutes"] >= duration:
+                    slot_start = dt.fromisoformat(slot["start_time"])
+                    slot_end = slot_start + timedelta(minutes=duration)
+                    suggestions.append({
+                        "item_id": item.id,
+                        "item_title": item.title,
+                        "original_start": item.start_time.isoformat(),
+                        "original_end": item.end_time.isoformat(),
+                        "suggested_start": slot_start.isoformat(),
+                        "suggested_end": slot_end.isoformat(),
+                        "reason": f"将「{item.title}」移至空闲时段 {slot_start:%H:%M}-{slot_end:%H:%M}",
+                    })
+                    break
+        return ToolResult(data={
+            "conflict_id": conflict.id,
+            "conflict_title": conflict.title,
+            "suggestions": suggestions,
+        }, message="已生成调整建议")
 
     def create_reminder(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session

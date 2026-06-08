@@ -93,6 +93,9 @@ class AnalyzeDayArgs(BaseModel):
 
 class FindFreeSlotsArgs(BaseModel):
     plan_date: date
+    workday_start: str = Field(default="09:00", pattern=r"^\d{2}:\d{2}$")
+    workday_end: str = Field(default="22:00", pattern=r"^\d{2}:\d{2}$")
+    timezone: str = Field(default="Asia/Shanghai", max_length=64)
 
 
 class PlanTasksIntoDayArgs(BaseModel):
