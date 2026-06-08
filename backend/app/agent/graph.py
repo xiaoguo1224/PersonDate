@@ -95,7 +95,7 @@ class SchedulePlanningGraph:
                 "请把用户输入中的相对时间解析成当前时区下的绝对日期或时间。"
                 "所有时间字段请使用 ISO 8601。"
                 "如果 intent 是 create_event，优先输出 event_title 和 event_start_time。"
-                "同时提取地点到 event_location，例如"信息科技大楼324"、"会议室A"等。"
+                "同时提取地点到 event_location，例如'信息科技大楼324'、'会议室A'等。"
                 "如果用户只提供了开始时间，没有提供结束时间，不要追问持续时间，"
                 "end_time 可以留空，处理层会默认 1 小时。"
                 "如果 intent 是 update_event，请尽量输出 original_time 或 event_start_time，"
