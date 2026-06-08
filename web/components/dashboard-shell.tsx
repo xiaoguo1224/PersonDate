@@ -331,21 +331,26 @@ function DashboardShellContent({
 
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      const fallbackMessage = generateWarmMessage(null);
-      setWarmMessage(fallbackMessage);
+      setWarmMessage(generateWarmMessage(null));
       return;
     }
 
+    const timeoutId = setTimeout(() => {
+      setWarmMessage(generateWarmMessage(null));
+    }, 10000);
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        clearTimeout(timeoutId);
         const { latitude, longitude } = position.coords;
         void fetchWeather(latitude, longitude);
       },
       (err) => {
+        clearTimeout(timeoutId);
         console.error("获取位置失败:", err);
-        const fallbackMessage = generateWarmMessage(null);
-        setWarmMessage(fallbackMessage);
-      }
+        setWarmMessage(generateWarmMessage(null));
+      },
+      { timeout: 8000, maximumAge: 600000 },
     );
   }, [fetchWeather, generateWarmMessage]);
 
