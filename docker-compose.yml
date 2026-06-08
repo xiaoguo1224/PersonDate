@@ -17,13 +17,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      - schedule_agent_network
 
   redis:
     image: redis:7-alpine
     platform: linux/amd64
     container_name: schedule-agent-redis
-    ports:
-      - "6380:6379"
+    expose:
+      - "6379"
     volumes:
       - schedule_agent_redis_data:/data
     command: redis-server --appendonly yes
@@ -33,6 +35,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      - schedule_agent_network
 
   backend:
     build:
@@ -57,8 +61,10 @@ services:
       wechat-channel:
         condition: service_healthy
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
+    networks:
+      - schedule_agent_network
     command: >
       sh -c "uv run alembic upgrade head
       && uv run python -m app.bootstrap
@@ -84,8 +90,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "18789:18789"
+    expose:
+      - "18789"
+    networks:
+      - schedule_agent_network
     restart: unless-stopped
     healthcheck:
       test:
@@ -105,17 +113,23 @@ services:
       context: ./web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+        NEXT_PUBLIC_API_BASE_URL: /api
     platform: linux/amd64
     container_name: schedule-agent-web
-    env_file:
-      - ./web/.env
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: /api
     depends_on:
       - backend
     restart: unless-stopped
     ports:
       - "3000:3000"
+    networks:
+      - schedule_agent_network
 
 volumes:
   schedule_agent_pgdata:
   schedule_agent_redis_data:
+
+networks:
+  schedule_agent_network:
+    driver: bridge
