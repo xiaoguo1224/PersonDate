@@ -95,6 +95,7 @@ class SchedulePlanningGraph:
                 "请把用户输入中的相对时间解析成当前时区下的绝对日期或时间。"
                 "所有时间字段请使用 ISO 8601。"
                 "如果 intent 是 create_event，优先输出 event_title 和 event_start_time。"
+                "同时提取地点到 event_location，例如"信息科技大楼324"、"会议室A"等。"
                 "如果用户只提供了开始时间，没有提供结束时间，不要追问持续时间，"
                 "end_time 可以留空，处理层会默认 1 小时。"
                 "如果 intent 是 update_event，请尽量输出 original_time 或 event_start_time，"
@@ -345,6 +346,7 @@ class SchedulePlanningGraph:
         title = extracted.get("event_title") or "安排"
         start_time = extracted.get("event_start_time")
         end_time = extracted.get("event_end_time")
+        location = extracted.get("event_location")
         remind_before = extracted.get("remind_before_minutes")
         if start_time is None:
             state.intent = "ask_user_clarification"
@@ -369,7 +371,7 @@ class SchedulePlanningGraph:
                 "start_time": start_time,
                 "end_time": end_time,
                 "timezone": state.timezone,
-                "location": None,
+                "location": location,
                 "remind_before_minutes": remind_before,
             },
             user_id=state.user_id,
@@ -429,8 +431,9 @@ class SchedulePlanningGraph:
             return
         user_tz = ZoneInfo(state.timezone)
         local_start = start_time.astimezone(user_tz)
+        location_text = f"，地点：{location}" if location else ""
         state.final_response = (
-            f"已为你创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}。"
+            f"已为你创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}{location_text}。"
         )
 
     def _handle_query_scheduled_items(self, state: AgentState) -> None:

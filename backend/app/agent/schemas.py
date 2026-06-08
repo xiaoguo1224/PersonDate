@@ -147,6 +147,7 @@ class MessageExtraction(BaseModel):
     event_title: str | None = None
     event_start_time: datetime | None = None
     event_end_time: datetime | None = None
+    event_location: str | None = None
     remind_before_minutes: int | None = None
     query_start_date: date | None = None
     query_end_date: date | None = None
@@ -184,6 +185,8 @@ class MessageExtraction(BaseModel):
 
         if "event_title" not in payload and payload.get("title") is not None:
             payload["event_title"] = payload["title"]
+        if "event_location" not in payload and payload.get("location") is not None:
+            payload["event_location"] = payload["location"]
         if "task_title" not in payload and payload.get("summary") is not None:
             payload["task_title"] = payload["summary"]
         if "task_title" not in payload and payload.get("title") is not None:
