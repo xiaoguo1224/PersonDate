@@ -10,8 +10,12 @@ from sqlalchemy.orm import Session
 
 from datetime import UTC
 
+from app.core.cache import cache_get, cache_set
+from app.core.cache_invalidator import invalidate_user_events
 from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.scheduled_item import ScheduledItem
+
+_EVENTS_TTL = 600  # 10 分钟
 
 
 class ScheduledItemService:
@@ -47,6 +51,7 @@ class ScheduledItemService:
         )
         self.db.add(item)
         self.db.flush()
+        invalidate_user_events(user_id)
         logger.info("创建日程 user_id=%s title=%s item_id=%s start=%s end=%s", user_id, title, item.id, start_time.isoformat(), end_time.isoformat())
         return item
 
@@ -81,6 +86,32 @@ class ScheduledItemService:
         end = start.replace(hour=23, minute=59, second=59)
         return self.list_by_date_range(user_id, start, end)
 
+    def list_by_date_cached(self, user_id: str, plan_date: date) -> list[dict]:
+        cache_key = f"schedule:user:{user_id}:events:date:{plan_date.isoformat()}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+        items = self.list_by_date(user_id, plan_date)
+        result = [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "start_time": item.start_time.isoformat(),
+                "end_time": item.end_time.isoformat(),
+                "timezone": item.timezone,
+                "location": item.location,
+                "source": item.source,
+                "source_task_id": item.source_task_id,
+                "remind_before_minutes": item.remind_before_minutes,
+                "status": item.status,
+                "sort_order": item.sort_order,
+            }
+            for item in items
+        ]
+        cache_set(cache_key, result, _EVENTS_TTL)
+        return result
+
     def update(
         self,
         item: ScheduledItem,
@@ -110,18 +141,21 @@ class ScheduledItemService:
         if status is not None:
             item.status = status
         self.db.flush()
+        invalidate_user_events(item.user_id)
         logger.info("更新日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
     def mark_completed(self, item: ScheduledItem) -> ScheduledItem:
         item.status = ScheduledItemStatus.COMPLETED.value
         self.db.flush()
+        invalidate_user_events(item.user_id)
         logger.info("完成日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
     def soft_delete(self, item: ScheduledItem) -> ScheduledItem:
         item.status = ScheduledItemStatus.DELETED.value
         self.db.flush()
+        invalidate_user_events(item.user_id)
         logger.info("删除日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
@@ -154,6 +188,7 @@ class ScheduledItemService:
         for item in items:
             item.status = ScheduledItemStatus.ACTIVE.value
         self.db.flush()
+        invalidate_user_events(user_id)
         logger.info("确认草稿 user_id=%s date=%s count=%d", user_id, plan_date.isoformat(), len(items))
         return len(items)
 
