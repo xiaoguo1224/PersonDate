@@ -9,12 +9,15 @@ class ReminderDTO(BaseModel):
     target_id: str
     title: str
     conversation_id: str
+    original_time: datetime | None = None
     trigger_time: datetime
+    remind_before_minutes: int = 0
     status: str
     retry_count: int
     max_retries: int
     error_message: str | None = None
     fired_at: datetime | None = None
+
 
 
 class ReminderListResponse(BaseModel):
