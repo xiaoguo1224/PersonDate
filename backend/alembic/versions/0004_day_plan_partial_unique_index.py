@@ -44,6 +44,8 @@ def _index_exists(index_name: str, table_name: str) -> bool:
 
 
 def upgrade() -> None:
+    if not _table_exists("day_plans"):
+        return
     if _constraint_exists("uq_day_plan_active", "day_plans"):
         op.drop_constraint("uq_day_plan_active", "day_plans", type_="unique")
     if not _index_exists("uq_day_plan_active", "day_plans"):
@@ -58,6 +60,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not _table_exists("day_plans"):
+        return
     op.drop_index("uq_day_plan_active", table_name="day_plans")
     op.create_unique_constraint(
         "uq_day_plan_active",
