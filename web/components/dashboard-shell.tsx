@@ -7,7 +7,6 @@ import {
   CheckSquareOutlined,
   ClusterOutlined,
   DatabaseOutlined,
-  DownOutlined,
   FileTextOutlined,
   HomeOutlined,
   InboxOutlined,
@@ -22,7 +21,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { App, Avatar, Badge, Button, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
+import { App, Avatar, Button, Dropdown, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 
@@ -232,31 +231,6 @@ function DashboardShellContent({
           className="dashboard-nav"
         />
 
-        <div className="dashboard-sidebar__footer">
-          <div className="dashboard-profile-card">
-            <Avatar className="dashboard-profile-card__avatar">{avatarText}</Avatar>
-            <div className="dashboard-profile-card__body">
-              <Text strong className="dashboard-profile-card__name">
-                {displayName}
-              </Text>
-              <Space size={8} wrap>
-                <Tag color={sessionRole === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
-                  {sessionRole}
-                </Tag>
-                <Text className="muted-text">在线</Text>
-              </Space>
-            </div>
-          </div>
-          <ThemeSwitcher />
-          <Space className="dashboard-sidebar__actions" size={8} wrap>
-            <Button icon={<BellOutlined />} href="/dashboard/reminders">
-              提醒
-            </Button>
-            <Button icon={<LogoutOutlined />} onClick={logout}>
-              退出
-            </Button>
-          </Space>
-        </div>
       </Sider>
 
       <Layout className="dashboard-main">
@@ -272,11 +246,36 @@ function DashboardShellContent({
             <Button className="dashboard-topbar__button" type="default" icon={<PlusOutlined />} href="/dashboard/calendar">
               快速新建
             </Button>
-            <Badge count={3} size="small" offset={[-4, 4]}>
-              <Button className="dashboard-topbar__icon-button" icon={<BellOutlined />} aria-label="通知" />
-            </Badge>
-            <Avatar className="dashboard-topbar__avatar">{avatarText}</Avatar>
-            <Button type="text" className="dashboard-topbar__user-menu" icon={<DownOutlined />} />
+            <Button className="dashboard-topbar__icon-button" icon={<BellOutlined />} href="/dashboard/reminders" aria-label="提醒" />
+            <ThemeSwitcher />
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: "profile",
+                    label: (
+                      <Space>
+                        <Tag color={sessionRole === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
+                          {sessionRole}
+                        </Tag>
+                        <span>{displayName}</span>
+                      </Space>
+                    ),
+                    disabled: true,
+                  },
+                  { type: "divider" },
+                  { key: "account", label: "账号设置", icon: <UserOutlined />, onClick: () => router.push("/dashboard/account") },
+                  { key: "reminders", label: "提醒任务", icon: <BellOutlined />, onClick: () => router.push("/dashboard/reminders") },
+                  { type: "divider" },
+                  { key: "logout", label: "退出登录", icon: <LogoutOutlined />, danger: true, onClick: logout },
+                ],
+              }}
+              trigger={["click"]}
+            >
+              <Space className="dashboard-topbar__user-trigger" size={8}>
+                <Avatar className="dashboard-topbar__avatar">{avatarText}</Avatar>
+              </Space>
+            </Dropdown>
           </Space>
         </Header>
 
