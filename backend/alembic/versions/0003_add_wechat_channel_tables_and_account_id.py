@@ -8,6 +8,7 @@ Create Date: 2026-06-05 00:00:00.000000
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from alembic import op
 
@@ -18,8 +19,29 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(table_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return table_name in inspector.get_table_names()
+
+
+def _column_exists(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    columns = [col["name"] for col in inspector.get_columns(table_name)]
+    return column_name in columns
+
+
+def _index_exists(index_name: str, table_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    indexes = [idx["name"] for idx in inspector.get_indexes(table_name)]
+    return index_name in indexes
+
+
 def upgrade() -> None:
-    op.create_table(
+    if not _table_exists("wechat_accounts"):
+        op.create_table(
         "wechat_accounts",
         sa.Column("owner_user_id", sa.String(length=36), nullable=False),
         sa.Column("account_id", sa.String(length=255), nullable=False),
@@ -66,8 +88,9 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.create_table(
-        "wechat_login_sessions",
+    if not _table_exists("wechat_login_sessions"):
+        op.create_table(
+            "wechat_login_sessions",
         sa.Column("owner_user_id", sa.String(length=36), nullable=False),
         sa.Column("login_session_id", sa.String(length=255), nullable=False),
         sa.Column("qr_payload", sa.Text(), nullable=False),
@@ -109,8 +132,9 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.create_table(
-        "wechat_channel_inbound_messages",
+    if not _table_exists("wechat_channel_inbound_messages"):
+        op.create_table(
+            "wechat_channel_inbound_messages",
         sa.Column("account_id", sa.String(length=255), nullable=False),
         sa.Column("message_id", sa.String(length=255), nullable=False),
         sa.Column("cursor_token", sa.String(length=64), nullable=False),
@@ -165,16 +189,18 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.add_column(
-        "channel_message_logs",
-        sa.Column("account_id", sa.String(length=255), nullable=True),
-    )
-    op.create_index(
-        "ix_channel_message_logs_account_id",
-        "channel_message_logs",
-        ["account_id"],
-        unique=False,
-    )
+    if not _column_exists("channel_message_logs", "account_id"):
+        op.add_column(
+            "channel_message_logs",
+            sa.Column("account_id", sa.String(length=255), nullable=True),
+        )
+    if not _index_exists("ix_channel_message_logs_account_id", "channel_message_logs"):
+        op.create_index(
+            "ix_channel_message_logs_account_id",
+            "channel_message_logs",
+            ["account_id"],
+            unique=False,
+        )
     op.create_unique_constraint(
         "uq_channel_account_message",
         "channel_message_logs",
