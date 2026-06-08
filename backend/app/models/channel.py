@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -125,6 +125,7 @@ class ChannelMessageLog(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "channel_message_logs"
     __table_args__ = (
         UniqueConstraint("channel", "account_id", "message_id", name="uq_channel_account_message"),
+        Index("ix_message_logs_conversation_dir_time", "conversation_id", "direction", "created_at"),
     )
 
     user_id: Mapped[str | None] = mapped_column(

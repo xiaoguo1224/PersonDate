@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -11,6 +11,9 @@ from app.models.enums import ScheduledItemSource, ScheduledItemStatus
 
 class ScheduledItem(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "scheduled_items"
+    __table_args__ = (
+        Index("ix_scheduled_items_user_start", "user_id", "start_time"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False

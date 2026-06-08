@@ -54,6 +54,9 @@ class ScheduleConflict(UUIDMixin, TimestampMixin, Base):
 
 class TaskItem(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "task_items"
+    __table_args__ = (
+        Index("ix_task_items_user_status", "user_id", "status"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
