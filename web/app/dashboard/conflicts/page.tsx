@@ -271,7 +271,6 @@ export default function ConflictsPage() {
                       <Tag color={getSeverityColor(conflict.severity)}>{conflict.severity}</Tag>
                       <Tag color={getStatusColor(conflict.status)}>{conflict.status}</Tag>
                     </Space>
-                    {conflict.description ? <Text className="muted-text">{conflict.description}</Text> : null}
                     <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
                     {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
