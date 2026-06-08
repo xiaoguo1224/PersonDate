@@ -64,7 +64,7 @@ export default function SystemSettingsPage() {
           WEATHER_API_PROVIDER: String(
             getSettingValue(result.items, "WEATHER_API_PROVIDER")?.value ?? "openweathermap",
           ),
-          WEATHER_API_KEY: "",
+          // WEATHER_API_KEY 不设置，让用户手动输入
         });
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");

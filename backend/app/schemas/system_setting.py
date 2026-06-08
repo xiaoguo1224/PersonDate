@@ -32,8 +32,10 @@ class UpdateSystemSettingsRequest(BaseModel):
     REMINDER_SCAN_INTERVAL_SECONDS: int | None = Field(default=None, ge=1)
     DEFAULT_REMIND_BEFORE_MINUTES: int | None = Field(default=None, ge=0)
     SYSTEM_DAILY_PUSH_ENABLED: bool | None = None
+    WEATHER_API_PROVIDER: str | None = Field(default=None, max_length=32)
+    WEATHER_API_KEY: str | None = Field(default=None, max_length=4096)
 
-    @field_validator("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY", "DEFAULT_TIMEZONE", mode="before")
+    @field_validator("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY", "DEFAULT_TIMEZONE", "WEATHER_API_PROVIDER", mode="before")
     @classmethod
     def normalize_optional_strings(cls, value: Any) -> Any:
         return _empty_str_to_none(value)
