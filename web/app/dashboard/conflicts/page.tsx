@@ -36,7 +36,7 @@ export default function ConflictsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
