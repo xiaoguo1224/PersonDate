@@ -1,7 +1,11 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 from app.models import User, UserRole, UserStatus
 from app.schemas.setup import OwnerInitRequest
 from app.services.user_service import UserService
@@ -23,6 +27,7 @@ class SetupService:
 
     def create_owner(self, payload: OwnerInitRequest) -> User:
         if self.is_initialized():
+            logger.warning("初始化失败: 系统已经初始化")
             raise ValueError("系统已经初始化")
         settings = get_settings()
         owner = self.users.create_user(
@@ -32,4 +37,5 @@ class SetupService:
             display_name=payload.display_name,
             email=str(payload.email) if payload.email else None,
         )
+        logger.info("系统初始化完成 owner_id=%s", owner.id)
         return owner

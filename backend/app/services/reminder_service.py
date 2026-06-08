@@ -1,6 +1,9 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.models import ReminderJob, ReminderStatus
@@ -34,6 +37,7 @@ class ReminderService:
         )
         self.db.add(job)
         self.db.flush()
+        logger.info("创建提醒 user_id=%s target_type=%s target_id=%s trigger=%s", user_id, target_type, target_id, trigger_time.isoformat())
         return job
 
     def create_from_scheduled_item(
@@ -57,9 +61,11 @@ class ReminderService:
         )
         self.db.add(reminder)
         self.db.flush()
+        logger.info("创建日程提醒 user_id=%s item_id=%s trigger=%s", user_id, scheduled_item_id, actual_trigger.isoformat())
         return reminder
 
     def cancel_by_target(self, *, user_id: str, target_id: str) -> None:
+        logger.info("取消目标提醒 user_id=%s target_id=%s", user_id, target_id)
         stmt = select(ReminderJob).where(
             ReminderJob.user_id == user_id,
             ReminderJob.target_id == target_id,
@@ -98,6 +104,7 @@ class ReminderService:
 
     def cancel_job(self, job: ReminderJob) -> ReminderJob:
         job.status = ReminderStatus.CANCELED.value
+        logger.info("取消提醒 job_id=%s user_id=%s", job.id, job.user_id)
         return job
 
     def reactivate_job(self, job: ReminderJob, new_trigger_time: datetime | None = None) -> ReminderJob:
@@ -118,4 +125,5 @@ class ReminderService:
         for job in jobs:
             job.status = ReminderStatus.FIRED.value
             job.fired_at = now
+        logger.info("触发到期提醒 count=%d", len(jobs))
         return jobs

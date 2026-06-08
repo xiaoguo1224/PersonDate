@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.models import ScheduleSource, TaskItem, TaskStatus
@@ -54,6 +57,7 @@ class TaskService:
         )
         self.db.add(item)
         self.db.flush()
+        logger.info("创建任务 user_id=%s title=%s task_id=%s", user_id, title, item.id)
         return item
 
     def list_tasks(
@@ -90,15 +94,19 @@ class TaskService:
         return self.db.scalar(stmt)
 
     def update_task(self, task: TaskItem, **changes: object) -> TaskItem:
+        applied: list[str] = []
         for key, value in changes.items():
             if value is _UNSET:
                 continue
             setattr(task, key, value)
+            applied.append(key)
+        logger.info("更新任务 user_id=%s task_id=%s 字段=%s", task.user_id, task.id, ",".join(applied))
         return task
 
     def complete_task(self, task: TaskItem) -> TaskItem:
         task.status = TaskStatus.COMPLETED.value
         task.completed_days = (task.completed_days or 0) + 1
+        logger.info("完成任务 user_id=%s task_id=%s", task.user_id, task.id)
         stmt = select(ScheduledItem).where(
             ScheduledItem.user_id == task.user_id,
             ScheduledItem.source_task_id == task.id,
@@ -110,6 +118,7 @@ class TaskService:
 
     def delete_task(self, task: TaskItem) -> TaskItem:
         task.status = TaskStatus.DELETED.value
+        logger.info("删除任务 user_id=%s task_id=%s", task.user_id, task.id)
         stmt = select(ScheduledItem).where(
             ScheduledItem.user_id == task.user_id,
             ScheduledItem.source_task_id == task.id,

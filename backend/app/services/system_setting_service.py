@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models import SystemSetting
 from app.schemas.system_setting import UpdateSystemSettingsRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,7 @@ class SystemSettingService:
             setting.description = spec.description
             setting.is_sensitive = spec.is_sensitive
         self.db.flush()
+        logger.info("更新系统设置 字段=%s", ",".join(payload.model_fields_set))
         return self.list_settings()
 
     def to_public_dict(self, setting: SystemSetting) -> dict[str, Any]:

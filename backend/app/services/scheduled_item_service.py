@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from datetime import UTC
@@ -44,6 +47,7 @@ class ScheduledItemService:
         )
         self.db.add(item)
         self.db.flush()
+        logger.info("创建日程 user_id=%s title=%s item_id=%s start=%s end=%s", user_id, title, item.id, start_time.isoformat(), end_time.isoformat())
         return item
 
     def get(self, user_id: str, item_id: str) -> ScheduledItem | None:
@@ -106,16 +110,19 @@ class ScheduledItemService:
         if status is not None:
             item.status = status
         self.db.flush()
+        logger.info("更新日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
     def mark_completed(self, item: ScheduledItem) -> ScheduledItem:
         item.status = ScheduledItemStatus.COMPLETED.value
         self.db.flush()
+        logger.info("完成日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
     def soft_delete(self, item: ScheduledItem) -> ScheduledItem:
         item.status = ScheduledItemStatus.DELETED.value
         self.db.flush()
+        logger.info("删除日程 user_id=%s item_id=%s", item.user_id, item.id)
         return item
 
     def search(
@@ -147,6 +154,7 @@ class ScheduledItemService:
         for item in items:
             item.status = ScheduledItemStatus.ACTIVE.value
         self.db.flush()
+        logger.info("确认草稿 user_id=%s date=%s count=%d", user_id, plan_date.isoformat(), len(items))
         return len(items)
 
     def list_pending_tasks(self, user_id: str) -> list:
@@ -209,4 +217,5 @@ class ScheduledItemService:
             created.append(item)
             base = slot_end
 
+        logger.info("生成草稿 user_id=%s date=%s count=%d", user_id, plan_date.isoformat(), len(created))
         return created

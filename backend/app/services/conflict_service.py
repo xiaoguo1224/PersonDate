@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.models import ConflictSeverity, ConflictStatus, ConflictType, ScheduleConflict
@@ -140,6 +143,7 @@ class ConflictService:
             self.db.add(conflict)
             conflicts.append(conflict)
         self.db.flush()
+        logger.info("检测日程冲突 user_id=%s item_id=%s 新增冲突数=%d", user_id, item.id, len(conflicts))
         return conflicts
 
     def detect_day_conflicts(self, user_id: str) -> list[ScheduleConflict]:
@@ -181,6 +185,7 @@ class ConflictService:
                 self.db.add(conflict)
                 conflicts.append(conflict)
         self.db.flush()
+        logger.info("检测全天冲突 user_id=%s 新增冲突数=%d", user_id, len(conflicts))
         return conflicts
 
     def list_conflicts(
@@ -236,6 +241,7 @@ class ConflictService:
             conflict.resolved_at = datetime.now(UTC)
             resolved_conflicts.append(conflict)
         self.db.flush()
+        logger.info("解决项目冲突 user_id=%s item_id=%s 解决数=%d", user_id, item_id, len(resolved_conflicts))
         return resolved_conflicts
 
     def get_conflict(self, user_id: str, conflict_id: str) -> ScheduleConflict | None:
@@ -248,9 +254,11 @@ class ConflictService:
 
     def ignore_conflict(self, conflict: ScheduleConflict) -> ScheduleConflict:
         conflict.status = ConflictStatus.IGNORED.value
+        logger.info("忽略冲突 user_id=%s conflict_id=%s", conflict.user_id, conflict.id)
         return conflict
 
     def resolve_conflict(self, conflict: ScheduleConflict) -> ScheduleConflict:
         conflict.status = ConflictStatus.RESOLVED.value
         conflict.resolved_at = datetime.now(UTC)
+        logger.info("解决冲突 user_id=%s conflict_id=%s", conflict.user_id, conflict.id)
         return conflict

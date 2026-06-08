@@ -1,7 +1,11 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ChannelIdentity
+
+logger = logging.getLogger(__name__)
 
 
 class ChannelIdentityService:
@@ -77,6 +81,7 @@ class ChannelIdentityService:
                 status="active",
             )
             self.db.add(identity)
+            logger.info("新建微信绑定 user_id=%s channel_user_id=%s conversation_id=%s", user_id, channel_user_id, conversation_id)
         else:
             identity.user_id = user_id
             identity.channel = "wechat"
@@ -85,4 +90,5 @@ class ChannelIdentityService:
             identity.display_name = display_name
             identity.avatar_url = avatar_url
             identity.status = "active"
+            logger.info("更新微信绑定 user_id=%s channel_user_id=%s identity_id=%s", user_id, channel_user_id, identity.id)
         return identity

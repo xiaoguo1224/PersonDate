@@ -55,6 +55,7 @@ class DailyNotificationService:
 
     def notify_user(self, user: User) -> bool:
         """向单个用户推送今日安排 + 天气。"""
+        logger.info("开始推送用户 user_id=%s", user.id)
         from app.models.channel import ChannelIdentity
         from app.services.wechat_channel_service import WechatChannelService
 
@@ -104,6 +105,8 @@ class DailyNotificationService:
             content=message,
             user_id=user.id,
         )
+        if log.status == "sent":
+            logger.info("推送成功 user_id=%s conversation_id=%s", user.id, identity.conversation_id)
         return log.status == "sent"
 
     def get_weather(self, city: str) -> dict[str, Any]:

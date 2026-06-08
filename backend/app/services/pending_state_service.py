@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.models import AgentPendingState, PendingStateStatus
@@ -52,6 +55,7 @@ class PendingStateService:
         )
         self.db.add(pending)
         self.db.flush()
+        logger.info("保存 pending state user_id=%s conversation_id=%s type=%s", user_id, conversation_id, state_type)
         return pending
 
     def clear(
@@ -60,3 +64,4 @@ class PendingStateService:
         current = self.get_active(user_id, conversation_id)
         if current:
             current.status = status
+            logger.info("清除 pending state user_id=%s conversation_id=%s status=%s", user_id, conversation_id, status)

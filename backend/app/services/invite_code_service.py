@@ -1,8 +1,11 @@
+import logging
 from datetime import UTC, datetime
 from secrets import choice
 from string import ascii_uppercase, digits
 
 from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.models import InviteCode, InviteCodeStatus, InviteCodeUsage, User
@@ -31,6 +34,7 @@ class InviteCodeService:
         )
         self.db.add(invite_code)
         self.db.flush()
+        logger.info("创建邀请码 code=%s creator_id=%s max_uses=%d", invite_code.code, creator.id, invite_code.max_uses)
         return invite_code
 
     def list_all(self) -> list[InviteCode]:
@@ -39,18 +43,23 @@ class InviteCodeService:
 
     def disable(self, invite_code: InviteCode) -> InviteCode:
         invite_code.status = InviteCodeStatus.DISABLED.value
+        logger.info("禁用邀请码 code=%s", invite_code.code)
         return invite_code
 
     def validate(self, code: str) -> InviteCode:
         invite_code = self.db.scalar(select(InviteCode).where(InviteCode.code == code))
         if invite_code is None:
+            logger.warning("邀请码验证失败 code=%s: 邀请码无效", code)
             raise ValueError("邀请码无效")
         if invite_code.status != InviteCodeStatus.ACTIVE.value:
+            logger.warning("邀请码验证失败 code=%s: 邀请码已失效", code)
             raise ValueError("邀请码已失效")
         if invite_code.expires_at and invite_code.expires_at < datetime.now(UTC):
             invite_code.status = InviteCodeStatus.EXPIRED.value
+            logger.warning("邀请码验证失败 code=%s: 邀请码已过期", code)
             raise ValueError("邀请码已过期")
         if invite_code.used_count >= invite_code.max_uses:
+            logger.warning("邀请码验证失败 code=%s: 邀请码已被使用完", code)
             raise ValueError("邀请码已被使用完")
         return invite_code
 
@@ -62,4 +71,5 @@ class InviteCodeService:
             used_at=datetime.now(UTC),
         )
         self.db.add(usage)
+        logger.info("邀请码已使用 code=%s user_id=%s", invite_code.code, user.id)
         return usage
