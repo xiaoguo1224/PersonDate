@@ -23,8 +23,16 @@ const notoSerifSC = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "PersonDate · Your AI Time Copilot",
+  title: {
+    default: "PersonDate · Your AI Time Copilot",
+    template: "%s | PersonDate",
+  },
   description: "面向 owner/member 的安排驾驶舱与 Agent 管理界面。",
+  icons: {
+    icon: "/small_logo.png",
+    shortcut: "/small_logo.png",
+    apple: "/small_logo.png",
+  },
 };
 
 export default function RootLayout({
