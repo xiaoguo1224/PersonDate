@@ -4,7 +4,7 @@ import { EditOutlined, SwapOutlined, WarningOutlined } from "@ant-design/icons";
 import { Button, Card, Modal, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
-import { loadScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
+import { formatRange, loadScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
 
 const { Text } = Typography;
 
@@ -16,6 +16,7 @@ type ConflictResolutionModalProps = Readonly<{
   onIgnore: () => void;
   onClose: () => void;
   accessToken: string;
+  timezone?: string;
 }>;
 
 export default function ConflictResolutionModal({
@@ -26,6 +27,7 @@ export default function ConflictResolutionModal({
   onIgnore,
   onClose,
   accessToken,
+  timezone,
 }: ConflictResolutionModalProps) {
   const [loading, setLoading] = useState(false);
   const [conflictPairs, setConflictPairs] = useState<Array<{
@@ -108,7 +110,7 @@ export default function ConflictResolutionModal({
                       <Text strong>{current.title}</Text>
                       <br />
                       <Text className="muted-text" style={{ fontSize: 12 }}>
-                        {formatTimeRange(current.start_time, current.end_time)}
+                        {formatRange(current.start_time, current.end_time, timezone)}
                       </Text>
                     </div>
                     {current.id === currentItemId ? (
@@ -122,7 +124,7 @@ export default function ConflictResolutionModal({
                       <Text strong>{other.title}</Text>
                       <br />
                       <Text className="muted-text" style={{ fontSize: 12 }}>
-                        {formatTimeRange(other.start_time, other.end_time)}
+                        {formatRange(other.start_time, other.end_time, timezone)}
                       </Text>
                     </div>
                     <Button
@@ -162,17 +164,4 @@ export default function ConflictResolutionModal({
       )}
     </Modal>
   );
-}
-
-function formatTimeRange(start: string, end: string): string {
-  const fmt: Intl.DateTimeFormatOptions = {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  };
-  const s = new Date(start).toLocaleString("zh-CN", fmt);
-  const e = new Date(end).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  return `${s} - ${e}`;
 }
