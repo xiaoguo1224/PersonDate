@@ -31,6 +31,7 @@ import {
 import zhCN from "antd/locale/zh_CN";
 import dayjs, { type Dayjs } from "dayjs";
 import "dayjs/locale/zh-cn";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useGSAP } from "@gsap/react";
@@ -528,7 +529,8 @@ export default function CalendarPage() {
   const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
   const demoEvents = useMemo(() => buildDemoCalendarEvents(focusDate), [focusDate]);
   const [events, setEvents] = useState<ScheduledItem[]>([]);
-  const [dayConflicts, setDayConflicts] = useState<ScheduledItem[]>([]);
+  const [conflictItemIds, setConflictItemIds] = useState<Set<string>>(new Set());
+  const [dayConflictModalOpen, setDayConflictModalOpen] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -585,17 +587,16 @@ export default function CalendarPage() {
       accessToken,
     ).then((result) => {
       const conflictItems = result.data?.items || result.items || [];
-      const conflictItemIds = new Set<string>();
+      const ids = new Set<string>();
       for (const c of conflictItems) {
-        const ids = c.related_item_ids;
-        if (ids) {
-          Object.values(ids).forEach((id) => conflictItemIds.add(id as string));
+        const relatedIds = c.related_item_ids;
+        if (relatedIds) {
+          Object.values(relatedIds).forEach((id) => ids.add(id as string));
         }
       }
-      const dayConflictItems = events.filter((e) => conflictItemIds.has(e.id));
-      setDayConflicts(dayConflictItems);
-    }).catch(() => setDayConflicts([]));
-  }, [accessToken, events]);
+      setConflictItemIds(ids);
+    }).catch(() => setConflictItemIds(new Set()));
+  }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken || timezoneLoading) return;
@@ -616,6 +617,15 @@ export default function CalendarPage() {
       ),
     [events, focusDate, timezone],
   );
+  const dayConflicts = useMemo(
+    () => selectedDayEvents.filter((e) => conflictItemIds.has(e.id)),
+    [selectedDayEvents, conflictItemIds],
+  );
+  useEffect(() => {
+    if (dayConflicts.length > 0) {
+      setDayConflictModalOpen(true);
+    }
+  }, [dayConflicts]);
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => startOfWeek(focusDate).add(index, "day")),
     [focusDate],
@@ -1292,8 +1302,18 @@ export default function CalendarPage() {
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       {dayConflicts.map((conflict) => (
                         <div key={conflict.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <Text ellipsis style={{ maxWidth: 180 }}>{conflict.title}</Text>
-                          <Tag color="red">冲突</Tag>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <Text ellipsis style={{ maxWidth: 180 }}>{conflict.title}</Text>
+                            <Text className="muted-text" style={{ display: "block", fontSize: 12 }}>
+                              {formatRange(conflict.start_time, conflict.end_time, timezone)}
+                            </Text>
+                          </div>
+                          <Space size={4}>
+                            <Tag color="red">冲突</Tag>
+                            <Link href="/dashboard/conflicts">
+                              <Button size="small" type="link">去解决</Button>
+                            </Link>
+                          </Space>
                         </div>
                       ))}
                     </Space>
@@ -1390,8 +1410,8 @@ export default function CalendarPage() {
 
         <Modal
           title={`${focusDate.format("YYYY-MM-DD")} 的冲突项`}
-          open={dayConflicts.length > 0}
-          onCancel={() => setDayConflicts([])}
+          open={dayConflictModalOpen && dayConflicts.length > 0}
+          onCancel={() => setDayConflictModalOpen(false)}
           footer={null}
           width={520}
         >
@@ -1427,6 +1447,7 @@ export default function CalendarPage() {
           onIgnore={handleConflictIgnore}
           onClose={handleConflictIgnore}
           accessToken={accessToken ?? ""}
+          timezone={timezone}
         />
       </Space>
     </ConfigProvider>
