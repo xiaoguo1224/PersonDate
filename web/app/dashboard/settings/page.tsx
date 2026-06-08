@@ -83,6 +83,7 @@ export default function SystemSettingsPage() {
     setSaving(true);
     try {
       const payload: Record<string, unknown> = { ...values };
+      // 只有当 API Key 为空时才删除，否则保留用户输入的值
       if (!values.WEATHER_API_KEY || !values.WEATHER_API_KEY.trim()) {
         delete payload.WEATHER_API_KEY;
       }
@@ -95,6 +96,7 @@ export default function SystemSettingsPage() {
         accessToken,
       );
       setItems(result.items);
+      // 保存成功后清空输入框
       form.setFieldsValue({
         WEATHER_API_KEY: "",
       });
@@ -200,9 +202,16 @@ export default function SystemSettingsPage() {
               <Form.Item
                 label="天气 API Key"
                 name="WEATHER_API_KEY"
-                extra="用于获取天气信息。留空表示不修改当前密钥。OpenWeatherMap 和高德地图使用不同的 Key。"
+                extra={
+                  summary.weatherApiKey?.is_configured
+                    ? "已配置 API Key。留空表示不修改，输入新值将覆盖原配置。"
+                    : "未配置 API Key，请输入有效的 API Key 以启用天气功能。"
+                }
               >
-                <Input.Password placeholder="输入天气 API Key" autoComplete="new-password" />
+                <Input.Password
+                  placeholder={summary.weatherApiKey?.is_configured ? "留空不修改，输入新值覆盖" : "请输入天气 API Key"}
+                  autoComplete="new-password"
+                />
               </Form.Item>
 
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
