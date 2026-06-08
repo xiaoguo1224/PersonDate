@@ -34,9 +34,11 @@ import {
   createScheduledItem,
   deleteScheduledItem,
   updateScheduledItem,
+  formatDateTime,
   formatRange,
   formatClock,
   getTodayDateKey,
+  loadScheduledItem,
   sendAgentMessage,
   type ConflictItem,
   type DashboardSummary,
@@ -48,6 +50,49 @@ import {
 const { Title, Text } = Typography;
 
 gsap.registerPlugin(useGSAP);
+
+function ConflictTimeDisplay({
+  conflict,
+  timezone,
+  accessToken,
+}: Readonly<{
+  conflict: ConflictItem;
+  timezone: string;
+  accessToken: string;
+}>) {
+  const [items, setItems] = useState<{ current: ScheduledItem | null; other: ScheduledItem | null }>({
+    current: null,
+    other: null,
+  });
+
+  useEffect(() => {
+    const ids = conflict.related_item_ids;
+    if (!ids?.current || !ids?.other) return;
+    let alive = true;
+    Promise.all([
+      loadScheduledItem(ids.current, accessToken).catch(() => null),
+      loadScheduledItem(ids.other, accessToken).catch(() => null),
+    ]).then(([current, other]) => {
+      if (alive) setItems({ current, other });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [conflict.related_item_ids, accessToken]);
+
+  if (!items.current || !items.other) return null;
+
+  return (
+    <Space direction="vertical" size={2} style={{ fontSize: 12 }}>
+      <Text className="muted-text">
+        {items.current.title}：{formatDateTime(items.current.start_time, timezone)} - {formatDateTime(items.current.end_time, timezone)}
+      </Text>
+      <Text className="muted-text">
+        {items.other.title}：{formatDateTime(items.other.start_time, timezone)} - {formatDateTime(items.other.end_time, timezone)}
+      </Text>
+    </Space>
+  );
+}
 
 type ChatRole = "assistant" | "user" | "system";
 
@@ -195,6 +240,7 @@ type TodayPageViewProps = Readonly<{
   onViewConflict: (conflict: ConflictItem) => void;
   onDeleteEvent: (id: string) => void;
   planDate: string;
+  accessToken: string;
 }>;
 
 function TodayPageView({
@@ -227,6 +273,7 @@ function TodayPageView({
   onViewConflict,
   onDeleteEvent,
   planDate,
+  accessToken,
 }: TodayPageViewProps) {
   const conflictRows = viewData.conflicts;
   const reminderRows = viewData.reminders;
@@ -498,9 +545,7 @@ function TodayPageView({
                           </Text>
                           <Tag color={getConflictColor(conflict.severity)}>{conflict.severity}</Tag>
                         </div>
-                        {conflict.description ? (
-                          <Text className="today-conflict-item__meta">{conflict.description}</Text>
-                        ) : null}
+                        <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
                         {conflict.suggestion ? (
                           <Text className="today-conflict-item__meta">建议：{conflict.suggestion}</Text>
                         ) : null}
@@ -531,7 +576,7 @@ function TodayPageView({
                           </Text>
                           <Tag color={getReminderColor(reminder.status)}>{reminder.status}</Tag>
                         </div>
-                        <Text className="today-reminder-item__meta">{formatRange(reminder.trigger_time, undefined, timezone)}</Text>
+                        <Text className="today-reminder-item__meta">{formatDateTime(reminder.trigger_time, timezone)}</Text>
                         <Text className="today-reminder-item__meta">
                           重试 {reminder.retry_count}/{reminder.max_retries}
                         </Text>
@@ -939,6 +984,7 @@ export default function TodayPage() {
         onViewConflict={handleViewConflict}
         onDeleteEvent={(id) => void handleDeleteEvent(id)}
         planDate={planDate}
+        accessToken={accessToken ?? ""}
       />
 
       <Modal
