@@ -6,9 +6,13 @@ from sqlalchemy import select
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
+from app.core.cache import cache_get, cache_set
+from app.core.cache_invalidator import invalidate_user_settings
 from app.core.security import hash_password
 from app.models import User, UserSettings, UserStatus
 from app.schemas.user_settings import UpdateUserSettingsRequest
+
+_USER_SETTINGS_TTL = 1800  # 30 分钟
 
 
 class UserService:
@@ -73,6 +77,27 @@ class UserService:
         logger.info("启用用户 user_id=%s username=%s", user.id, user.username)
         return user
 
+    def get_settings_dict(self, user_id: str) -> dict | None:
+        cache_key = f"schedule:user:{user_id}:settings"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
+        if settings is None:
+            return None
+        result = {
+            "user_id": settings.user_id,
+            "default_timezone": settings.default_timezone,
+            "workday_start_time": str(settings.workday_start_time) if settings.workday_start_time else None,
+            "workday_end_time": str(settings.workday_end_time) if settings.workday_end_time else None,
+            "daily_plan_push_time": settings.daily_plan_push_time,
+            "default_remind_before_minutes": settings.default_remind_before_minutes,
+            "daily_plan_push_enabled": settings.daily_plan_push_enabled,
+            "city": settings.city,
+        }
+        cache_set(cache_key, result, _USER_SETTINGS_TTL)
+        return result
+
     def update_settings(self, user_id: str, payload: UpdateUserSettingsRequest) -> UserSettings:
         settings = self.ensure_settings(user_id)
         changed_fields: list[str] = []
@@ -95,4 +120,5 @@ class UserService:
             settings.daily_plan_push_enabled = payload.daily_plan_push_enabled
             changed_fields.append("daily_plan_push_enabled")
         logger.info("更新用户配置 user_id=%s 字段=%s", user_id, ",".join(changed_fields))
+        invalidate_user_settings(user_id)
         return settings
