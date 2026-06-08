@@ -16,6 +16,8 @@ Users interact via natural language through WeChat to create schedules, manage t
 - **Web Dashboard** — Today's schedule, calendar views, task pool, conflicts, reminders, Agent logs
 - **Multi-user via Invite Codes** — Lightweight user system with owner/member roles
 - **WeChat Binding** — Bind your WeChat account to the web system via binding codes
+- **Redis Cache Layer** — Query caching with write-through invalidation, auto-degradation when Redis is unavailable
+- **Structured Logging** — All service operations logged with user_id for production troubleshooting
 
 ## Tech Stack
 
@@ -24,8 +26,9 @@ Users interact via natural language through WeChat to create schedules, manage t
 | Backend | Python 3.11+ / FastAPI / SQLAlchemy 2.0 / Alembic |
 | Agent | LangGraph / OpenAI-compatible SDK / Pydantic v2 |
 | Database | PostgreSQL |
+| Cache | Redis 7+ (query cache, weather cache, agent state cache) |
 | Reminders | APScheduler |
-| Frontend | Next.js / React / TypeScript / Ant Design |
+| Frontend | Next.js / React / TypeScript / Ant Design / SWR |
 | WeChat Channel | openclaw-weixin (message channel only) |
 | Deployment | Docker Compose |
 
@@ -42,7 +45,7 @@ FastAPI Schedule Agent Service
   ↓
 LangGraph SchedulePlanningGraph
   ↓
-Tool Executor → Business Services → PostgreSQL
+Tool Executor → Business Services → Redis Cache → PostgreSQL
   ↓
 APScheduler Reminder Worker
   ↓
@@ -52,7 +55,7 @@ WeChat Channel → WeChat User
 Web access path:
 
 ```
-Next.js Web Dashboard → FastAPI REST API → PostgreSQL
+Next.js Web Dashboard (SWR) → FastAPI REST API → Redis Cache → PostgreSQL
 ```
 
 ## Getting Started
@@ -62,6 +65,7 @@ Next.js Web Dashboard → FastAPI REST API → PostgreSQL
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
+- Redis 7+
 - pnpm (recommended) or npm
 - uv (recommended) or pip
 
@@ -75,6 +79,7 @@ Services will be available at:
 
 - Backend API: `http://localhost:8000`
 - Web Dashboard: `http://localhost:3000`
+- Redis: `localhost:6380` (internal 6379)
 
 ### Backend Setup (Local Development)
 
@@ -100,6 +105,7 @@ Create a `.env` file in the `backend/` directory:
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/persondate
+REDIS_URL=redis://localhost:6379/0
 JWT_SECRET=your-secret-key
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=your-api-key
@@ -123,8 +129,9 @@ PersonDate/
 │   ├── app/
 │   │   ├── api/routes/       # REST API endpoints
 │   │   ├── agent/            # LangGraph Agent (graph, nodes, prompts)
+│   │   ├── core/             # Core modules (config, security, redis, cache, cache_invalidator)
 │   │   ├── tools/            # Agent tool registry and executor
-│   │   ├── services/         # Business logic services
+│   │   ├── services/         # Business logic services (with structured logging + cache)
 │   │   ├── models/           # SQLAlchemy ORM models
 │   │   ├── schemas/          # Pydantic request/response schemas
 │   │   └── workers/          # APScheduler reminder worker
@@ -135,6 +142,7 @@ PersonDate/
 │   │   ├── login/            # Login page
 │   │   └── register/         # Registration page
 │   ├── components/           # Shared React components
+│   ├── hooks/                # SWR hooks (useScheduledItems, useTasks, useConflicts, useReminders)
 │   └── lib/                  # API client, types, utilities
 ├── docs/                     # Project design documents
 └── docker-compose.yml
