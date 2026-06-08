@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.cache import cache_get, cache_set
 from app.core.config import get_settings
 from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.schedule import TaskItem
@@ -17,9 +18,12 @@ from app.models.user import User, UserSettings
 
 logger = logging.getLogger(__name__)
 
-WEATHER_CACHE: dict[str, dict[str, Any]] = {}
-WEATHER_CACHE_TTL_SECONDS = 3600
-WEATHER_CACHE_TIMESTAMP: dict[str, float] = {}
+
+def _weather_cache_key(city: str) -> str:
+    import hashlib
+
+    city_hash = hashlib.md5(city.encode()).hexdigest()[:12]
+    return f"schedule:weather:{city_hash}"
 
 
 class DailyNotificationService:
@@ -110,16 +114,15 @@ class DailyNotificationService:
         return log.status == "sent"
 
     def get_weather(self, city: str) -> dict[str, Any]:
-        """获取城市天气，带 1 小时缓存。"""
-        now = datetime.now().timestamp()
-        if city in WEATHER_CACHE:
-            age = now - WEATHER_CACHE_TIMESTAMP.get(city, 0)
-            if age < WEATHER_CACHE_TTL_SECONDS:
-                return WEATHER_CACHE[city]
-
+        """获取城市天气，带 1 小时 Redis 缓存。"""
+        cache_key = _weather_cache_key(city)
+        cached = cache_get(cache_key)
+        if cached is not None:
+            logger.debug("天气缓存命中 city=%s", city)
+            return cached
+        logger.debug("天气缓存未命中，调用 API city=%s", city)
         data = self._fetch_weather_from_api(city)
-        WEATHER_CACHE[city] = data
-        WEATHER_CACHE_TIMESTAMP[city] = now
+        cache_set(cache_key, data, 3600)
         return data
 
     def build_message(
