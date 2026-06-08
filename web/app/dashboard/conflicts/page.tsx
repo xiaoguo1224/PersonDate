@@ -7,10 +7,53 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
+import { formatDateTime, formatRange, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
+
+function ConflictTimeDisplay({
+  conflict,
+  timezone,
+  accessToken,
+}: Readonly<{
+  conflict: ConflictItem;
+  timezone: string;
+  accessToken: string;
+}>) {
+  const [items, setItems] = useState<{ current: ScheduledItem | null; other: ScheduledItem | null }>({
+    current: null,
+    other: null,
+  });
+
+  useEffect(() => {
+    const ids = conflict.related_item_ids;
+    if (!ids?.current || !ids?.other) return;
+    let alive = true;
+    Promise.all([
+      loadScheduledItem(ids.current, accessToken).catch(() => null),
+      loadScheduledItem(ids.other, accessToken).catch(() => null),
+    ]).then(([current, other]) => {
+      if (alive) setItems({ current, other });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [conflict.related_item_ids, accessToken]);
+
+  if (!items.current || !items.other) return null;
+
+  return (
+    <Space direction="vertical" size={2} style={{ fontSize: 12 }}>
+      <Text className="muted-text">
+        {items.current.title}：{formatRange(items.current.start_time, items.current.end_time, timezone)}
+      </Text>
+      <Text className="muted-text">
+        {items.other.title}：{formatRange(items.other.start_time, items.other.end_time, timezone)}
+      </Text>
+    </Space>
+  );
+}
 
 type StatusFilter = "open" | "resolved" | "ignored" | "all";
 
@@ -353,6 +396,7 @@ export default function ConflictsPage() {
                       <Tag color={getStatusColor(conflict.status)}>{conflict.status}</Tag>
                     </Space>
                     {conflict.description ? <Text className="muted-text">{conflict.description}</Text> : null}
+                    <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
                     {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <Tag>检测时间 {formatDateTime(conflict.detected_at, timezone)}</Tag>

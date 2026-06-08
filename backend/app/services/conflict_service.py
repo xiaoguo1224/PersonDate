@@ -131,13 +131,7 @@ class ConflictService:
                 conflict_type=ConflictType.TIME_OVERLAP.value,
                 severity=ConflictSeverity.HIGH.value,
                 title=f"安排冲突：{primary.title} 与 {secondary.title}",
-                description=(
-                    f"{primary.title} 与 {secondary.title} 的时间重叠，"
-                    f"分别是 {primary.start_time.isoformat()} - "
-                    f"{primary.end_time.isoformat()} 和 "
-                    f"{secondary.start_time.isoformat()} - "
-                    f"{secondary.end_time.isoformat()}"
-                ),
+                description=f"{primary.title} 与 {secondary.title} 的时间存在重叠。",
                 related_item_ids=related_item_ids,
                 suggestion="请调整其中一个安排时间，或选择忽略冲突。",
                 status=ConflictStatus.OPEN.value,
