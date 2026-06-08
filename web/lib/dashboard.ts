@@ -83,6 +83,11 @@ export type TaskListResponse = {
   page_size: number;
 };
 
+export type ScheduledItemResult = {
+  item: ScheduledItem;
+  conflicts: ConflictItem[];
+};
+
 // ── 安排 API ──────────────────────────────────────────────
 
 export async function loadScheduledItems(
@@ -112,8 +117,8 @@ export async function loadScheduledItems(
 export async function createScheduledItem(
   data: ScheduledItemCreatePayload,
   accessToken?: string,
-): Promise<ScheduledItem> {
-  return requestJson<ScheduledItem>("/api/scheduled-items", {
+): Promise<ScheduledItemResult> {
+  return requestJson<ScheduledItemResult>("/api/scheduled-items", {
     method: "POST",
     body: JSON.stringify(data),
   }, accessToken);
@@ -123,12 +128,16 @@ export async function updateScheduledItem(
   id: string,
   data: ScheduledItemUpdatePayload,
   accessToken?: string,
-): Promise<ScheduledItem> {
-  return requestJson<ScheduledItem>(
+): Promise<ScheduledItemResult> {
+  return requestJson<ScheduledItemResult>(
     `/api/scheduled-items/${id}`,
     { method: "PATCH", body: JSON.stringify(data) },
     accessToken,
   );
+}
+
+export async function loadScheduledItem(id: string, accessToken?: string): Promise<ScheduledItem> {
+  return requestJson<ScheduledItem>(`/api/scheduled-items/${id}`, {}, accessToken);
 }
 
 export async function deleteScheduledItem(id: string, accessToken?: string): Promise<void> {
