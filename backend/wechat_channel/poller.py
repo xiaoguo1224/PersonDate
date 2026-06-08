@@ -131,6 +131,7 @@ class PollerThread(threading.Thread):
                 WechatAccount.account_id == self.account_id
             ).first()
             if account:
+                account.cursor = self._last_cursor_token or self._i_link_cursor
                 account.last_active_time = datetime.now(UTC)
                 db.commit()
         except Exception:
