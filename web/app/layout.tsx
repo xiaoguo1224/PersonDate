@@ -23,7 +23,7 @@ const notoSerifSC = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "微信智能安排规划 Agent",
+  title: "PersonDate · Your AI Time Copilot",
   description: "面向 owner/member 的安排驾驶舱与 Agent 管理界面。",
 };
 
