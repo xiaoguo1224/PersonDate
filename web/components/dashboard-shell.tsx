@@ -175,6 +175,7 @@ export function DashboardShell({
         pathname={pathname}
         router={router}
         sessionRole={session.role}
+        accessToken={session.accessToken}
         logout={logout}
       >
         {children}
@@ -192,6 +193,7 @@ function DashboardShellContent({
   pathname,
   router,
   sessionRole,
+  accessToken,
 }: Readonly<{
   avatarText: string;
   children: React.ReactNode;
@@ -201,6 +203,7 @@ function DashboardShellContent({
   pathname: string;
   router: ReturnType<typeof useRouter>;
   sessionRole: UserRole;
+  accessToken?: string;
 }>) {
   const preferences = useDashboardTimezone();
   const dateLabel = getHeaderDateLabel(preferences.timezone);
@@ -254,9 +257,14 @@ function DashboardShellContent({
   }, []);
 
   const fetchWeatherApiKey = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
     try {
       const response = await requestJson<{ items: Array<{ key: string; is_configured: boolean }> }>(
         "/api/admin/system-settings",
+        {},
+        accessToken,
       );
       const weatherSetting = response.items.find((item) => item.key === "WEATHER_API_KEY");
       if (weatherSetting?.is_configured) {
@@ -265,7 +273,7 @@ function DashboardShellContent({
     } catch (err) {
       console.error("获取天气 API Key 失败:", err);
     }
-  }, []);
+  }, [accessToken]);
 
   const fetchWeather = useCallback(async (latitude: number, longitude: number) => {
     if (!weatherApiKey) {
