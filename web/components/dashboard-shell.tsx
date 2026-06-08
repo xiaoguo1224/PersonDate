@@ -5,8 +5,10 @@ import {
   BellOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
+  CloudOutlined,
   ClusterOutlined,
   DatabaseOutlined,
+  EnvironmentOutlined,
   FileTextOutlined,
   HomeOutlined,
   InboxOutlined,
@@ -16,6 +18,7 @@ import {
   QrcodeOutlined,
   RobotOutlined,
   SettingOutlined,
+  SmileOutlined,
   TeamOutlined,
   UserOutlined,
   WarningOutlined,
@@ -23,7 +26,7 @@ import {
 import type { MenuProps } from "antd";
 import { App, Avatar, Button, Dropdown, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { DashboardPreferencesProvider, useDashboardTimezone } from "@/components/dashboard-preferences";
@@ -201,6 +204,101 @@ function DashboardShellContent({
   const preferences = useDashboardTimezone();
   const dateLabel = getHeaderDateLabel(preferences.timezone);
 
+  const [weather, setWeather] = useState<{
+    city: string;
+    temperature: number;
+    description: string;
+  } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [warmMessage, setWarmMessage] = useState("");
+
+  const generateWarmMessage = useCallback((weatherData: typeof weather) => {
+    const messages = [
+      "今天也要加油哦！",
+      "愿你的一天充满阳光和快乐！",
+      "无论遇到什么，都要保持微笑！",
+      "今天会是美好的一天！",
+      "记得照顾好自己！",
+      "你的努力终将会有回报！",
+      "每一天都是新的开始！",
+      "相信自己，你可以做到！",
+    ];
+
+    if (weatherData) {
+      const temp = weatherData.temperature;
+      const desc = weatherData.description.toLowerCase();
+
+      if (desc.includes("雨") || desc.includes("rain")) {
+        return "今天有雨，记得带伞哦！";
+      } else if (desc.includes("雪") || desc.includes("snow")) {
+        return "今天有雪，注意保暖和出行安全！";
+      } else if (desc.includes("雾") || desc.includes("fog") || desc.includes("霾") || desc.includes("haze")) {
+        return "今天空气质量不佳，建议减少外出！";
+      } else if (temp > 35) {
+        return "今天天气炎热，记得多喝水防暑！";
+      } else if (temp > 30) {
+        return "今天天气较热，注意防晒！";
+      } else if (temp < 0) {
+        return "今天天气寒冷，注意保暖！";
+      } else if (temp < 10) {
+        return "今天天气较冷，多穿点衣服！";
+      }
+    }
+
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    return messages[randomIndex];
+  }, []);
+
+  const fetchWeather = useCallback(async (latitude: number, longitude: number) => {
+    setWeatherLoading(true);
+    try {
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=YOUR_API_KEY&units=metric&lang=zh_cn`
+      );
+      if (!response.ok) {
+        throw new Error("天气数据获取失败");
+      }
+      const data = await response.json();
+      const weatherData = {
+        city: data.name,
+        temperature: Math.round(data.main.temp),
+        description: data.weather[0].description,
+      };
+      setWeather(weatherData);
+      setWarmMessage(generateWarmMessage(weatherData));
+    } catch (err) {
+      console.error("获取天气失败:", err);
+      const fallbackMessage = generateWarmMessage(null);
+      setWarmMessage(fallbackMessage);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, [generateWarmMessage]);
+
+  const getLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      const fallbackMessage = generateWarmMessage(null);
+      setWarmMessage(fallbackMessage);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        void fetchWeather(latitude, longitude);
+      },
+      (err) => {
+        console.error("获取位置失败:", err);
+        const fallbackMessage = generateWarmMessage(null);
+        setWarmMessage(fallbackMessage);
+      }
+    );
+  }, [fetchWeather, generateWarmMessage]);
+
+  useEffect(() => {
+    getLocation();
+  }, [getLocation]);
+
   return (
     <App>
     <Layout className="app-shell dashboard-shell">
@@ -240,7 +338,24 @@ function DashboardShellContent({
             <Title level={4} className="dashboard-topbar__title">
               {preferences.loading ? "正在同步你的时区..." : dateLabel}
             </Title>
-          
+            <Space size={8} wrap>
+              {weatherLoading ? (
+                <Spin size="small" />
+              ) : weather ? (
+                <>
+                  <Tag icon={<EnvironmentOutlined />} color="blue" style={{ margin: 0 }}>{weather.city}</Tag>
+                  <Tag icon={<CloudOutlined />} color="cyan" style={{ margin: 0 }}>{weather.temperature}°C {weather.description}</Tag>
+                </>
+              ) : (
+                <Tag icon={<EnvironmentOutlined />} color="blue" style={{ margin: 0 }}>定位中...</Tag>
+              )}
+              {warmMessage && (
+                <Text className="muted-text" style={{ fontSize: 12 }}>
+                  <SmileOutlined style={{ color: "#fadb14", marginRight: 4 }} />
+                  {warmMessage}
+                </Text>
+              )}
+            </Space>
           </Space>
           <Space size={12} wrap className="dashboard-topbar__actions">
             <Button className="dashboard-topbar__button" type="default" icon={<PlusOutlined />} href="/dashboard/calendar">

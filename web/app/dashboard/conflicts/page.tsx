@@ -1,7 +1,7 @@
 "use client";
 
 import { App, Button, Card, DatePicker, Empty, Form, Input, List, Modal, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
-import { CloseOutlined, SearchOutlined, SwapOutlined, ClockCircleOutlined, EnvironmentOutlined, CloudOutlined, SmileOutlined } from "@ant-design/icons";
+import { CloseOutlined, SearchOutlined, SwapOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -330,30 +330,6 @@ export default function ConflictsPage() {
             <Tag color="orange">{summary.open} 个未解决</Tag>
             <Tag color="green">{summary.resolved} 个已解决</Tag>
           </Space>
-          {warmMessage && (
-            <div style={{ marginTop: 8, padding: "12px 16px", background: "rgba(255,255,255,0.08)", borderRadius: 8 }}>
-              <Space direction="vertical" size={4}>
-                <Space>
-                  {weatherLoading ? (
-                    <Spin size="small" />
-                  ) : weather ? (
-                    <>
-                      <Tag icon={<EnvironmentOutlined />} color="blue">{weather.city}</Tag>
-                      <Tag icon={<CloudOutlined />} color="cyan">{weather.temperature}°C {weather.description}</Tag>
-                      <Tag color="green">湿度 {weather.humidity}%</Tag>
-                      <Tag color="purple">风速 {weather.windSpeed} km/h</Tag>
-                    </>
-                  ) : (
-                    <Tag icon={<EnvironmentOutlined />} color="blue">位置获取中...</Tag>
-                  )}
-                </Space>
-                <Space>
-                  <SmileOutlined style={{ color: "#fadb14" }} />
-                  <Text style={{ color: "#fadb14", fontWeight: 500 }}>{warmMessage}</Text>
-                </Space>
-              </Space>
-            </div>
-          )}
         </Space>
       </Card>
 
