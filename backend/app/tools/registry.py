@@ -28,6 +28,7 @@ from app.tools.schemas import (
     DetectConflictsArgs,
     FindFreeSlotsArgs,
     PlanTasksIntoDayArgs,
+    QueryRemindersArgs,
     QueryScheduledItemsArgs,
     QueryTasksArgs,
     RegeneratePlanArgs,
@@ -550,6 +551,27 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
         service.cancel_job(job)
         return ToolResult(data={"id": job.id}, message="提醒已取消")
 
+    def query_reminders(
+        args: dict[str, Any], user_id: str, conversation_id: str, session: Session
+    ) -> ToolResult:
+        payload = QueryRemindersArgs.model_validate(args)
+        service = ReminderService(session)
+        items, total = service.list_jobs(
+            user_id,
+            status=payload.status or "pending",
+            keyword=payload.keyword,
+        )
+        data = [
+            {
+                "id": item.id,
+                "title": item.title,
+                "trigger_time": item.trigger_time.isoformat(),
+                "status": item.status,
+            }
+            for item in items
+        ]
+        return ToolResult(data=data, message=f"提醒查询完成，共 {total} 条")
+
     def ask_user_clarification(
         args: dict[str, Any], user_id: str, conversation_id: str, session: Session
     ) -> ToolResult:
@@ -583,6 +605,7 @@ def build_default_tool_registry(db: Session) -> ToolRegistry:
     registry.register(ToolSpec("create_reminder", CreateReminderArgs, create_reminder))
     registry.register(ToolSpec("update_reminder", UpdateReminderArgs, update_reminder))
     registry.register(ToolSpec("cancel_reminder", CancelReminderArgs, cancel_reminder))
+    registry.register(ToolSpec("query_reminders", QueryRemindersArgs, query_reminders))
     registry.register(
         ToolSpec("ask_user_clarification", AskUserClarificationArgs, ask_user_clarification)
     )

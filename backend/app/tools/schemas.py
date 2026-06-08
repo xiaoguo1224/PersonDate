@@ -138,6 +138,11 @@ class CancelReminderArgs(BaseModel):
     reminder_id: str
 
 
+class QueryRemindersArgs(BaseModel):
+    status: str | None = None
+    keyword: str | None = None
+
+
 class AskUserClarificationArgs(BaseModel):
     prompt: str
     reason: str | None = None

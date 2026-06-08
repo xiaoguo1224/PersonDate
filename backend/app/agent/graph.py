@@ -72,12 +72,14 @@ class SchedulePlanningGraph:
                 "只输出 JSON，不要输出多余文本。"
                 "请根据用户输入判断 intent。"
                 "可选值：create_scheduled_item, query_scheduled_items, query_free_slots, "
-                "create_task, plan_day, update_scheduled_item, delete_scheduled_item, "
-                "confirm_plan, ask_user_clarification, unknown。"
+                "query_reminders, create_task, plan_day, update_scheduled_item, "
+                "delete_scheduled_item, confirm_plan, ask_user_clarification, unknown。"
                 "如果用户说「帮我安排一下」「安排一下」「生成计划」「计划一下」，"
                 "必须返回 plan_day。"
                 "如果用户问「空闲时间」「什么时候有空」「哪些时间段是空的」「空档」，"
                 "必须返回 query_free_slots。"
+                "如果用户问「有哪些提醒」「提醒列表」「查看提醒」「有什么提醒」，"
+                "必须返回 query_reminders。"
                 "如果消息同时包含任务时长或任务事项，但明确要求安排计划，"
                 "也不要返回 create_event。"
                 "如果用户明确是在确认或取消待办流程，请优先返回 confirm_plan 或 "
@@ -218,6 +220,9 @@ class SchedulePlanningGraph:
             return
         if intent == "query_free_slots":
             self._handle_query_free_slots(state)
+            return
+        if intent == "query_reminders":
+            self._handle_query_reminders(state)
             return
         if intent == "delete_scheduled_item":
             self._handle_delete_scheduled_item(state)
@@ -485,7 +490,9 @@ class SchedulePlanningGraph:
                 end_text = datetime.fromisoformat(end).astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
             else:
                 end_text = str(end)
-            lines.append(f"{index}. {event['title']} {start_text} - {end_text}")
+            location = event.get("location")
+            loc_text = f" @{location}" if location else ""
+            lines.append(f"{index}. {event['title']} {start_text} - {end_text}{loc_text}")
         state.final_response = "\n".join(lines)
 
     def _handle_query_free_slots(self, state: AgentState) -> None:
@@ -525,6 +532,30 @@ class SchedulePlanningGraph:
             else:
                 duration_text = f"{minutes}分钟"
             lines.append(f"{index}. {start:%H:%M}-{end:%H:%M} ({duration_text})")
+        state.final_response = "\n".join(lines)
+
+    def _handle_query_reminders(self, state: AgentState) -> None:
+        result = self.tools.execute(
+            "query_reminders",
+            {"status": "pending"},
+            user_id=state.user_id,
+            conversation_id=state.conversation_id,
+        )
+        state.tool_calls.append(
+            {"tool_name": "query_reminders", "args": {"status": "pending"}}
+        )
+        state.tool_results.append(
+            {"tool_name": "query_reminders", "result": result.model_dump(mode="json")}
+        )
+        reminders = result.data or []
+        if not reminders:
+            state.final_response = "当前没有待触发的提醒。"
+            return
+        lines = ["待触发的提醒："]
+        user_tz = ZoneInfo(state.timezone)
+        for index, item in enumerate(reminders, start=1):
+            trigger = datetime.fromisoformat(item["trigger_time"]).astimezone(user_tz)
+            lines.append(f"{index}. {item['title']} - {trigger:%Y-%m-%d %H:%M}")
         state.final_response = "\n".join(lines)
 
     def _handle_create_task(self, state: AgentState) -> None:

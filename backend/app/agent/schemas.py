@@ -80,6 +80,7 @@ class IntentDecision(BaseModel):
         "create_scheduled_item",
         "query_scheduled_items",
         "query_free_slots",
+        "query_reminders",
         "create_task",
         "plan_day",
         "update_scheduled_item",
