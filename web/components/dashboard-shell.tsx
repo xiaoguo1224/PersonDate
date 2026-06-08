@@ -360,17 +360,8 @@ function DashboardShellContent({
     <App>
     <Layout className="app-shell dashboard-shell">
       <Sider breakpoint="lg" collapsedWidth={0} width={254} className="dashboard-sidebar">
-        <div className="dashboard-sidebar__brand">
-          <div className="dashboard-brand-mark">
-            <img src="/big_logo.png" alt="PersonDate" style={{ width: 40, height: 40, borderRadius: 8 }} />
-          </div>
-          <div>
-            <Title level={4} className="dashboard-brand-title">
-              安排驾驶舱
-            </Title>
-            <Text className="muted-text">智能规划，高效每一天</Text>
-          </div>
-        </div>
+
+            <img src="/big_logo.png" alt="PersonDate" style={{ width: 150,marginBottom:20,borderRadius: 8 }} />
 
         <div className="dashboard-sidebar__meta">
           <span className="hero-kicker">Dashboard</span>
