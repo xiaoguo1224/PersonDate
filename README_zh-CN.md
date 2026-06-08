@@ -1,4 +1,4 @@
-# PersonDate — 微信智能日程规划 Agent
+# PersonDate
 
 [English](./README.md)
 
@@ -16,6 +16,8 @@
 - **Web 驾驶舱** — 今日安排、日历视图、任务池、冲突事项、提醒任务、Agent 日志
 - **邀请码多用户** — 轻量级用户体系，支持 owner/member 角色
 - **微信绑定** — 通过绑定码将微信账号与 Web 系统关联
+- **Redis 缓存层** — 查询缓存，写时失效，Redis 不可用时自动降级
+- **结构化日志** — 所有服务操作记录 user_id，便于生产环境排查
 
 ## 技术栈
 
@@ -24,8 +26,9 @@
 | 后端 | Python 3.11+ / FastAPI / SQLAlchemy 2.0 / Alembic |
 | Agent | LangGraph / OpenAI-compatible SDK / Pydantic v2 |
 | 数据库 | PostgreSQL |
+| 缓存 | Redis 7+（查询缓存、天气缓存、Agent 状态缓存） |
 | 提醒调度 | APScheduler |
-| 前端 | Next.js / React / TypeScript / Ant Design |
+| 前端 | Next.js / React / TypeScript / Ant Design / SWR |
 | 微信通道 | openclaw-weixin（仅作为消息通道） |
 | 部署 | Docker Compose |
 
@@ -42,7 +45,7 @@ FastAPI Schedule Agent Service
   ↓
 LangGraph SchedulePlanningGraph
   ↓
-Tool Executor → Business Services → PostgreSQL
+Tool Executor → Business Services → Redis Cache → PostgreSQL
   ↓
 APScheduler Reminder Worker
   ↓
@@ -52,7 +55,7 @@ WeChat Channel → 微信用户
 Web 访问链路：
 
 ```
-Next.js Web Dashboard → FastAPI REST API → PostgreSQL
+Next.js Web Dashboard (SWR) → FastAPI REST API → Redis Cache → PostgreSQL
 ```
 
 ## 快速开始
@@ -62,6 +65,7 @@ Next.js Web Dashboard → FastAPI REST API → PostgreSQL
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
+- Redis 7+
 - pnpm（推荐）或 npm
 - uv（推荐）或 pip
 
@@ -73,8 +77,8 @@ docker compose up -d --build
 
 启动后可访问：
 
-- 后端 API：`http://localhost:8000`
 - Web 驾驶舱：`http://localhost:3000`
+- 数据库：`localhost:5433`
 
 ### 后端启动（本地开发）
 
@@ -100,6 +104,7 @@ pnpm dev
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/persondate
+REDIS_URL=redis://localhost:6379/0
 JWT_SECRET=your-secret-key
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=your-api-key
@@ -123,8 +128,9 @@ PersonDate/
 │   ├── app/
 │   │   ├── api/routes/       # REST API 接口
 │   │   ├── agent/            # LangGraph Agent（图、节点、提示词）
+│   │   ├── core/             # 核心模块（配置、安全、Redis、缓存、缓存失效器）
 │   │   ├── tools/            # Agent 工具注册和执行器
-│   │   ├── services/         # 业务逻辑服务
+│   │   ├── services/         # 业务逻辑服务（带结构化日志 + 缓存）
 │   │   ├── models/           # SQLAlchemy ORM 模型
 │   │   ├── schemas/          # Pydantic 请求/响应 Schema
 │   │   └── workers/          # APScheduler 提醒 Worker
@@ -135,6 +141,7 @@ PersonDate/
 │   │   ├── login/            # 登录页
 │   │   └── register/         # 注册页
 │   ├── components/           # 共享 React 组件
+│   ├── hooks/                # SWR hooks（useScheduledItems、useTasks、useConflicts、useReminders）
 │   └── lib/                  # API 客户端、类型、工具函数
 ├── docs/                     # 项目设计文档
 └── docker-compose.yml
