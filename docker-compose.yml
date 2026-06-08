@@ -17,6 +17,22 @@ services:
       timeout: 5s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    platform: linux/amd64
+    container_name: schedule-agent-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - schedule_agent_redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   backend:
     build:
       context: ./backend
@@ -31,8 +47,11 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:3001
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       wechat-channel:
         condition: service_healthy
@@ -57,8 +76,11 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "18789:18789"
@@ -92,3 +114,4 @@ services:
 
 volumes:
   schedule_agent_pgdata:
+  schedule_agent_redis_data:
