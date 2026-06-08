@@ -17,8 +17,14 @@ from app.services.pending_state_service import PendingStateService
 from app.tools.executor import ToolExecutor
 
 
-def _candidate_line(candidate: dict[str, object], index: int) -> str:
-    start = str(candidate["start_time"]).replace("T", " ")[:16]
+def _candidate_line(candidate: dict[str, object], index: int, user_tz: ZoneInfo | None = None) -> str:
+    raw = candidate["start_time"]
+    if isinstance(raw, datetime) and user_tz is not None:
+        start = raw.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+    elif isinstance(raw, datetime):
+        start = raw.strftime("%Y-%m-%d %H:%M")
+    else:
+        start = str(raw).replace("T", " ")[:16]
     return f"{index}. {candidate['title']} {start}"
 
 
@@ -457,14 +463,16 @@ class SchedulePlanningGraph:
         for index, event in enumerate(events, start=1):
             start = event["start_time"]
             end = event.get("end_time")
-            if isinstance(start, str):
-                start_dt = datetime.fromisoformat(start).astimezone(user_tz)
-                start_text = start_dt.strftime("%Y-%m-%d %H:%M")
+            if isinstance(start, datetime):
+                start_text = start.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+            elif isinstance(start, str):
+                start_text = datetime.fromisoformat(start).astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
             else:
                 start_text = str(start)
-            if isinstance(end, str):
-                end_dt = datetime.fromisoformat(end).astimezone(user_tz)
-                end_text = end_dt.strftime("%Y-%m-%d %H:%M")
+            if isinstance(end, datetime):
+                end_text = end.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+            elif isinstance(end, str):
+                end_text = datetime.fromisoformat(end).astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
             else:
                 end_text = str(end)
             lines.append(f"{index}. {event['title']} {start_text} - {end_text}")
@@ -624,8 +632,9 @@ class SchedulePlanningGraph:
                 "status": pending.status,
             }
             lines = ["找到多个候选安排，请回复序号选择："]
+            user_tz = ZoneInfo(state.timezone)
             for index, candidate in enumerate(candidates[:3], start=1):
-                lines.append(_candidate_line(candidate, index))
+                lines.append(_candidate_line(candidate, index, user_tz))
             state.final_response = "\n".join(lines)
             return
         candidate = candidates[0]
@@ -700,8 +709,9 @@ class SchedulePlanningGraph:
                 "status": pending.status,
             }
             lines = ["找到多个候选安排，请回复序号选择："]
+            user_tz = ZoneInfo(state.timezone)
             for index, candidate in enumerate(candidates[:3], start=1):
-                lines.append(_candidate_line(candidate, index))
+                lines.append(_candidate_line(candidate, index, user_tz))
             state.final_response = "\n".join(lines)
             return
         candidate = candidates[0]
