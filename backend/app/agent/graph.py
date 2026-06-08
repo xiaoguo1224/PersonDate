@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from app.agent.llm_client import LLMClient
-from app.agent.schemas import IntentDecision, MessageExtraction
 from app.agent.state import AgentState
 from app.core.config import get_settings
 from app.models import ConflictStatus, PendingStateType, User
@@ -15,6 +14,30 @@ from app.services.agent_log_service import AgentLogService
 from app.services.conflict_service import ConflictService
 from app.services.pending_state_service import PendingStateService
 from app.tools.executor import ToolExecutor
+
+_TOOL_DESCRIPTIONS = {
+    "create_scheduled_item": "创建日程安排，需要 title、start_time，可选 end_time、location、remind_before_minutes",
+    "query_scheduled_items": "查询日程安排，按日期范围或关键词查询",
+    "update_scheduled_item": "修改日程安排，需要 item_id 和要修改的字段",
+    "delete_scheduled_item": "删除日程安排，需要 item_id",
+    "create_task": "创建任务，需要 title 和 estimated_minutes",
+    "query_tasks": "查询任务列表",
+    "update_task": "修改任务，需要 task_id 和要修改的字段",
+    "complete_task": "完成任务，需要 task_id",
+    "delete_task": "删除任务，需要 task_id",
+    "analyze_day": "分析某天的安排和任务",
+    "find_free_slots": "查找某天的空闲时间段",
+    "plan_tasks_into_day": "将未排期任务排入某天生成安排草案",
+    "confirm_plan": "确认安排草案，将草案状态改为 active",
+    "regenerate_plan": "重新生成安排草案",
+    "detect_conflicts": "检测日程冲突",
+    "suggest_reschedule": "根据冲突建议调整时间，需要 conflict_id",
+    "create_reminder": "创建提醒",
+    "update_reminder": "修改提醒",
+    "cancel_reminder": "取消提醒",
+    "query_reminders": "查询提醒列表",
+    "ask_user_clarification": "当信息不足时向用户追问",
+}
 
 
 def _candidate_line(candidate: dict[str, object], index: int, user_tz: ZoneInfo | None = None) -> str:
@@ -55,66 +78,71 @@ class SchedulePlanningGraph:
         self.settings = get_settings()
         self.llm = llm_client or LLMClient()
 
-    def _build_analysis_payload(self, state: AgentState) -> str:
-        payload = {
-            "message": state.input_text,
-            "current_time": state.current_time.isoformat(),
-            "timezone": state.timezone,
-            "user_settings": state.user_settings or {},
-            "pending_state": state.pending_state,
-        }
-        return json.dumps(payload, ensure_ascii=False, default=str)
+    def _build_tools(self) -> list[dict]:
+        tools = []
+        for name in self.tools.registry.names:
+            spec = self.tools.registry.get(name)
+            schema = spec.schema.model_json_schema()
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": _TOOL_DESCRIPTIONS.get(name, name),
+                    "parameters": schema,
+                },
+            })
+        return tools
 
-    def _classify_intent(self, state: AgentState) -> IntentDecision:
-        return self.llm.chat_json(
-            system_prompt=(
-                "你是微信智能安排规划 Agent 的意图分类器。"
-                "只输出 JSON，不要输出多余文本。"
-                "请根据用户输入判断 intent。"
-                "可选值：create_scheduled_item, query_scheduled_items, query_free_slots, "
-                "query_reminders, create_task, plan_day, update_scheduled_item, "
-                "delete_scheduled_item, confirm_plan, ask_user_clarification, unknown。"
-                "如果用户说「帮我安排一下」「安排一下」「生成计划」「计划一下」，"
-                "必须返回 plan_day。"
-                "如果用户问「空闲时间」「什么时候有空」「哪些时间段是空的」「空档」，"
-                "必须返回 query_free_slots。"
-                "如果用户问「有哪些提醒」「提醒列表」「查看提醒」「有什么提醒」，"
-                "必须返回 query_reminders。"
-                "如果消息同时包含任务时长或任务事项，但明确要求安排计划，"
-                "也不要返回 create_event。"
-                "如果用户明确是在确认或取消待办流程，请优先返回 confirm_plan 或 "
-                "ask_user_clarification，具体以上下文为准。"
-            ),
-            user_prompt=self._build_analysis_payload(state),
-            schema=IntentDecision,
+    def _build_system_prompt(self, state: AgentState) -> str:
+        return (
+            "你是微信智能日程规划 Agent。"
+            "用户通过微信与你对话，管理日程、任务和提醒。"
+            "\n\n"
+            f"当前时间：{state.current_time.isoformat()}\n"
+            f"用户时区：{state.timezone}\n"
+            "\n"
+            "规则：\n"
+            "1. 单条明确日程可以直接创建\n"
+            "2. 复杂规划先用 analyze_day 了解现状，再生成草案\n"
+            "3. 存在冲突时询问用户\n"
+            "4. 信息不足时追问\n"
+            "5. 回复简洁，使用中文\n"
+            "6. 不要编造信息，用工具查询实际数据"
         )
 
-    def _extract_info(self, state: AgentState, intent: str) -> MessageExtraction:
-        payload = json.loads(self._build_analysis_payload(state))
-        payload["intent"] = intent
-        return self.llm.chat_json(
-            system_prompt=(
-                "你是微信智能安排规划 Agent 的结构化信息抽取器。"
-                "只输出 JSON，不要输出多余文本。"
-                "请把用户输入中的相对时间解析成当前时区下的绝对日期或时间。"
-                "所有时间字段请使用 ISO 8601。"
-                "如果 intent 是 create_scheduled_item，优先输出 event_title 和 event_start_time。"
-                "同时提取地点到 event_location，例如'信息科技大楼324'、'会议室A'等。"
-                "如果用户只提供了开始时间，没有提供结束时间，不要追问持续时间，"
-                "end_time 可以留空，处理层会默认 1 小时。"
-                "如果 intent 是 update_scheduled_item，必须输出 target_event_keyword（用户想修改的事件名称关键词，"
-                "如'拍照'、'开会'）和 target_event_date（目标日期）。"
-                "同时输出 new_start_time 和 new_end_time（新的时间）。"
-                "如果用户提到了原始时间，也可以输出 original_time。"
-                "如果 intent 是 delete_scheduled_item，必须输出 target_event_keyword 和 target_event_date。"
-                "如果 intent 是 query_scheduled_items，请输出 query_start_date 和 query_end_date。"
-                "如果 intent 是 plan_day 或 create_task，请输出 task_title、"
-                "estimated_minutes、plan_date，或者返回 events 列表。"
-                "只有在确实无法继续时，才把 clarification_prompt 写成中文追问。"
-            ),
-            user_prompt=json.dumps(payload, ensure_ascii=False, default=str),
-            schema=MessageExtraction,
+    def _execute_single_tool(self, state: AgentState, tool_call) -> dict:
+        name = tool_call.function.name
+        args = json.loads(tool_call.function.arguments)
+        result = self.tools.execute(
+            name, args,
+            user_id=state.user_id,
+            conversation_id=state.conversation_id,
         )
+        state.tool_calls.append({"tool_name": name, "args": args})
+        state.tool_results.append({
+            "tool_name": name,
+            "result": result.model_dump(mode="json"),
+        })
+        if name == "create_scheduled_item" and result.success:
+            self._post_create_check_conflicts(state, result)
+        return result.model_dump(mode="json")
+
+    def _run_agent_loop(
+        self, state: AgentState, messages: list[dict], tools: list[dict]
+    ) -> str:
+        for _ in range(5):
+            response = self.llm.chat_with_tools(messages=messages, tools=tools)
+            if not response.tool_calls:
+                return response.content or ""
+            messages.append(response.model_dump())
+            for tool_call in response.tool_calls:
+                result = self._execute_single_tool(state, tool_call)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                })
+        return "处理轮数超限，请简化请求。"
 
     def invoke(
         self,
@@ -154,18 +182,13 @@ class SchedulePlanningGraph:
             if state.pending_state:
                 self._handle_pending(state)
             else:
-                graph_trace.append("classify_intent")
-                decision = self._classify_intent(state)
-                state.intent = decision.intent
-                graph_trace.append("extract_info")
-                extracted = self._extract_info(state, decision.intent)
-                state.extracted = {
-                    "intent": decision.intent,
-                    "confidence": decision.confidence,
-                    "reason": decision.reason,
-                    **extracted.model_dump(),
-                }
-                self._classify_and_route(state)
+                graph_trace.append("agent_loop")
+                messages = [
+                    {"role": "system", "content": self._build_system_prompt(state)},
+                    {"role": "user", "content": message},
+                ]
+                tools = self._build_tools()
+                state.final_response = self._run_agent_loop(state, messages, tools)
             graph_trace.append("generate_response")
             state.success = True
         except Exception as exc:  # noqa: BLE001
@@ -205,44 +228,46 @@ class SchedulePlanningGraph:
                 "status": pending.status,
             }
 
-    def _classify_and_route(self, state: AgentState) -> None:
-        text = state.input_text.strip()
-        if text in {"取消", "取消一下"}:
-            state.intent = "cancel"
-            state.final_response = "已取消当前待处理事项。"
+    def _post_create_check_conflicts(self, state: AgentState, result) -> None:
+        result_data: dict = result.data or {}
+        event_id = str(result_data.get("id", ""))
+        if not event_id:
             return
-        intent = state.intent or "unknown"
-        if intent == "ask_user_clarification":
-            state.final_response = self._ask_user_clarification(state)
-            return
-        if intent == "query_scheduled_items":
-            self._handle_query_scheduled_items(state)
-            return
-        if intent == "query_free_slots":
-            self._handle_query_free_slots(state)
-            return
-        if intent == "query_reminders":
-            self._handle_query_reminders(state)
-            return
-        if intent == "delete_scheduled_item":
-            self._handle_delete_scheduled_item(state)
-            return
-        if intent == "update_scheduled_item":
-            self._handle_update_scheduled_item(state)
-            return
-        if intent == "create_task":
-            self._handle_create_task(state)
-            return
-        if intent == "plan_day":
-            self._handle_plan_day(state)
-            return
-        if intent == "create_scheduled_item":
-            self._handle_create_scheduled_item(state)
-            return
-        if intent == "confirm_plan":
-            state.final_response = '请在待确认的安排草案上下文中回复"确认"或"取消"。'
-            return
-        state.final_response = "我没能理解这条消息，请补充时间、事项或目标。"
+        open_conflicts = [
+            conflict
+            for conflict in self.conflicts.list_conflicts(state.user_id, ConflictStatus.OPEN.value)[0]
+            if isinstance(conflict.related_item_ids, dict)
+            and (
+                conflict.related_item_ids.get("current") == event_id
+                or conflict.related_item_ids.get("other") == event_id
+            )
+        ]
+        if open_conflicts:
+            title = result_data.get("title", "安排")
+            start_raw = result_data.get("start_time")
+            end_raw = result_data.get("end_time")
+            start_time = datetime.fromisoformat(start_raw) if isinstance(start_raw, str) else start_raw
+            end_time = datetime.fromisoformat(end_raw) if isinstance(end_raw, str) else end_raw
+            remind_before = result_data.get("remind_before_minutes", 0)
+            pending = self.pending_states.save(
+                user_id=state.user_id,
+                conversation_id=state.conversation_id,
+                state_type=PendingStateType.WAITING_CONFLICT_RESOLUTION.value,
+                state_payload={
+                    "event_id": event_id,
+                    "event_title": title,
+                    "event_start_time": start_time.isoformat() if start_time else None,
+                    "event_end_time": end_time.isoformat() if end_time else None,
+                    "event_timezone": state.timezone,
+                    "remind_before_minutes": remind_before,
+                    "conflict_ids": [item.id for item in open_conflicts],
+                },
+            )
+            state.pending_state = pending.state_payload | {
+                "id": pending.id,
+                "state_type": pending.state_type,
+                "status": pending.status,
+            }
 
     def _handle_pending(self, state: AgentState) -> None:
         pending = state.pending_state or {}
@@ -304,16 +329,10 @@ class SchedulePlanningGraph:
                 conversation_id=state.conversation_id,
             )
             state.tool_calls.append(
-                {
-                    "tool_name": "query_scheduled_items",
-                    "args": {"keyword": keyword, "on_date": target_date},
-                }
+                {"tool_name": "query_scheduled_items", "args": {"keyword": keyword, "on_date": target_date}}
             )
             state.tool_results.append(
-                {
-                    "tool_name": "query_scheduled_items",
-                    "result": result.model_dump(mode="json"),
-                }
+                {"tool_name": "query_scheduled_items", "result": result.model_dump(mode="json")}
             )
             return result.data or []
 
@@ -324,10 +343,7 @@ class SchedulePlanningGraph:
             conversation_id=state.conversation_id,
         )
         state.tool_calls.append(
-            {
-                "tool_name": "query_scheduled_items",
-                "args": {"start_date": target_date, "end_date": target_date},
-            }
+            {"tool_name": "query_scheduled_items", "args": {"start_date": target_date, "end_date": target_date}}
         )
         state.tool_results.append(
             {"tool_name": "query_scheduled_items", "result": result.model_dump(mode="json")}
@@ -353,462 +369,6 @@ class SchedulePlanningGraph:
                 matched.append(event)
         return matched or candidates
 
-    def _handle_create_scheduled_item(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        title = extracted.get("event_title") or "安排"
-        start_time = extracted.get("event_start_time")
-        end_time = extracted.get("event_end_time")
-        location = extracted.get("event_location")
-        remind_before = extracted.get("remind_before_minutes")
-        if start_time is None:
-            state.intent = "ask_user_clarification"
-            state.final_response = (
-                extracted.get("clarification_prompt")
-                or '请补充具体时间，例如"明天下午 3 点开会"。'
-            )
-            return
-        if end_time is None:
-            end_time = start_time + timedelta(hours=1)
-        if remind_before is None:
-            remind_before = (
-                state.user_settings.get("default_remind_before_minutes", 0)
-                if state.user_settings
-                else 0
-            )
-        result = self.tools.execute(
-            "create_scheduled_item",
-            {
-                "title": title,
-                "description": None,
-                "start_time": start_time,
-                "end_time": end_time,
-                "timezone": state.timezone,
-                "location": location,
-                "remind_before_minutes": remind_before,
-            },
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {
-                "tool_name": "create_scheduled_item",
-                "args": {"title": title, "start_time": start_time, "end_time": end_time},
-            }
-        )
-        state.tool_results.append(
-            {"tool_name": "create_scheduled_item", "result": result.model_dump(mode="json")}
-        )
-        if not result.success:
-            state.final_response = result.error or "创建安排失败。"
-            return
-        result_data: dict[str, object] = result.data or {}
-        event_id = str(result_data["id"])
-        open_conflicts = [
-            conflict
-            for conflict in self.conflicts.list_conflicts(state.user_id, ConflictStatus.OPEN.value)[0]
-            if isinstance(conflict.related_item_ids, dict)
-            and (
-                conflict.related_item_ids.get("current") == event_id
-                or conflict.related_item_ids.get("other") == event_id
-            )
-        ]
-        if open_conflicts:
-            pending = self.pending_states.save(
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
-                state_type=PendingStateType.WAITING_CONFLICT_RESOLUTION.value,
-                state_payload={
-                    "event_id": event_id,
-                    "event_title": title,
-                    "event_start_time": start_time.isoformat(),
-                    "event_end_time": end_time.isoformat() if end_time else None,
-                    "event_timezone": state.timezone,
-                    "remind_before_minutes": remind_before,
-                    "conflict_ids": [item.id for item in open_conflicts],
-                },
-            )
-            state.pending_state = pending.state_payload | {
-                "id": pending.id,
-                "state_type": pending.state_type,
-                "status": pending.status,
-            }
-            user_tz = ZoneInfo(state.timezone)
-            local_start = start_time.astimezone(user_tz)
-            lines = [f"已创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}。"]
-            lines.append("但检测到冲突，请回复 1、2 或 3 选择处理方式。")
-            lines.append("1. 保留当前安排并忽略冲突")
-            lines.append("2. 将当前安排顺延 1 小时")
-            lines.append("3. 删除当前安排")
-            state.final_response = "\n".join(lines)
-            return
-        user_tz = ZoneInfo(state.timezone)
-        local_start = start_time.astimezone(user_tz)
-        location_text = f"，地点：{location}" if location else ""
-        state.final_response = (
-            f"已为你创建安排：{title}，时间为 {local_start.strftime('%Y-%m-%d %H:%M')}{location_text}。"
-        )
-
-    def _handle_query_scheduled_items(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        target_date = extracted.get("query_start_date") or extracted.get("query_end_date")
-        if target_date is None:
-            target_date = state.current_time.date()
-        result = self.tools.execute(
-            "query_scheduled_items",
-            {"start_date": target_date, "end_date": target_date},
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {
-                "tool_name": "query_scheduled_items",
-                "args": {"start_date": target_date, "end_date": target_date},
-            }
-        )
-        state.tool_results.append(
-            {"tool_name": "query_scheduled_items", "result": result.model_dump(mode="json")}
-        )
-        events = result.data or []
-        state.scheduled_items = events
-        if not events:
-            state.final_response = f"{target_date.isoformat()} 没有安排。"
-            return
-        lines = [f"{target_date.isoformat()} 的安排："]
-        user_tz = ZoneInfo(state.timezone)
-        for index, event in enumerate(events, start=1):
-            start = event["start_time"]
-            end = event.get("end_time")
-            if isinstance(start, datetime):
-                start_text = start.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
-            elif isinstance(start, str):
-                start_text = datetime.fromisoformat(start).astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
-            else:
-                start_text = str(start)
-            if isinstance(end, datetime):
-                end_text = end.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
-            elif isinstance(end, str):
-                end_text = datetime.fromisoformat(end).astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
-            else:
-                end_text = str(end)
-            location = event.get("location")
-            loc_text = f" @{location}" if location else ""
-            lines.append(f"{index}. {event['title']} {start_text} - {end_text}{loc_text}")
-        state.final_response = "\n".join(lines)
-
-    def _handle_query_free_slots(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        target_date = extracted.get("query_start_date") or extracted.get("query_end_date")
-        if target_date is None:
-            target_date = state.current_time.date()
-        result = self.tools.execute(
-            "find_free_slots",
-            {"plan_date": target_date, "timezone": state.timezone},
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {
-                "tool_name": "find_free_slots",
-                "args": {"plan_date": target_date},
-            }
-        )
-        state.tool_results.append(
-            {"tool_name": "find_free_slots", "result": result.model_dump(mode="json")}
-        )
-        slots = result.data or []
-        if not slots:
-            state.final_response = f"{target_date.isoformat()} 没有空闲时间。"
-            return
-        lines = [f"{target_date.isoformat()} 的空闲时间："]
-        user_tz = ZoneInfo(state.timezone)
-        for index, slot in enumerate(slots, start=1):
-            start = datetime.fromisoformat(slot["start_time"]).astimezone(user_tz)
-            end = datetime.fromisoformat(slot["end_time"]).astimezone(user_tz)
-            minutes = slot["duration_minutes"]
-            if minutes >= 60:
-                hours = minutes // 60
-                mins = minutes % 60
-                duration_text = f"{hours}小时" + (f"{mins}分钟" if mins else "")
-            else:
-                duration_text = f"{minutes}分钟"
-            lines.append(f"{index}. {start:%H:%M}-{end:%H:%M} ({duration_text})")
-        state.final_response = "\n".join(lines)
-
-    def _handle_query_reminders(self, state: AgentState) -> None:
-        result = self.tools.execute(
-            "query_reminders",
-            {"status": "pending"},
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {"tool_name": "query_reminders", "args": {"status": "pending"}}
-        )
-        state.tool_results.append(
-            {"tool_name": "query_reminders", "result": result.model_dump(mode="json")}
-        )
-        reminders = result.data or []
-        if not reminders:
-            state.final_response = "当前没有待触发的提醒。"
-            return
-        lines = ["待触发的提醒："]
-        user_tz = ZoneInfo(state.timezone)
-        for index, item in enumerate(reminders, start=1):
-            trigger = datetime.fromisoformat(item["trigger_time"]).astimezone(user_tz)
-            lines.append(f"{index}. {item['title']} - {trigger:%Y-%m-%d %H:%M}")
-        state.final_response = "\n".join(lines)
-
-    def _handle_create_task(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        minutes = extracted.get("estimated_minutes")
-        title = extracted.get("task_title") or "任务"
-        if minutes is None:
-            state.intent = "ask_user_clarification"
-            state.final_response = (
-                extracted.get("clarification_prompt") or '请补充任务时长，例如"明天写论文 2 小时"。'
-            )
-            return
-        result = self.tools.execute(
-            "create_task",
-            {
-                "title": title,
-                "description": None,
-                "estimated_minutes": minutes,
-                "deadline": None,
-                "priority": "medium",
-            },
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {"tool_name": "create_task", "args": {"title": title, "estimated_minutes": minutes}}
-        )
-        state.tool_results.append(
-            {"tool_name": "create_task", "result": result.model_dump(mode="json")}
-        )
-        if state.intent == "plan_day":
-            target_date = extracted.get("plan_date") or state.current_time.date()
-            plan_result = self.tools.execute(
-                "plan_tasks_into_day",
-                {"plan_date": target_date},
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
-            )
-            state.tool_calls.append(
-                {"tool_name": "plan_tasks_into_day", "args": {"plan_date": target_date}}
-            )
-            state.tool_results.append(
-                {"tool_name": "plan_tasks_into_day", "result": plan_result.model_dump(mode="json")}
-            )
-            if plan_result.success:
-                pending = self.pending_states.save(
-                    user_id=state.user_id,
-                    conversation_id=state.conversation_id,
-                    state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
-                    state_payload={"date": target_date.isoformat()},
-                )
-                state.pending_state = pending.state_payload | {
-                    "id": pending.id,
-                    "state_type": pending.state_type,
-                    "status": pending.status,
-                }
-                state.final_response = (
-                    f"已创建任务：{title}，预计 {minutes} 分钟。\n"
-                    f'已生成 {target_date.isoformat()} 的安排草案，请回复"确认"或"取消"。'
-                )
-                return
-        state.final_response = f"已创建任务：{title}，预计 {minutes} 分钟。"
-
-    def _handle_plan_day(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        target_date = extracted.get("plan_date") or state.current_time.date()
-        task_minutes = extracted.get("estimated_minutes")
-        task_title = extracted.get("task_title") or "任务"
-        if task_minutes is not None:
-            create_task_result = self.tools.execute(
-                "create_task",
-                {
-                    "title": task_title,
-                    "description": None,
-                    "estimated_minutes": task_minutes,
-                    "deadline": None,
-                    "priority": "medium",
-                },
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
-            )
-            state.tool_calls.append(
-                {
-                    "tool_name": "create_task",
-                    "args": {
-                        "title": task_title,
-                        "estimated_minutes": task_minutes,
-                    },
-                }
-            )
-            state.tool_results.append(
-                {"tool_name": "create_task", "result": create_task_result.model_dump(mode="json")}
-            )
-        result = self.tools.execute(
-            "plan_tasks_into_day",
-            {"plan_date": target_date},
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {"tool_name": "plan_tasks_into_day", "args": {"plan_date": target_date}}
-        )
-        state.tool_results.append(
-            {"tool_name": "plan_tasks_into_day", "result": result.model_dump(mode="json")}
-        )
-        if not result.success:
-            state.final_response = result.error or "生成计划失败。"
-            return
-        pending = self.pending_states.save(
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-            state_type=PendingStateType.WAITING_PLAN_CONFIRMATION.value,
-            state_payload={"date": target_date.isoformat()},
-        )
-        state.pending_state = pending.state_payload | {
-            "id": pending.id,
-            "state_type": pending.state_type,
-            "status": pending.status,
-        }
-        state.final_response = (
-            f'已生成 {target_date.isoformat()} 的安排草案，请回复"确认"或"取消"。'
-        )
-
-    def _handle_update_scheduled_item(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        keyword = extracted.get("target_event_keyword")
-        target_time = extracted.get("original_time") or extracted.get("event_start_time")
-        target_date = extracted.get("target_event_date")
-        if target_date is None and isinstance(target_time, datetime):
-            target_date = target_time.date()
-        candidates = self._find_scheduled_item_candidates(
-            state,
-            keyword=keyword,
-            target_date=target_date,
-            target_time=target_time if isinstance(target_time, datetime) else None,
-        )
-        state.candidate_scheduled_items = candidates
-        if not candidates:
-            state.final_response = "没有找到可修改的安排。"
-            return
-        if len(candidates) > 1:
-            pending = self.pending_states.save(
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
-                state_type=PendingStateType.WAITING_EVENT_SELECTION.value,
-                state_payload={
-                    "action": "update_scheduled_item",
-                    "candidates": candidates[:3],
-                },
-            )
-            state.pending_state = pending.state_payload | {
-                "id": pending.id,
-                "state_type": pending.state_type,
-                "status": pending.status,
-            }
-            lines = ["找到多个候选安排，请回复序号选择："]
-            user_tz = ZoneInfo(state.timezone)
-            for index, candidate in enumerate(candidates[:3], start=1):
-                lines.append(_candidate_line(candidate, index, user_tz))
-            state.final_response = "\n".join(lines)
-            return
-        candidate = candidates[0]
-        new_start = extracted.get("new_start_time")
-        new_end = extracted.get("new_end_time")
-        if new_start is None:
-            state.final_response = (
-                extracted.get("clarification_prompt") or '请补充新的时间，例如"改到 4 点"。'
-            )
-            return
-        if new_end is None:
-            new_end = new_start + timedelta(hours=1)
-        update_result = self.tools.execute(
-            "update_scheduled_item",
-            {
-                "item_id": candidate["id"],
-                "title": candidate["title"],
-                "start_time": new_start,
-                "end_time": new_end,
-                "timezone": state.timezone,
-            },
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {
-                "tool_name": "update_scheduled_item",
-                "args": {"item_id": candidate["id"], "start_time": new_start, "end_time": new_end},
-            }
-        )
-        state.tool_results.append(
-            {"tool_name": "update_scheduled_item", "result": update_result.model_dump(mode="json")}
-        )
-        if not update_result.success:
-            state.final_response = update_result.error or "修改安排失败。"
-            return
-        state.final_response = (
-            f'已将安排「{candidate["title"]}」调整到 {new_start:%Y-%m-%d} '
-            f'{_format_clock_time(new_start)} 到 {_format_clock_time(new_end)}。'
-        )
-
-    def _handle_delete_scheduled_item(self, state: AgentState) -> None:
-        extracted = state.extracted or {}
-        keyword = extracted.get("target_event_keyword")
-        target_time = extracted.get("event_start_time") or extracted.get("original_time")
-        target_date = extracted.get("target_event_date")
-        if target_date is None and isinstance(target_time, datetime):
-            target_date = target_time.date()
-        candidates = self._find_scheduled_item_candidates(
-            state,
-            keyword=keyword,
-            target_date=target_date,
-            target_time=target_time if isinstance(target_time, datetime) else None,
-        )
-        state.candidate_scheduled_items = candidates
-        if not candidates:
-            state.final_response = "没有找到可删除的安排。"
-            return
-        if len(candidates) > 1:
-            pending = self.pending_states.save(
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
-                state_type=PendingStateType.WAITING_EVENT_SELECTION.value,
-                state_payload={
-                    "action": "delete_scheduled_item",
-                    "candidates": candidates[:3],
-                },
-            )
-            state.pending_state = pending.state_payload | {
-                "id": pending.id,
-                "state_type": pending.state_type,
-                "status": pending.status,
-            }
-            lines = ["找到多个候选安排，请回复序号选择："]
-            user_tz = ZoneInfo(state.timezone)
-            for index, candidate in enumerate(candidates[:3], start=1):
-                lines.append(_candidate_line(candidate, index, user_tz))
-            state.final_response = "\n".join(lines)
-            return
-        candidate = candidates[0]
-        delete_result = self.tools.execute(
-            "delete_scheduled_item",
-            {"item_id": candidate["id"]},
-            user_id=state.user_id,
-            conversation_id=state.conversation_id,
-        )
-        state.tool_calls.append(
-            {"tool_name": "delete_scheduled_item", "args": {"item_id": candidate["id"]}}
-        )
-        state.tool_results.append(
-            {"tool_name": "delete_scheduled_item", "result": delete_result.model_dump(mode="json")}
-        )
-        state.final_response = f'已删除安排「{candidate["title"]}」。'
-
     def _confirm_plan_from_pending(self, state: AgentState) -> None:
         payload = state.pending_state or {}
         state_payload = payload.get("state_payload", {}) if "state_payload" in payload else payload
@@ -816,8 +376,7 @@ class SchedulePlanningGraph:
         if not plan_date_str:
             state.final_response = "没有可确认的安排草案。"
             return
-        from datetime import date as date_type
-        plan_date = date_type.fromisoformat(plan_date_str)
+        plan_date = date.fromisoformat(plan_date_str)
         result = self.tools.execute(
             "confirm_plan",
             {"plan_date": plan_date},
@@ -846,18 +405,12 @@ class SchedulePlanningGraph:
         timezone = state_payload.get("event_timezone") or state.timezone
         remind_before_minutes = state_payload.get("remind_before_minutes")
         original_start = (
-            datetime.fromisoformat(start_raw)
-            if isinstance(start_raw, str)
-            else start_raw
-            if isinstance(start_raw, datetime)
-            else None
+            datetime.fromisoformat(start_raw) if isinstance(start_raw, str)
+            else start_raw if isinstance(start_raw, datetime) else None
         )
         original_end = (
-            datetime.fromisoformat(end_raw)
-            if isinstance(end_raw, str)
-            else end_raw
-            if isinstance(end_raw, datetime)
-            else None
+            datetime.fromisoformat(end_raw) if isinstance(end_raw, str)
+            else end_raw if isinstance(end_raw, datetime) else None
         )
         if choice == 1:
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
@@ -867,33 +420,22 @@ class SchedulePlanningGraph:
         if choice == 2 and event_id and original_start is not None:
             new_start = original_start + timedelta(hours=1)
             new_end = (
-                original_end + timedelta(hours=1)
-                if original_end is not None
+                original_end + timedelta(hours=1) if original_end is not None
                 else new_start + timedelta(hours=1)
             )
             result = self.tools.execute(
                 "update_scheduled_item",
                 {
-                    "item_id": event_id,
-                    "title": event_title,
-                    "start_time": new_start,
-                    "end_time": new_end,
-                    "timezone": timezone,
-                    "remind_before_minutes": remind_before_minutes,
+                    "item_id": event_id, "title": event_title,
+                    "start_time": new_start, "end_time": new_end,
+                    "timezone": timezone, "remind_before_minutes": remind_before_minutes,
                 },
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
+                user_id=state.user_id, conversation_id=state.conversation_id,
             )
-            state.tool_calls.append(
-                {
-                    "tool_name": "update_scheduled_item",
-                    "args": {
-                        "item_id": event_id,
-                        "start_time": new_start,
-                        "end_time": new_end,
-                    },
-                }
-            )
+            state.tool_calls.append({
+                "tool_name": "update_scheduled_item",
+                "args": {"item_id": event_id, "start_time": new_start, "end_time": new_end},
+            })
             state.tool_results.append(
                 {"tool_name": "update_scheduled_item", "result": result.model_dump(mode="json")}
             )
@@ -914,10 +456,8 @@ class SchedulePlanningGraph:
             return
         if choice == 3 and event_id:
             self.tools.execute(
-                "delete_scheduled_item",
-                {"item_id": event_id},
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
+                "delete_scheduled_item", {"item_id": event_id},
+                user_id=state.user_id, conversation_id=state.conversation_id,
             )
             self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
             state.pending_state = None
@@ -943,10 +483,8 @@ class SchedulePlanningGraph:
         candidate = candidates[choice - 1]
         if action == "delete_scheduled_item":
             self.tools.execute(
-                "delete_scheduled_item",
-                {"item_id": candidate["id"]},
-                user_id=state.user_id,
-                conversation_id=state.conversation_id,
+                "delete_scheduled_item", {"item_id": candidate["id"]},
+                user_id=state.user_id, conversation_id=state.conversation_id,
             )
             state.final_response = f'已删除安排「{candidate["title"]}」。'
         elif action == "update_scheduled_item":
@@ -958,8 +496,3 @@ class SchedulePlanningGraph:
         state.final_response = "我已经收到提醒时间，后续可继续补充具体提醒方式。"
         self.pending_states.clear(state.user_id, state.conversation_id, status="completed")
         state.pending_state = None
-
-    def _ask_user_clarification(self, state: AgentState) -> str:
-        extracted = state.extracted or {}
-        prompt = extracted.get("clarification_prompt")
-        return prompt or "请补充更多信息，我才能继续处理。"

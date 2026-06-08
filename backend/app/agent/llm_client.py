@@ -5,6 +5,7 @@ import logging
 from typing import TypeVar
 
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -56,3 +57,17 @@ class LLMClient:
                 str(exc)[:500],
             )
             raise ValueError("LLM 返回结构与期望 schema 不匹配") from exc
+
+    def chat_with_tools(
+        self,
+        *,
+        messages: list[dict],
+        tools: list[dict],
+    ) -> ChatCompletionMessage:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=tools or None,
+            tool_choice="auto" if tools else None,
+        )
+        return response.choices[0].message
