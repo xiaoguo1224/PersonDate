@@ -9,11 +9,14 @@ from sqlalchemy import func, select
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
+from app.core.cache import cache_get, cache_set
+from app.core.cache_invalidator import invalidate_user_tasks
 from app.models import ScheduleSource, TaskItem, TaskStatus
 from app.models.enums import ScheduledItemStatus, ScheduledItemSource, TaskScheduleType, TaskTimeType
 from app.models.scheduled_item import ScheduledItem
 
 
+_TASKS_TTL = 600  # 10 分钟
 _UNSET = object()
 
 
@@ -57,6 +60,7 @@ class TaskService:
         )
         self.db.add(item)
         self.db.flush()
+        invalidate_user_tasks(user_id)
         logger.info("创建任务 user_id=%s title=%s task_id=%s", user_id, title, item.id)
         return item
 
@@ -89,6 +93,35 @@ class TaskService:
         )
         return items, total
 
+    def list_tasks_cached(self, user_id: str, status: str | None = None) -> list[dict]:
+        cache_key = f"schedule:user:{user_id}:tasks:status:{status or 'all'}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+        items, _ = self.list_tasks(user_id, status=status, page_size=100)
+        result = [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "estimated_minutes": item.estimated_minutes,
+                "deadline": item.deadline.isoformat() if item.deadline else None,
+                "priority": item.priority,
+                "status": item.status,
+                "schedule_type": item.schedule_type,
+                "start_date": item.start_date.isoformat() if item.start_date else None,
+                "end_date": item.end_date.isoformat() if item.end_date else None,
+                "duration_days": item.duration_days,
+                "time_type": item.time_type,
+                "scheduled_time": str(item.scheduled_time) if item.scheduled_time else None,
+                "scheduled_end_time": str(item.scheduled_end_time) if item.scheduled_end_time else None,
+                "completed_days": item.completed_days,
+            }
+            for item in items
+        ]
+        cache_set(cache_key, result, _TASKS_TTL)
+        return result
+
     def get_task(self, user_id: str, task_id: str) -> TaskItem | None:
         stmt = select(TaskItem).where(TaskItem.user_id == user_id, TaskItem.id == task_id)
         return self.db.scalar(stmt)
@@ -100,6 +133,7 @@ class TaskService:
                 continue
             setattr(task, key, value)
             applied.append(key)
+        invalidate_user_tasks(task.user_id)
         logger.info("更新任务 user_id=%s task_id=%s 字段=%s", task.user_id, task.id, ",".join(applied))
         return task
 
@@ -114,6 +148,7 @@ class TaskService:
         )
         for item in self.db.scalars(stmt):
             item.status = ScheduledItemStatus.COMPLETED.value
+        invalidate_user_tasks(task.user_id)
         return task
 
     def delete_task(self, task: TaskItem) -> TaskItem:
@@ -126,6 +161,7 @@ class TaskService:
         )
         for item in self.db.scalars(stmt):
             item.status = ScheduledItemStatus.DELETED.value
+        invalidate_user_tasks(task.user_id)
         return task
 
     def complete_task_day(self, task: TaskItem) -> TaskItem:
