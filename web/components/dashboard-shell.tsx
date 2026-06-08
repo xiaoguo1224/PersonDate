@@ -273,6 +273,25 @@ function DashboardShellContent({
       setWarmMessage(fallbackMessage);
       return;
     }
+
+    // 检查本地缓存
+    const cacheKey = `weather_${latitude.toFixed(4)}_${longitude.toFixed(4)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { data, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        // 缓存12小时有效
+        if (now - timestamp < 12 * 60 * 60 * 1000) {
+          setWeather(data);
+          setWarmMessage(generateWarmMessage(data));
+          return;
+        }
+      } catch {
+        // 缓存解析失败，继续获取新数据
+      }
+    }
+
     setWeatherLoading(true);
     try {
       const response = await requestJson<{
@@ -284,6 +303,12 @@ function DashboardShellContent({
       }>(`/api/weather?lat=${latitude}&lon=${longitude}`);
       setWeather(response);
       setWarmMessage(generateWarmMessage(response));
+
+      // 保存到本地缓存
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: response,
+        timestamp: Date.now(),
+      }));
     } catch (err) {
       console.error("获取天气失败:", err);
       const fallbackMessage = generateWarmMessage(null);

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -11,6 +12,10 @@ from app.schemas.common import ApiResponse
 from app.services.system_setting_service import SystemSettingService
 
 router = APIRouter(tags=["weather"])
+
+# 天气数据缓存，格式：{cache_key: {"data": {...}, "expires_at": datetime}}
+_weather_cache: dict[str, dict[str, Any]] = {}
+CACHE_DURATION = timedelta(hours=12)  # 缓存12小时
 
 
 def _get_setting_value(db: Session, key: str) -> str | None:
@@ -105,11 +110,27 @@ async def get_weather(
     if not api_key:
         raise HTTPException(status_code=400, detail="天气 API Key 未配置")
 
+    # 生成缓存键，使用经纬度的前4位小数（约11米精度）
+    cache_key = f"{provider}_{lat:.4f}_{lon:.4f}"
+    now = datetime.now()
+
+    # 检查缓存是否有效
+    if cache_key in _weather_cache:
+        cached = _weather_cache[cache_key]
+        if now < cached["expires_at"]:
+            return ApiResponse(data=cached["data"])
+
     try:
         if provider == "amap":
             weather_data = await _fetch_amap(lat, lon, api_key)
         else:
             weather_data = await _fetch_openweathermap(lat, lon, api_key)
+
+        # 更新缓存
+        _weather_cache[cache_key] = {
+            "data": weather_data,
+            "expires_at": now + CACHE_DURATION,
+        }
 
         return ApiResponse(data=weather_data)
     except httpx.HTTPStatusError as e:
