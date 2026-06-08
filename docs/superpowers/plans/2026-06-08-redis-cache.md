@@ -8,6 +8,22 @@
 
 **Tech Stack:** redis-py, SWR, Alembic, SQLAlchemy 2.x, FastAPI, Next.js
 
+## 日志规范
+
+所有缓存相关操作必须添加 `logging` 日志，便于线上排查。日志级别约定：
+
+| 场景 | 级别 | 示例 |
+|---|---|---|
+| Redis 连接成功/失败 | `INFO` / `WARNING` | `Redis 连接成功` / `Redis 连接失败，降级为无缓存模式` |
+| 缓存命中 | `DEBUG` | `cache_hit key=schedule:user:xxx:events:date:2026-06-08` |
+| 缓存 miss | `DEBUG` | `cache_miss key=schedule:user:xxx:events:date:2026-06-08` |
+| 缓存写入 | `DEBUG` | `cache_set key=schedule:user:xxx:events:date:2026-06-08 ttl=600` |
+| 缓存失效（删除） | `INFO` | `cache_invalidate pattern=schedule:user:xxx:events:*` |
+| 缓存操作异常 | `WARNING` | `cache_get 失败 key=xxx: ConnectionError` |
+| 降级为直接查库 | `WARNING` | `Redis 不可用，降级查询` |
+
+所有 Service 的写操作（create/update/delete）完成后，必须记录一条 `INFO` 日志说明缓存已失效。
+
 ---
 
 ## Task 1: Redis 基础设施 — 连接管理
@@ -182,14 +198,17 @@ def _deserialize(raw: str | None) -> Any:
 def cache_get(key: str) -> Any | None:
     r = get_redis()
     if r is None:
+        logger.debug("cache_skip key=%s (Redis 不可用)", key)
         return None
     try:
         raw = r.get(key)
         if raw is None:
+            logger.debug("cache_miss key=%s", key)
             return None
+        logger.debug("cache_hit key=%s", key)
         return _deserialize(raw)
     except Exception as exc:
-        logger.debug("cache_get 失败 key=%s: %s", key, exc)
+        logger.warning("cache_get 失败 key=%s: %s", key, exc)
         return None
 
 
@@ -200,8 +219,9 @@ def cache_set(key: str, value: Any, ttl: int = DEFAULT_TTL_SECONDS) -> None:
     try:
         serialized = _serialize(value)
         r.setex(key, ttl, serialized)
+        logger.debug("cache_set key=%s ttl=%d", key, ttl)
     except Exception as exc:
-        logger.debug("cache_set 失败 key=%s: %s", key, exc)
+        logger.warning("cache_set 失败 key=%s: %s", key, exc)
 
 
 def cache_delete(key: str) -> None:
@@ -210,8 +230,9 @@ def cache_delete(key: str) -> None:
         return
     try:
         r.delete(key)
+        logger.info("cache_delete key=%s", key)
     except Exception as exc:
-        logger.debug("cache_delete 失败 key=%s: %s", key, exc)
+        logger.warning("cache_delete 失败 key=%s: %s", key, exc)
 
 
 def cache_delete_pattern(pattern: str) -> None:
@@ -222,8 +243,9 @@ def cache_delete_pattern(pattern: str) -> None:
         keys = r.keys(pattern)
         if keys:
             r.delete(*keys)
+            logger.info("cache_invalidate pattern=%s count=%d", pattern, len(keys))
     except Exception as exc:
-        logger.debug("cache_delete_pattern 失败 pattern=%s: %s", pattern, exc)
+        logger.warning("cache_delete_pattern 失败 pattern=%s: %s", pattern, exc)
 
 
 def cache_get_or_load(
@@ -234,6 +256,7 @@ def cache_get_or_load(
     cached = cache_get(key)
     if cached is not None:
         return cached
+    logger.debug("cache_load key=%s (调用 loader)", key)
     result = loader()
     if result is not None:
         cache_set(key, result, ttl)
@@ -249,7 +272,7 @@ Expected: `cache module ok`
 
 ```bash
 git add backend/app/core/cache.py
-git commit -m "feat(cache): 添加 CacheManager 统一缓存读写接口"
+git commit -m "feat(cache): 添加 CacheManager 统一缓存读写接口（含日志）"
 ```
 
 ---
@@ -274,26 +297,32 @@ logger = logging.getLogger(__name__)
 
 
 def invalidate_user_events(user_id: str) -> None:
+    logger.info("失效用户日程缓存 user_id=%s", user_id)
     cache_delete_pattern(f"schedule:user:{user_id}:events:*")
 
 
 def invalidate_user_tasks(user_id: str) -> None:
+    logger.info("失效用户任务缓存 user_id=%s", user_id)
     cache_delete_pattern(f"schedule:user:{user_id}:tasks:*")
 
 
 def invalidate_user_conflicts(user_id: str) -> None:
+    logger.info("失效用户冲突缓存 user_id=%s", user_id)
     cache_delete_pattern(f"schedule:user:{user_id}:conflicts:*")
 
 
 def invalidate_user_reminders(user_id: str) -> None:
+    logger.info("失效用户提醒缓存 user_id=%s", user_id)
     cache_delete_pattern(f"schedule:user:{user_id}:reminders:*")
 
 
 def invalidate_user_settings(user_id: str) -> None:
+    logger.info("失效用户配置缓存 user_id=%s", user_id)
     cache_delete_pattern(f"schedule:user:{user_id}:settings")
 
 
 def invalidate_system_settings() -> None:
+    logger.info("失效系统设置缓存")
     cache_delete_pattern("schedule:system:settings")
 
 
@@ -302,13 +331,16 @@ def invalidate_weather(city: str | None = None) -> None:
         from app.core.cache import cache_delete
         import hashlib
         city_hash = hashlib.md5(city.encode()).hexdigest()[:12]
+        logger.info("失效天气缓存 city=%s", city)
         cache_delete(f"schedule:weather:{city_hash}")
     else:
+        logger.info("失效全部天气缓存")
         cache_delete_pattern("schedule:weather:*")
 
 
 def invalidate_pending_state(conversation_id: str) -> None:
     from app.core.cache import cache_delete
+    logger.info("失效 Agent pending state 缓存 conversation_id=%s", conversation_id)
     cache_delete(f"schedule:agent:pending:{conversation_id}")
 ```
 
@@ -316,7 +348,7 @@ def invalidate_pending_state(conversation_id: str) -> None:
 
 ```bash
 git add backend/app/core/cache_invalidator.py
-git commit -m "feat(cache): 添加 CacheInvalidator 缓存失效逻辑"
+git commit -m "feat(cache): 添加 CacheInvalidator 缓存失效逻辑（含日志）"
 ```
 
 ---
