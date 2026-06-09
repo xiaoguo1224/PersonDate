@@ -15,6 +15,17 @@ from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
 
+_user_id: str = ""
+
+
+def set_user_id(user_id: str) -> None:
+    global _user_id
+    _user_id = user_id
+
+
+def _get_user_id() -> str:
+    return _user_id
+
 
 def _item_to_dict(item: object) -> dict[str, Any]:
     return {
@@ -50,7 +61,6 @@ def create_scheduled_item(
     location: str | None = None,
     remind_before_minutes: int = 0,
     timezone: str = "Asia/Shanghai",
-    user_id: str = "",
 ) -> dict:
     """创建日程安排。
 
@@ -61,8 +71,8 @@ def create_scheduled_item(
         location: 地点，可选
         remind_before_minutes: 提前提醒分钟数，默认0
         timezone: 时区，默认 Asia/Shanghai
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ScheduledItemService(db)
@@ -79,7 +89,6 @@ def create_scheduled_item(
             remind_before_minutes=remind_before_minutes,
             source="agent",
         )
-        # 创建提醒
         trigger_time = start - timedelta(minutes=remind_before_minutes)
         real_conversation_id = ChannelIdentityService(db).get_conversation_id(user_id)
         ReminderService(db).create_for_target(
@@ -90,7 +99,6 @@ def create_scheduled_item(
             trigger_time=trigger_time,
             conversation_id=real_conversation_id,
         )
-        # 检测冲突
         ConflictService(db).detect_item_conflicts(user_id, item)
         db.commit()
         return {"success": True, "data": _item_to_dict(item), "message": "安排已创建"}
@@ -107,7 +115,6 @@ def query_scheduled_items(
     end_date: str | None = None,
     keyword: str | None = None,
     on_date: str | None = None,
-    user_id: str = "",
 ) -> dict:
     """查询日程安排。按日期范围或关键词查询。
 
@@ -116,8 +123,8 @@ def query_scheduled_items(
         end_date: 结束日期，格式 YYYY-MM-DD
         keyword: 搜索关键词
         on_date: 指定日期，格式 YYYY-MM-DD
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ScheduledItemService(db)
@@ -151,7 +158,6 @@ def update_scheduled_item(
     end_time: str | None = None,
     location: str | None = None,
     remind_before_minutes: int | None = None,
-    user_id: str = "",
 ) -> dict:
     """修改日程安排。
 
@@ -162,8 +168,8 @@ def update_scheduled_item(
         end_time: 新结束时间，ISO 8601 格式
         location: 新地点
         remind_before_minutes: 新提前提醒分钟数
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ScheduledItemService(db)
@@ -182,7 +188,6 @@ def update_scheduled_item(
             location=location,
             remind_before_minutes=remind_before_minutes,
         )
-        # 更新提醒
         if start is not None:
             remind_before = remind_before_minutes if remind_before_minutes is not None else (item.remind_before_minutes or 0)
             ReminderService(db).cancel_by_target(user_id=user_id, target_id=item.id)
@@ -203,13 +208,13 @@ def update_scheduled_item(
 
 
 @tool
-def delete_scheduled_item(item_id: str, user_id: str = "") -> dict:
+def delete_scheduled_item(item_id: str) -> dict:
     """删除日程安排。
 
     Args:
         item_id: 日程ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ScheduledItemService(db)
@@ -233,7 +238,6 @@ def create_task(
     description: str | None = None,
     deadline: str | None = None,
     priority: str = "medium",
-    user_id: str = "",
 ) -> dict:
     """创建任务。
 
@@ -243,8 +247,8 @@ def create_task(
         description: 任务描述
         deadline: 截止时间，ISO 8601 格式
         priority: 优先级，low/medium/high
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         dl = datetime.fromisoformat(deadline) if deadline else None
@@ -266,13 +270,13 @@ def create_task(
 
 
 @tool
-def query_tasks(status: str | None = None, user_id: str = "") -> dict:
+def query_tasks(status: str | None = None) -> dict:
     """查询任务列表。
 
     Args:
         status: 筛选状态，pending/completed，不填返回全部
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         tasks = TaskService(db).list_tasks(user_id, status)[0]
@@ -288,13 +292,13 @@ def query_tasks(status: str | None = None, user_id: str = "") -> dict:
 
 
 @tool
-def complete_task(task_id: str, user_id: str = "") -> dict:
+def complete_task(task_id: str) -> dict:
     """完成任务。
 
     Args:
         task_id: 任务ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = TaskService(db)
@@ -312,13 +316,13 @@ def complete_task(task_id: str, user_id: str = "") -> dict:
 
 
 @tool
-def delete_task(task_id: str, user_id: str = "") -> dict:
+def delete_task(task_id: str) -> dict:
     """删除任务。
 
     Args:
         task_id: 任务ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = TaskService(db)
@@ -336,13 +340,13 @@ def delete_task(task_id: str, user_id: str = "") -> dict:
 
 
 @tool
-def analyze_day(plan_date: str, user_id: str = "") -> dict:
+def analyze_day(plan_date: str) -> dict:
     """分析某天的安排和任务。
 
     Args:
         plan_date: 日期，格式 YYYY-MM-DD
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         d = date.fromisoformat(plan_date)
@@ -370,7 +374,6 @@ def find_free_slots(
     timezone: str = "Asia/Shanghai",
     workday_start: str = "09:00",
     workday_end: str = "22:00",
-    user_id: str = "",
 ) -> dict:
     """查找某天的空闲时间段。
 
@@ -379,8 +382,8 @@ def find_free_slots(
         timezone: 时区
         workday_start: 工作时间开始，格式 HH:MM
         workday_end: 工作时间结束，格式 HH:MM
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         from datetime import UTC, datetime as dt
@@ -431,13 +434,13 @@ def find_free_slots(
 
 
 @tool
-def plan_tasks_into_day(plan_date: str, user_id: str = "") -> dict:
+def plan_tasks_into_day(plan_date: str) -> dict:
     """将未排期任务排入某天生成安排草案。
 
     Args:
         plan_date: 日期，格式 YYYY-MM-DD
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         d = date.fromisoformat(plan_date)
@@ -457,13 +460,13 @@ def plan_tasks_into_day(plan_date: str, user_id: str = "") -> dict:
 
 
 @tool
-def confirm_plan(plan_date: str, user_id: str = "") -> dict:
+def confirm_plan(plan_date: str) -> dict:
     """确认安排草案，将草案状态改为 active。
 
     Args:
         plan_date: 日期，格式 YYYY-MM-DD
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         d = date.fromisoformat(plan_date)
@@ -478,13 +481,13 @@ def confirm_plan(plan_date: str, user_id: str = "") -> dict:
 
 
 @tool
-def detect_conflicts(plan_date: str | None = None, user_id: str = "") -> dict:
+def detect_conflicts(plan_date: str | None = None) -> dict:
     """检测日程冲突。
 
     Args:
         plan_date: 日期，格式 YYYY-MM-DD，不填则检测全部
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ConflictService(db)
@@ -505,13 +508,13 @@ def detect_conflicts(plan_date: str | None = None, user_id: str = "") -> dict:
 
 
 @tool
-def suggest_reschedule(conflict_id: str, user_id: str = "") -> dict:
+def suggest_reschedule(conflict_id: str) -> dict:
     """根据冲突建议调整时间。
 
     Args:
         conflict_id: 冲突ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         conflict_service = ConflictService(db)
@@ -535,7 +538,7 @@ def suggest_reschedule(conflict_id: str, user_id: str = "") -> dict:
 
         conflict_date = item_a.start_time.astimezone(UTC).date()
         free_slots_result = find_free_slots.invoke(
-            {"plan_date": conflict_date.isoformat(), "user_id": user_id}
+            {"plan_date": conflict_date.isoformat()}
         )
         free_slots = free_slots_result.get("data", [])
 
@@ -570,7 +573,6 @@ def create_reminder(
     trigger_time: str,
     target_type: str = "scheduled_item",
     target_id: str = "",
-    user_id: str = "",
 ) -> dict:
     """创建提醒。
 
@@ -579,8 +581,8 @@ def create_reminder(
         trigger_time: 触发时间，ISO 8601 格式
         target_type: 关联类型
         target_id: 关联ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         real_conversation_id = ChannelIdentityService(db).get_conversation_id(user_id)
@@ -602,13 +604,13 @@ def create_reminder(
 
 
 @tool
-def query_reminders(status: str = "pending", user_id: str = "") -> dict:
+def query_reminders(status: str = "pending") -> dict:
     """查询提醒列表。
 
     Args:
         status: 筛选状态，pending/fired/canceled
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         items, total = ReminderService(db).list_jobs(user_id, status=status)
@@ -632,13 +634,13 @@ def query_reminders(status: str = "pending", user_id: str = "") -> dict:
 
 
 @tool
-def cancel_reminder(reminder_id: str, user_id: str = "") -> dict:
+def cancel_reminder(reminder_id: str) -> dict:
     """取消提醒。
 
     Args:
         reminder_id: 提醒ID
-        user_id: 用户ID（系统自动注入）
     """
+    user_id = _get_user_id()
     db = SessionLocal()
     try:
         service = ReminderService(db)
@@ -665,7 +667,6 @@ def ask_user_clarification(prompt: str) -> dict:
     return {"success": True, "data": {"prompt": prompt}, "message": prompt}
 
 
-# 工具列表
 ALL_TOOLS = [
     create_scheduled_item,
     query_scheduled_items,

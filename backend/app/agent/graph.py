@@ -14,7 +14,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
-from app.agent.tools import ALL_TOOLS
+from app.agent.tools import ALL_TOOLS, set_user_id
 from app.core.config import get_settings
 from app.models import User
 from app.services.agent_log_service import AgentLogService
@@ -188,6 +188,8 @@ class SchedulePlanningGraph:
             else settings.default_timezone
         )
         now_local = datetime.now(UTC).astimezone(ZoneInfo(tz_name))
+
+        set_user_id(current_user.id)
 
         config = {"configurable": {"thread_id": conversation_id}}
 
