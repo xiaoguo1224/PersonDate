@@ -65,7 +65,6 @@ const navigation: NavigationItem[] = [
   { key: "settings", label: "设置", icon: <SettingOutlined />, roles: ["owner"], children: [
     { key: "/dashboard/settings", label: "系统设置", icon: <SettingOutlined />, roles: ["owner"] },
     { key: "/dashboard/model-config", label: "模型配置", icon: <RobotOutlined />, roles: ["owner"] },
-    { key: "/dashboard/notification-settings", label: "通知设置", icon: <BellOutlined />, roles: ["owner", "member"] },
   ]},
   { key: "/dashboard/wechat-status", label: "微信通道状态", href: "/dashboard/wechat-status", icon: <ClusterOutlined />, roles: ["owner"] },
 ];
