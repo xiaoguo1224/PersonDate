@@ -53,14 +53,7 @@ class FakeGraph:
             intent="create_scheduled_item",
             tool_calls=[{"tool_name": "create_scheduled_item"}],
             tool_results=[{"tool_name": "create_scheduled_item"}],
-            pending_state=None,
-            graph_trace=[
-                "load_context",
-                "check_pending_state",
-                "classify_intent",
-                "extract_info",
-                "generate_response",
-            ],
+            graph_trace=["agent_loop"],
             error=None,
         )
 

@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models import (
-    ReminderJob,
-    ScheduledItem,
-    TaskItem,
-)
+from app.models import ReminderJob, ScheduledItem, TaskItem
 from app.models.enums import ReminderTargetType
 from app.schemas.setup import OwnerInitRequest
 from app.services.setup_service import SetupService
@@ -35,14 +31,7 @@ def test_create_event_and_reminder(db_session, graph) -> None:
     reminder = db_session.scalar(select(ReminderJob).where(ReminderJob.user_id == owner.id))
 
     assert state.success is True
-    assert state.intent == "create_scheduled_item"
     assert "已为你创建安排" in (state.final_response or "")
-    assert state.graph_trace[:4] == [
-        "load_context",
-        "check_pending_state",
-        "classify_intent",
-        "extract_info",
-    ]
     assert event is not None
     assert event.title == "会议"
     assert reminder is not None
@@ -56,7 +45,6 @@ def test_query_events_for_tomorrow(db_session, graph) -> None:
     state = graph.invoke(current_user=owner, message="明天有什么安排？", conversation_id="debug")
     db_session.commit()
 
-    assert state.intent == "query_scheduled_items"
     assert "的安排" in (state.final_response or "")
     assert "会议" in (state.final_response or "")
 
@@ -64,7 +52,7 @@ def test_query_events_for_tomorrow(db_session, graph) -> None:
 def test_plan_task_and_confirm(db_session, graph) -> None:
     owner = _create_owner(db_session)
 
-    state = graph.invoke(
+    graph.invoke(
         current_user=owner,
         message="明天写论文 2 小时，帮我安排一下",
         conversation_id="debug",
@@ -83,7 +71,6 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
 
     assert task is not None
     assert task.title == "写论文"
-    assert state.pending_state is not None
     assert len(draft_items) >= 1
 
     confirm_state = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
@@ -97,7 +84,6 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
         )
     )
 
-    assert confirm_state.intent == "confirm_plan"
     assert "计划已确认" in (confirm_state.final_response or "")
     assert len(confirmed_items) >= 1
 
@@ -105,25 +91,23 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
 def test_confirm_plan_replaces_existing_confirmed_plan(db_session, graph) -> None:
     owner = _create_owner(db_session)
 
-    first_state = graph.invoke(
+    graph.invoke(
         current_user=owner,
         message="明天写论文 2 小时，帮我安排一下",
         conversation_id="debug",
     )
     db_session.commit()
-    assert first_state.pending_state is not None
 
     first_confirm = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
     db_session.commit()
     assert first_confirm.success is True
 
-    second_state = graph.invoke(
+    graph.invoke(
         current_user=owner,
         message="明天写论文 2 小时，帮我安排一下",
         conversation_id="debug",
     )
     db_session.commit()
-    assert second_state.pending_state is not None
 
     second_confirm = graph.invoke(current_user=owner, message="确认", conversation_id="debug")
     db_session.commit()
@@ -158,7 +142,6 @@ def test_update_and_delete_event(db_session, graph) -> None:
     updated_event = db_session.scalar(
         select(ScheduledItem).where(ScheduledItem.user_id == owner.id)
     )
-    assert update_state.intent == "update_scheduled_item"
     assert "4 点" in (update_state.final_response or "")
     assert updated_event is not None
     assert updated_event.start_time.hour == 16
@@ -177,7 +160,6 @@ def test_update_and_delete_event(db_session, graph) -> None:
         select(ReminderJob).where(ReminderJob.user_id == owner.id)
     )
 
-    assert delete_state.intent == "delete_scheduled_item"
     assert "已删除" in (delete_state.final_response or "")
     assert deleted_event is not None
     assert deleted_event.status == "deleted"
@@ -197,7 +179,6 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
     )
     db_session.commit()
 
-    assert conflict_state.pending_state is not None
     assert "冲突" in (conflict_state.final_response or "")
 
     shift_state = graph.invoke(current_user=owner, message="2", conversation_id="debug")
@@ -218,7 +199,6 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
         .order_by(ReminderJob.created_at.desc())
     )
 
-    assert shift_state.pending_state is None
     assert "顺延" in (shift_state.final_response or "")
     assert shifted_event is not None
     assert shifted_event.start_time.hour == 16
@@ -232,7 +212,6 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
     )
     db_session.commit()
 
-    assert clarification_state.pending_state is None
     assert "具体提醒时间" in (clarification_state.final_response or "")
 
     cancel_state = graph.invoke(
@@ -240,5 +219,4 @@ def test_conflict_clarification_and_cancel(db_session, graph) -> None:
     )
     db_session.commit()
 
-    assert cancel_state.pending_state is None
     assert "已取消" in (cancel_state.final_response or "")

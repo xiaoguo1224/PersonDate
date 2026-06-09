@@ -18,14 +18,7 @@ class FakeGraph:
             intent="create_scheduled_item",
             tool_calls=[{"tool_name": "create_scheduled_item"}],
             tool_results=[{"tool_name": "create_scheduled_item"}],
-            pending_state=None,
-            graph_trace=[
-                "load_context",
-                "check_pending_state",
-                "classify_intent",
-                "extract_info",
-                "generate_response",
-            ],
+            graph_trace=["agent_loop"],
             error=None,
         )
 
@@ -43,10 +36,4 @@ def test_web_agent_message_route_uses_web_channel(monkeypatch, client, admin_tok
     body = response.json()
     assert body["success"] is True
     assert body["data"]["intent"] == "create_scheduled_item"
-    assert body["data"]["graph_trace"] == [
-        "load_context",
-        "check_pending_state",
-        "classify_intent",
-        "extract_info",
-        "generate_response",
-    ]
+    assert body["data"]["graph_trace"] == ["agent_loop"]
