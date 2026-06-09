@@ -125,7 +125,6 @@ class CreateReminderArgs(BaseModel):
     target_id: str
     title: str
     trigger_time: datetime
-    conversation_id: str | None = None
 
 
 class UpdateReminderArgs(BaseModel):
