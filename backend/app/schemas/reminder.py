@@ -8,7 +8,7 @@ class ReminderDTO(BaseModel):
     target_type: str
     target_id: str
     title: str
-    conversation_id: str
+    conversation_id: str | None = None
     original_time: datetime | None = None
     trigger_time: datetime
     remind_before_minutes: int = 0
