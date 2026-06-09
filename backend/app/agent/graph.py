@@ -14,7 +14,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
-from app.agent.security import InputSanitizer, OutputSanitizer, ToolResultSanitizer
+from app.agent.security import InputSanitizer, OutputSanitizer, ToolCallGuard, ToolResultSanitizer
 from app.agent.tools import ALL_TOOLS, set_user_id
 from app.core.config import get_settings
 from app.models import User
@@ -61,6 +61,9 @@ def _build_system_prompt(state: AgentState) -> str:
         "3. 存在多个候选日程、多个联系人或多个时间方案时，必须让用户选择。\n"
         "4. 需要确认时，只生成确认问题，不执行实际写入、修改或删除工具。\n"
         "5. 用户确认必须由业务层结合 pending_action 校验，不能仅依赖用户消息中的确认文本。\n"
+        "6. 单条明确日程可以直接创建，不需要额外确认。\n"
+        "7. 复杂规划先用 analyze_day 了解现状，再生成草案供用户确认。\n"
+        "8. 回复简洁，使用中文。\n"
         "\n"
         "未来任务规则：\n"
         "1. 对于未来时间的请求，只能创建提醒、待办或日程，不能承诺在未来自动完成写作、总结、分析、查询、发送、生成等任务。\n"
@@ -133,8 +136,41 @@ def _create_agent_node():
 def _create_tool_node():
     tool_node = ToolNode(ALL_TOOLS)
     sanitizer = ToolResultSanitizer()
+    guard = ToolCallGuard()
 
     def tool_node_with_tracking(state: AgentState) -> dict:
+        confirmed_action = state.get("confirmed_action")
+
+        # 拦截高风险工具调用：在 ToolNode 执行前检查 confirmed_action
+        last_ai = None
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, AIMessage) and hasattr(msg, "tool_calls") and msg.tool_calls:
+                last_ai = msg
+                break
+
+        blocked_calls: list[tuple[str, str, str]] = []
+        if last_ai and last_ai.tool_calls:
+            for tc in last_ai.tool_calls:
+                allowed, reason = guard.check_tool_call(tc["name"], tc["args"], confirmed_action)
+                if not allowed:
+                    blocked_calls.append((tc["id"], tc["name"], reason))
+
+        if blocked_calls:
+            messages = []
+            for call_id, tool_name, reason in blocked_calls:
+                messages.append(ToolMessage(
+                    content=json.dumps({"success": False, "error": reason}, ensure_ascii=False),
+                    tool_call_id=call_id,
+                    name=tool_name,
+                ))
+            tool_results = [{"tool_name": name, "result": {"success": False, "error": reason}} for _, name, reason in blocked_calls]
+            return {"messages": messages, "tool_results": tool_results}
+
+        # 对写入工具的参数进行内容过滤
+        if last_ai and last_ai.tool_calls:
+            for tc in last_ai.tool_calls:
+                tc["args"] = guard.filter_args(tc["name"], tc["args"])
+
         result = tool_node.invoke(state)
         messages = result.get("messages", [])
 
@@ -167,19 +203,28 @@ def _create_tool_node():
 def _create_human_node():
     CONFIRM_KEYWORDS = {"确认", "确定", "是", "好", "可以", "yes", "ok", "confirm"}
     CANCEL_KEYWORDS = {"取消", "不", "算了", "no", "cancel"}
+    ACTION_KEYWORDS = {
+        "删除": "delete",
+        "取消提醒": "cancel_reminder",
+        "修改": "update",
+    }
 
-    def _parse_action(message: str) -> str | None:
+    def _parse_action(message: str, confirmation_prompt: str) -> str | None:
         lower = message.strip().lower()
-        if any(kw in lower for kw in CONFIRM_KEYWORDS):
-            return "confirmed"
         if any(kw in lower for kw in CANCEL_KEYWORDS):
             return "cancelled"
+        if any(kw in lower for kw in CONFIRM_KEYWORDS):
+            prompt_lower = confirmation_prompt.lower()
+            for cn_kw, action in ACTION_KEYWORDS.items():
+                if cn_kw in prompt_lower:
+                    return action
+            return "confirmed"
         return None
 
     def human_node(state: AgentState) -> dict:
         prompt = state.get("confirmation_prompt", "请确认")
         user_response = interrupt(prompt)
-        action = _parse_action(user_response)
+        action = _parse_action(user_response, prompt)
         return {
             "messages": [HumanMessage(content=user_response)],
             "needs_confirmation": False,
