@@ -47,7 +47,3 @@ def invalidate_weather(city: str | None = None) -> None:
         logger.info("失效全部天气缓存")
         cache_delete_pattern("schedule:weather:*")
 
-
-def invalidate_pending_state(conversation_id: str) -> None:
-    logger.info("失效 Agent pending state 缓存 conversation_id=%s", conversation_id)
-    cache_delete(f"schedule:agent:pending:{conversation_id}")
