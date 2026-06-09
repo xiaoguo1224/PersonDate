@@ -10,6 +10,7 @@
 
 - **微信自然语言交互** — 通过与 Agent 对话创建日程、任务和提醒
 - **LangGraph Agent** — 意图识别、信息抽取、多轮确认、冲突处理
+- **统一安排表** — 单表存储所有时间类事项（日程、任务、计划）
 - **冲突检测** — 创建或编辑安排时自动检测时间重叠，交互式解决冲突
 - **每日计划生成** — 自动将待办任务安排到可用时间段
 - **提醒系统** — 基于 APScheduler 的提醒，通过微信发送
@@ -18,6 +19,7 @@
 - **微信绑定** — 通过绑定码将微信账号与 Web 系统关联
 - **Redis 缓存层** — 查询缓存，写时失效，Redis 不可用时自动降级
 - **结构化日志** — 所有服务操作记录 user_id，便于生产环境排查
+- **安全防御** — 5 层安全机制：输入消毒、内容过滤、工具调用守卫、结果消毒、输出消毒
 
 ## 技术栈
 
@@ -127,11 +129,11 @@ PersonDate/
 ├── backend/                  # FastAPI 后端
 │   ├── app/
 │   │   ├── api/routes/       # REST API 接口
-│   │   ├── agent/            # LangGraph Agent（图、节点、提示词）
-│   │   ├── core/             # 核心模块（配置、安全、Redis、缓存、缓存失效器）
+│   │   ├── agent/            # LangGraph Agent（图、安全防护、工具）
+│   │   ├── core/             # 核心模块（配置、安全、Redis、缓存）
 │   │   ├── tools/            # Agent 工具注册和执行器
 │   │   ├── services/         # 业务逻辑服务（带结构化日志 + 缓存）
-│   │   ├── models/           # SQLAlchemy ORM 模型
+│   │   ├── models/           # SQLAlchemy ORM 模型（ScheduledItem、TaskItem 等）
 │   │   ├── schemas/          # Pydantic 请求/响应 Schema
 │   │   └── workers/          # APScheduler 提醒 Worker
 │   └── alembic/              # 数据库迁移

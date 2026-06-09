@@ -269,9 +269,8 @@ backend/
         users.py
         wechat.py
         channel_identity.py
-        calendar_events.py
+        scheduled_items.py
         tasks.py
-        day_plans.py
         conflicts.py
         reminders.py
         agent_logs.py
@@ -281,63 +280,51 @@ backend/
       graph.py
       state.py
       llm_client.py
-      prompts/
-      nodes/
-        load_context.py
-        check_pending_state.py
-        classify_intent.py
-        extract_info.py
-        route_intent.py
-        handle_create_event.py
-        handle_query_events.py
-        handle_create_task.py
-        handle_plan_day.py
-        handle_update_event.py
-        handle_delete_event.py
-        handle_confirm.py
-        detect_conflicts.py
-        generate_response.py
-        save_agent_log.py
+      schemas.py
+      security.py
+      parsing.py
+      tools.py
 
     tools/
       registry.py
       executor.py
-      create_event.py
-      query_events.py
-      update_event.py
-      delete_event.py
-      search_event_candidates.py
-      create_task.py
-      query_tasks.py
-      analyze_day.py
-      find_free_slots.py
-      plan_tasks_into_day.py
-      detect_conflicts.py
-      suggest_reschedule.py
-      confirm_plan.py
-      ask_user_clarification.py
 
     services/
       auth_service.py
       invite_code_service.py
       user_service.py
       channel_identity_service.py
-      calendar_event_service.py
+      scheduled_item_service.py
       task_service.py
-      day_plan_service.py
       conflict_service.py
       reminder_service.py
       agent_log_service.py
       system_setting_service.py
       wechat_channel_service.py
+      cache_manager.py
+      cache_invalidator.py
 
     workers/
       reminder_worker.py
 
     models/
+      __init__.py
+      enums.py
+      user.py
+      schedule.py
+      scheduled_item.py
+      channel.py
+      agent.py
+      system.py
+
     schemas/
     db/
     core/
+      config.py
+      security.py
+      redis.py
+      cache.py
+      cache_invalidator.py
 ```
 
 ### 前端目录
@@ -397,10 +384,8 @@ web/
 
 ```text
 users
-calendar_events
+scheduled_items
 task_items
-day_plans
-plan_items
 schedule_conflicts
 reminder_jobs
 ```
@@ -408,7 +393,7 @@ reminder_jobs
 规则：
 
 - `users` 使用 `status = deleted`。
-- `calendar_events` 使用 `status = deleted`。
+- `scheduled_items` 使用 `status = deleted`。
 - `task_items` 使用 `status = deleted`。
 - 查询默认过滤 deleted 数据。
 - 短期验证码、过期绑定码可以后续定期物理清理。
@@ -420,10 +405,8 @@ reminder_jobs
 必须隔离的表：
 
 ```text
-calendar_events
+scheduled_items
 task_items
-day_plans
-plan_items
 schedule_conflicts
 reminder_jobs
 agent_run_logs
@@ -475,6 +458,32 @@ save_agent_log
 密码、邀请码、系统设置
 ```
 
+### Agent 安全防护
+
+Agent 必须实现 5 层安全防御：
+
+1. **输入消毒 (InputSanitizer)**
+   - 检测并阻止 prompt 注入攻击
+   - 限制输入长度（最大 2000 字符）
+   - 关键词和正则模式匹配
+
+2. **内容过滤 (ContentFilter)**
+   - 过滤写入工具参数中的注入内容
+   - 截断过长的文本字段
+   - 替换检测到的注入内容为 `[已过滤]`
+
+3. **工具调用守卫 (ToolCallGuard)**
+   - 高风险工具（如删除）需要用户确认
+   - 验证 `confirmed_action` 参数
+
+4. **工具结果消毒 (ToolResultSanitizer)**
+   - 为用户数据添加安全标记
+   - 防止工具结果被误解为系统指令
+
+5. **输出消毒 (OutputSanitizer)**
+   - 检测并过滤系统提示词泄露
+   - 替换泄露内容为安全提示
+
 ### AgentState 要求
 
 AgentState 必须至少包含：
@@ -518,11 +527,11 @@ error
 必须支持：
 
 ```text
-create_event
-query_events
-update_event
-delete_event
-search_event_candidates
+create_scheduled_item
+query_scheduled_items
+update_scheduled_item
+delete_scheduled_item
+search_scheduled_item_candidates
 
 create_task
 query_tasks

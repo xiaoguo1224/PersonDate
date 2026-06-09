@@ -740,6 +740,8 @@ owner 可查看全局业务日志，member 只能查看自己的日志。
 
 ## 12. 安全设计
 
+### 12.1 基础安全
+
 1. Web 使用 JWT 登录认证。
 2. 密码使用 argon2 或 bcrypt 哈希。
 3. RBAC 控制 owner / member 权限。
@@ -749,6 +751,50 @@ owner 可查看全局业务日志，member 只能查看自己的日志。
 7. 微信消息必须先映射到系统用户。
 8. 未绑定微信用户不能使用 Agent。
 9. 被禁用用户不能登录，也不能通过微信使用 Agent。
+
+### 12.2 Agent 安全防护
+
+Agent 实现 5 层安全防御机制：
+
+```text
+用户输入
+  ↓
+InputSanitizer（输入消毒）
+  - 检测 prompt 注入攻击
+  - 限制输入长度（最大 2000 字符）
+  - 关键词和正则模式匹配
+  ↓
+LLM 处理
+  ↓
+ToolCallGuard（工具调用守卫）
+  - 高风险工具需要用户确认
+  - 验证 confirmed_action 参数
+  ↓
+ContentFilter（内容过滤）
+  - 过滤写入工具参数中的注入内容
+  - 截断过长的文本字段
+  - 替换检测到的注入内容为 [已过滤]
+  ↓
+ToolResultSanitizer（工具结果消毒）
+  - 为用户数据添加安全标记
+  - 防止工具结果被误解为系统指令
+  ↓
+OutputSanitizer（输出消毒）
+  - 检测并过滤系统提示词泄露
+  - 替换泄露内容为安全提示
+  ↓
+最终回复
+```
+
+安全防护组件：
+
+```text
+InputSanitizer - 输入消毒器
+ContentFilter - 内容过滤器
+ToolCallGuard - 工具调用守卫
+ToolResultSanitizer - 工具结果消毒器
+OutputSanitizer - 输出消毒器
+```
 
 ## 13. 架构最终确认
 

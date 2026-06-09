@@ -10,6 +10,7 @@ Users interact via natural language through WeChat to create schedules, manage t
 
 - **WeChat Natural Language Interaction** — Create schedules, tasks, and reminders by chatting with the Agent
 - **LangGraph Agent** — Intent recognition, information extraction, multi-turn confirmation, conflict handling
+- **Unified Scheduled Items** — Single table for all time-based items (events, tasks, plans)
 - **Conflict Detection** — Automatic time overlap detection when creating or editing schedules, with interactive resolution flow
 - **Daily Plan Generation** — Automatically arrange pending tasks into available time slots
 - **Reminder System** — APScheduler-based reminders delivered via WeChat
@@ -18,6 +19,7 @@ Users interact via natural language through WeChat to create schedules, manage t
 - **WeChat Binding** — Bind your WeChat account to the web system via binding codes
 - **Redis Cache Layer** — Query caching with write-through invalidation, auto-degradation when Redis is unavailable
 - **Structured Logging** — All service operations logged with user_id for production troubleshooting
+- **Security Defense** — 5-layer security: input sanitization, content filtering, tool call guarding, result sanitization, output sanitization
 
 ## Tech Stack
 
@@ -128,11 +130,11 @@ PersonDate/
 ├── backend/                  # FastAPI backend
 │   ├── app/
 │   │   ├── api/routes/       # REST API endpoints
-│   │   ├── agent/            # LangGraph Agent (graph, nodes, prompts)
-│   │   ├── core/             # Core modules (config, security, redis, cache, cache_invalidator)
+│   │   ├── agent/            # LangGraph Agent (graph, security, tools)
+│   │   ├── core/             # Core modules (config, security, redis, cache)
 │   │   ├── tools/            # Agent tool registry and executor
 │   │   ├── services/         # Business logic services (with structured logging + cache)
-│   │   ├── models/           # SQLAlchemy ORM models
+│   │   ├── models/           # SQLAlchemy ORM models (ScheduledItem, TaskItem, etc.)
 │   │   ├── schemas/          # Pydantic request/response schemas
 │   │   └── workers/          # APScheduler reminder worker
 │   └── alembic/              # Database migrations

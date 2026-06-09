@@ -161,12 +161,29 @@ unknown
 text
 ```
 
-### 4.7 event_status
+### 4.7 scheduled_item_status
 
 ```text
+draft
 active
 completed
 cancelled
+deleted
+```
+
+### 4.7.1 scheduled_item_source
+
+```text
+manual
+agent
+plan
+task
+```
+
+### 4.7.2 event_status
+
+```text
+active
 deleted
 ```
 
@@ -183,7 +200,6 @@ urgent
 
 ```text
 pending
-planned
 in_progress
 completed
 cancelled
@@ -250,10 +266,9 @@ resolved
 ### 4.16 reminder_target_type
 
 ```text
-calendar_event
-task_item
-plan_item
-day_plan
+scheduled_item
+task
+other
 ```
 
 ### 4.17 reminder_status
@@ -609,9 +624,9 @@ failed
 
 ## 7. 日程业务域
 
-## 7.1 calendar_events
+## 7.1 scheduled_items
 
-固定时间日程表。
+统一安排表，替代原 calendar_events 和 plan_items。
 
 ### 字段设计
 
@@ -621,15 +636,14 @@ user_id UUID NOT NULL FK -> users.id
 title VARCHAR(255) NOT NULL
 description TEXT
 start_time TIMESTAMPTZ NOT NULL
-end_time TIMESTAMPTZ
+end_time TIMESTAMPTZ NOT NULL
 timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Shanghai'
 location VARCHAR(255)
-source VARCHAR(32) NOT NULL DEFAULT 'agent'
+source VARCHAR(32) NOT NULL DEFAULT 'manual'
+source_task_id UUID FK -> task_items.id
+remind_before_minutes INTEGER
 status VARCHAR(32) NOT NULL DEFAULT 'active'
-repeat_rule TEXT
-external_calendar_id VARCHAR(255)
-external_event_id VARCHAR(255)
-created_by_channel VARCHAR(32)
+sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ NOT NULL
 updated_at TIMESTAMPTZ NOT NULL
 ```
@@ -638,19 +652,22 @@ updated_at TIMESTAMPTZ NOT NULL
 
 ```text
 INDEX(user_id, start_time)
-INDEX(user_id, end_time)
 INDEX(user_id, status)
 INDEX(source)
-INDEX(external_calendar_id)
-INDEX(external_event_id)
+INDEX(source_task_id)
 ```
 
 ### 约束
 
 ```text
-status IN ('active', 'completed', 'cancelled', 'deleted')
-end_time IS NULL OR end_time > start_time
+status IN ('draft', 'active', 'completed', 'cancelled', 'deleted')
+source IN ('manual', 'agent', 'plan', 'task')
+end_time > start_time
 ```
+
+### 设计说明
+
+scheduled_items 是统一的安排表，用于存储所有已排入时间轴的事项。source 字段标识来源：manual（手动创建）、agent（Agent 创建）、plan（计划生成）、task（任务排期）。
 
 ## 7.2 task_items
 
