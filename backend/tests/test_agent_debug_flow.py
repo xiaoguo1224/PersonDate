@@ -3,8 +3,6 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.models import (
-    AgentPendingState,
-    PendingStateStatus,
     ReminderJob,
     ScheduledItem,
     TaskItem,
@@ -74,12 +72,6 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
     db_session.commit()
 
     task = db_session.scalar(select(TaskItem).where(TaskItem.user_id == owner.id))
-    pending = db_session.scalar(
-        select(AgentPendingState).where(
-            AgentPendingState.user_id == owner.id,
-            AgentPendingState.status == PendingStateStatus.ACTIVE.value,
-        )
-    )
     draft_items = list(
         db_session.scalars(
             select(ScheduledItem).where(
@@ -92,7 +84,6 @@ def test_plan_task_and_confirm(db_session, graph) -> None:
     assert task is not None
     assert task.title == "写论文"
     assert state.pending_state is not None
-    assert pending is not None
     assert len(draft_items) >= 1
 
     confirm_state = graph.invoke(current_user=owner, message="确认", conversation_id="debug")

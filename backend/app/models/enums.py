@@ -137,19 +137,3 @@ class ReminderStatus(StrEnum):
     FIRED = "fired"
     FAILED = "failed"
     CANCELED = "canceled"
-
-
-class PendingStateType(StrEnum):
-    WAITING_PLAN_CONFIRMATION = "waiting_plan_confirmation"
-    WAITING_EVENT_SELECTION = "waiting_event_selection"
-    WAITING_CONFLICT_RESOLUTION = "waiting_conflict_resolution"
-    WAITING_CLARIFICATION = "waiting_clarification"
-    WAITING_REMINDER_TIME = "waiting_reminder_time"
-    WAITING_GENERIC_CONFIRMATION = "waiting_generic_confirmation"
-
-
-class PendingStateStatus(StrEnum):
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    CANCELED = "canceled"
-    COMPLETED = "completed"
