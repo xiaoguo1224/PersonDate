@@ -14,6 +14,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
+from app.agent.security import InputSanitizer, OutputSanitizer, ToolResultSanitizer
 from app.agent.tools import ALL_TOOLS, set_user_id
 from app.core.config import get_settings
 from app.models import User
@@ -131,6 +132,7 @@ def _create_agent_node():
 
 def _create_tool_node():
     tool_node = ToolNode(ALL_TOOLS)
+    sanitizer = ToolResultSanitizer()
 
     def tool_node_with_tracking(state: AgentState) -> dict:
         result = tool_node.invoke(state)
@@ -141,10 +143,16 @@ def _create_tool_node():
             if hasattr(msg, "content"):
                 try:
                     data = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                    sanitized = sanitizer.sanitize_result(
+                        msg.name if hasattr(msg, "name") else "unknown",
+                        data,
+                    )
                     tool_results.append({
                         "tool_name": msg.name if hasattr(msg, "name") else "unknown",
-                        "result": data,
+                        "result": sanitized,
                     })
+                    if isinstance(msg.content, str) and isinstance(sanitized, (dict, list)):
+                        msg.content = json.dumps(sanitized, ensure_ascii=False)
                 except (json.JSONDecodeError, TypeError):
                     pass
 
@@ -221,6 +229,8 @@ class SchedulePlanningGraph:
         self.checkpointer = MemorySaver()
         self.app = build_graph(self.checkpointer)
         self.logs = AgentLogService(db) if db else None
+        self.input_sanitizer = InputSanitizer()
+        self.output_sanitizer = OutputSanitizer()
 
     def invoke(
         self,
@@ -238,6 +248,19 @@ class SchedulePlanningGraph:
         )
         now_local = datetime.now(UTC).astimezone(ZoneInfo(tz_name))
 
+        is_safe, sanitized_message = self.input_sanitizer.sanitize(message)
+        if not is_safe:
+            return {
+                "success": True,
+                "final_response": sanitized_message,
+                "intent": "",
+                "tool_calls": [],
+                "tool_results": [],
+                "pending_state": None,
+                "graph_trace": ["input_blocked"],
+                "error": None,
+            }
+
         set_user_id(current_user.id)
 
         config = {"configurable": {"thread_id": conversation_id}}
@@ -253,7 +276,7 @@ class SchedulePlanningGraph:
         else:
             result = self.app.invoke(
                 {
-                    "messages": [HumanMessage(content=message)],
+                    "messages": [HumanMessage(content=sanitized_message)],
                     "user_id": current_user.id,
                     "conversation_id": conversation_id,
                     "timezone": tz_name,
@@ -278,12 +301,14 @@ class SchedulePlanningGraph:
         if interrupts and not final_response:
             final_response = interrupts[0]
 
+        final_response = self.output_sanitizer.sanitize_output(final_response)
+
         if self.logs:
             self.logs.create_log(
                 user_id=current_user.id,
                 channel=channel,
                 conversation_id=conversation_id,
-                input_text=message,
+                input_text=sanitized_message,
                 intent="",
                 graph_trace=["agent_loop"],
                 tools_called=result.get("tool_calls", []),
