@@ -73,7 +73,9 @@ class DailyNotificationService:
         weather = None
         if city:
             try:
-                weather = self.get_weather(city)
+                from app.services.system_setting_service import SystemSettingService
+                ss = SystemSettingService(self.db)
+                weather = self.get_weather(city, provider=ss.get_value("WEATHER_API_PROVIDER"), api_key=ss.get_value("WEATHER_API_KEY"))
             except Exception:
                 logger.exception("获取天气失败: city=%s", city)
 
@@ -113,7 +115,7 @@ class DailyNotificationService:
             logger.info("推送成功 user_id=%s conversation_id=%s", user.id, identity.conversation_id)
         return log.status == "sent"
 
-    def get_weather(self, city: str) -> dict[str, Any]:
+    def get_weather(self, city: str, provider: str | None = None, api_key: str | None = None) -> dict[str, Any]:
         """获取城市天气，带 1 小时 Redis 缓存。"""
         cache_key = _weather_cache_key(city)
         cached = cache_get(cache_key)
@@ -121,7 +123,7 @@ class DailyNotificationService:
             logger.debug("天气缓存命中 city=%s", city)
             return cached
         logger.debug("天气缓存未命中，调用 API city=%s", city)
-        data = self._fetch_weather_from_api(city)
+        data = self._fetch_weather_from_api(city, provider=provider, api_key=api_key)
         cache_set(cache_key, data, 3600)
         return data
 
@@ -234,18 +236,24 @@ class DailyNotificationService:
             })
         return results
 
-    def _fetch_weather_from_api(self, city: str) -> dict[str, Any]:
-        settings = get_settings()
-        api_key = settings.weather_api_key
+    def _fetch_weather_from_api(self, city: str, provider=None, api_key=None) -> dict[str, Any]:
+        # Use provided config or fall back to settings
+        if api_key is None or provider is None:
+            sys_settings = get_settings()
+            api_key = api_key or sys_settings.weather_api_key
+            provider = provider or sys_settings.weather_api_provider
+        api_key = api_key or ""
         if not api_key:
             logger.warning("天气 API Key 未配置")
             return {"desc": "未知", "temp": "?", "icon": "\U0001f324"}
 
-        provider = settings.weather_api_provider or "qweather"
+        provider = provider or "qweather"
         if provider == "qweather":
             return self._fetch_qweather(city, api_key)
         elif provider == "openweathermap":
             return self._fetch_openweathermap(city, api_key)
+        elif provider == "amap":
+            return self._fetch_amap(city, api_key)
         else:
             return {"desc": "未知", "temp": "?", "icon": "\U0001f324"}
 
@@ -314,3 +322,43 @@ class DailyNotificationService:
             "50d": "\U0001f32b", "50n": "\U0001f32b",
         }
         return mapping.get(icon, "\U0001f324")
+
+    def _fetch_amap(self, city: str, api_key: str) -> dict[str, Any]:
+        with httpx.Client(timeout=10) as client:
+            geo = client.get(
+                "https://restapi.amap.com/v3/geocode/geo",
+                params={"key": api_key, "address": city},
+            )
+            geo.raise_for_status()
+            geo_data = geo.json()
+            if geo_data.get("status") != "1" or not geo_data.get("geocodes"):
+                raise RuntimeError(f"找不到城市: {city}")
+            location = geo_data["geocodes"][0].get("city", city)
+
+            weather = client.get(
+                "https://restapi.amap.com/v3/weather/weatherInfo",
+                params={"key": api_key, "city": location, "extensions": "base"},
+            )
+            weather.raise_for_status()
+            wdata = weather.json()
+            if wdata.get("status") != "1":
+                raise RuntimeError(f"天气查询失败: {wdata}")
+
+            live = wdata.get("lives", [{}])[0]
+            return {
+                "desc": live.get("weather", "未知"),
+                "temp": live.get("temperature", "?"),
+                "icon": self._amap_icon_to_emoji(live.get("weather", "")),
+            }
+
+    @staticmethod
+    def _amap_icon_to_emoji(weather: str) -> str:
+        mapping = {
+            "晴": "☀️", "多云": "⛅", "阴": "☁️",
+            "小雨": "🌧", "中雨": "🌧", "大雨": "🌧",
+            "雷阵雨": "⛈", "雾": "🌫", "霾": "🌫",
+        }
+        for key, emoji in mapping.items():
+            if key in weather:
+                return emoji
+        return "🌤"
