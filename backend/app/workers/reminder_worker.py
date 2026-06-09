@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ReminderJob, ReminderStatus
+from app.services.channel_identity_service import ChannelIdentityService
 from app.services.wechat_channel_service import WechatChannelService
 
 
@@ -13,6 +14,7 @@ class ReminderWorker:
     def __init__(self, db: Session, sender: object | None = None) -> None:
         self.db = db
         self.wechat = WechatChannelService(db, sender=sender)
+        self.channel_identities = ChannelIdentityService(db)
 
     def run_once(self, now: datetime | None = None) -> list[ReminderJob]:
         current_time = now or datetime.now(UTC)
@@ -22,8 +24,10 @@ class ReminderWorker:
         )
         jobs = list(self.db.scalars(stmt.order_by(ReminderJob.trigger_time.asc())))
         for job in jobs:
+            # 发送时通过 user_id 实时查询当前活跃的 conversation_id
+            conversation_id = self.channel_identities.get_conversation_id(job.user_id)
             log = self.wechat.send_text(
-                conversation_id=job.conversation_id,
+                conversation_id=conversation_id,
                 content=f"提醒：{job.title}即将开始。",
                 user_id=job.user_id,
             )

@@ -8,7 +8,6 @@ from app.core.cache import cache_get, cache_set
 from app.core.cache_invalidator import invalidate_user_reminders
 from app.models import ReminderJob, ReminderStatus
 from app.models.enums import ReminderTargetType
-from app.services.channel_identity_service import ChannelIdentityService
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,6 @@ _REMINDERS_TTL = 600  # 10 分钟
 class ReminderService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.channel_identities = ChannelIdentityService(db)
 
     def create_for_target(
         self,
@@ -28,14 +26,12 @@ class ReminderService:
         target_id: str,
         title: str,
         trigger_time: datetime,
-        conversation_id: str | None = None,
     ) -> ReminderJob:
         job = ReminderJob(
             user_id=user_id,
             target_type=target_type,
             target_id=target_id,
             title=title,
-            conversation_id=conversation_id or self.channel_identities.get_conversation_id(user_id),
             trigger_time=trigger_time,
             status=ReminderStatus.PENDING.value,
         )
@@ -52,7 +48,6 @@ class ReminderService:
         title: str,
         trigger_time: datetime,
         remind_before_minutes: int,
-        conversation_id: str | None = None,
     ) -> ReminderJob:
         actual_trigger = trigger_time - timedelta(minutes=remind_before_minutes)
         reminder = ReminderJob(
@@ -61,7 +56,6 @@ class ReminderService:
             target_id=scheduled_item_id,
             title=title,
             trigger_time=actual_trigger,
-            conversation_id=conversation_id or self.channel_identities.get_conversation_id(user_id),
             status=ReminderStatus.PENDING.value,
         )
         self.db.add(reminder)

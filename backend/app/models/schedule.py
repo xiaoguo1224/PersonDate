@@ -99,7 +99,7 @@ class ReminderJob(UUIDMixin, TimestampMixin, Base):
     )
     target_id: Mapped[str] = mapped_column(String(36), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    conversation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     trigger_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ReminderStatus.PENDING.value

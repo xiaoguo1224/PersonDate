@@ -9,7 +9,6 @@ from langchain_core.tools import tool
 from app.db.session import SessionLocal
 from app.models import TaskItem, User, UserSettings
 from app.models.enums import ReminderTargetType, ScheduledItemStatus
-from app.services.channel_identity_service import ChannelIdentityService
 from app.services.conflict_service import ConflictService
 from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
@@ -105,14 +104,12 @@ def create_scheduled_item(
             source="agent",
         )
         trigger_time = start - timedelta(minutes=remind_before_minutes)
-        real_conversation_id = ChannelIdentityService(db).get_conversation_id(user_id)
         ReminderService(db).create_for_target(
             user_id=user_id,
             target_type=ReminderTargetType.SCHEDULED_ITEM.value,
             target_id=item.id,
             title=item.title,
             trigger_time=trigger_time,
-            conversation_id=real_conversation_id,
         )
         conflicts = ConflictService(db).detect_item_conflicts(user_id, item)
         db.commit()
@@ -611,14 +608,12 @@ def create_reminder(
     user_id = _get_user_id()
     db = SessionLocal()
     try:
-        real_conversation_id = ChannelIdentityService(db).get_conversation_id(user_id)
         job = ReminderService(db).create_for_target(
             user_id=user_id,
             target_type=target_type,
             target_id=target_id,
             title=title,
             trigger_time=datetime.fromisoformat(trigger_time),
-            conversation_id=real_conversation_id,
         )
         db.commit()
         return {"success": True, "data": {"id": job.id}, "message": "提醒已创建"}

@@ -814,7 +814,7 @@ user_id UUID NOT NULL FK -> users.id
 target_type VARCHAR(64) NOT NULL
 target_id UUID NOT NULL
 title VARCHAR(255) NOT NULL
-conversation_id VARCHAR(255) NOT NULL
+conversation_id VARCHAR(255)           -- 可空，发送时通过 user_id 实时查询
 trigger_time TIMESTAMPTZ NOT NULL
 status VARCHAR(32) NOT NULL DEFAULT 'pending'
 retry_count INTEGER NOT NULL DEFAULT 0
