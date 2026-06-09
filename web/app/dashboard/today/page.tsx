@@ -21,6 +21,8 @@ import dayjs, { type Dayjs } from "dayjs";
 import gsap from "gsap";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
@@ -489,7 +491,13 @@ function TodayPageView({
                             .filter(Boolean)
                             .join(" ")}
                         >
-                          <div className="agent-chat-bubble__content">{messageItem.content}</div>
+                          <div className="agent-chat-bubble__content">
+                            {isUser ? (
+                              messageItem.content
+                            ) : (
+                              <Markdown remarkPlugins={[remarkGfm]}>{messageItem.content}</Markdown>
+                            )}
+                          </div>
                           {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
                           <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
                         </div>
@@ -871,22 +879,19 @@ export default function TodayPage() {
       return;
     }
     setAgentSubmitting(true);
+    setAgentMessage("");
     const userMessage: ChatMessage = {
       id: createChatId(),
       role: "user",
       content,
       timestamp: getChatTimeLabel(),
     };
-    setAgentMessages((prev) => [
-      ...prev,
-      userMessage,
-      { id: createChatId(), role: "assistant", content: "正在思考...", pending: true, timestamp: getChatTimeLabel() },
-    ]);
+    setAgentMessages((prev) => [...prev, userMessage]);
 
     try {
       const result = await sendAgentMessage(accessToken, content);
       setAgentMessages((prev) => {
-        const next = prev.filter((messageItem) => !messageItem.pending);
+        const next = [...prev];
         next.push({
           id: createChatId(),
           role: "assistant",
@@ -907,7 +912,6 @@ export default function TodayPage() {
       } else {
         message.warning(result.final_response || "Agent 返回了待处理结果");
       }
-      setAgentMessage("");
       refreshData();
     } catch (caughtError: unknown) {
       const errorMessage = caughtError instanceof Error ? caughtError.message : "发送失败";
