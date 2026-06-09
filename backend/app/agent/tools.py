@@ -122,7 +122,7 @@ def query_scheduled_items(
         start_date: 开始日期，格式 YYYY-MM-DD
         end_date: 结束日期，格式 YYYY-MM-DD
         keyword: 搜索关键词
-        on_date: 指定日期，格式 YYYY-MM-DD
+        on_date: 指定日期，格式 YYYY-MM-DD（查询某一天的安排）
     """
     user_id = _get_user_id()
     db = SessionLocal()
@@ -136,6 +136,8 @@ def query_scheduled_items(
             start = datetime.combine(date.fromisoformat(start_date), datetime.min.time())
             end = datetime.combine(date.fromisoformat(end_date), datetime.max.time())
             items = service.list_by_date_range(user_id, start_time=start, end_time=end)
+        elif on_date:
+            items = service.list_by_date(user_id, date.fromisoformat(on_date))
         else:
             items = []
 
