@@ -716,9 +716,7 @@ POST /api/agent/debug/message
   "success": true,
   "data": {
     "final_response": "我建议明天 09:00-11:00 写论文，是否确认？",
-    "intent": "create_task",
-    "tools_called": [],
-    "pending_state": {}
+    "tools_called": ["create_task", "find_free_slots", "plan_tasks_into_day"]
   }
 }
 ```
@@ -748,9 +746,7 @@ POST /api/me/agent/message
   "success": true,
   "data": {
     "final_response": "我建议明天 09:00-11:00 写论文，是否确认？",
-    "intent": "create_task",
-    "tools_called": [],
-    "pending_state": {}
+    "tools_called": []
   }
 }
 ```
@@ -847,7 +843,6 @@ WECHAT_BIND_CODE_INVALID
 RESOURCE_NOT_FOUND
 RESOURCE_FORBIDDEN
 AGENT_PARSE_FAILED
-AGENT_PENDING_STATE_NOT_FOUND
 SCHEDULE_CONFLICT
 REMINDER_SEND_FAILED
 VALIDATION_ERROR

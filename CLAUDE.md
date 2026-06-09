@@ -11,7 +11,7 @@
 | 组件 | 技术栈 | 适用范围 |
 | ---- | ------ | -------- |
 | 后端服务 | Python 3.11+ + FastAPI + SQLAlchemy 2.0 + Alembic | 全局核心服务 |
-| Agent 状态流 | LangGraph + OpenAI-compatible SDK + Pydantic v2 | 日程识别、规划、确认、冲突处理 |
+| Agent 状态流 | LangGraph ReAct Agent + langchain_openai.ChatOpenAI | 日程识别、规划、确认、冲突处理 |
 | 数据库 | PostgreSQL | 用户、日程、任务、计划、日志、提醒 |
 | 缓存 | Redis 7+ | 查询缓存、天气缓存、Agent 状态缓存 |
 | 提醒调度 | APScheduler | reminder_job 到点触发 |
@@ -51,13 +51,13 @@ docs/02-architecture-design.md
 系统架构设计，包括 FastAPI 后端、LangGraph Agent、openclaw-weixin 微信通道、Reminder Worker、Web Dashboard 的边界和调用关系。
 
 docs/03-database-design.md
-数据库设计，包括用户、邀请码、微信绑定、日程、任务、每日计划、冲突、提醒、Agent 日志、pending state 等表结构。
+数据库设计，包括用户、邀请码、微信绑定、日程、任务、每日计划、冲突、提醒、Agent 日志等表结构。
 
 docs/04-api-design.md
 后端 REST API 设计，包括认证、邀请码、用户、微信绑定、日程、任务、计划、冲突、提醒、Agent 调试、系统设置等接口。
 
 docs/05-agent-langgraph-design.md
-Agent 与 LangGraph 设计，包括 AgentState、节点、工具、Prompt、pending state、多轮确认、冲突处理等规则。
+Agent 与 LangGraph 设计，包括 AgentState、ReAct 循环、工具、Prompt、interrupt 确认、冲突处理等规则。
 
 docs/06-wechat-channel-design.md
 微信通道接入设计，明确 openclaw-weixin 只作为消息通道，WeChat Channel Adapter 负责消息标准化、绑定、入站和出站。
@@ -210,9 +210,9 @@ WeChat Channel Adapter
   ↓
 FastAPI Schedule Agent Service
   ↓
-LangGraph SchedulePlanningGraph
+LangGraph SchedulePlanningGraph (ReAct: agent ↔ tools)
   ↓
-Tool Executor
+LangChain @tool + ToolNode
   ↓
 Business Services
   ↓
@@ -249,8 +249,8 @@ PostgreSQL
 - LLM 只负责自然语言理解、信息抽取和回复生成。
 - 冲突检测必须由程序确定性算法完成。
 - 提醒发送不经过 LLM。
-- Agent 不允许直接写数据库，必须通过 Tool Executor 调用业务服务。
-- Tool Executor 不允许信任模型输出的 `user_id`。
+- Agent 不允许直接写数据库，必须通过 @tool 装饰器的工具函数调用业务服务。
+- 工具函数内部使用 `set_user_id()` 注入用户身份，不允许信任模型输出的 `user_id`。
 - `user_id` 必须由系统上下文注入。
 
 ## 目录结构限制
@@ -278,16 +278,8 @@ backend/
 
     agent/
       graph.py
-      state.py
-      llm_client.py
-      schemas.py
-      security.py
-      parsing.py
       tools.py
-
-    tools/
-      registry.py
-      executor.py
+      security.py
 
     services/
       auth_service.py
@@ -410,7 +402,6 @@ task_items
 schedule_conflicts
 reminder_jobs
 agent_run_logs
-agent_pending_states
 channel_message_logs
 ```
 
@@ -427,34 +418,24 @@ channel_message_logs
 
 ### LangGraph 使用边界
 
-允许使用 LangGraph 管理：
+当前架构使用 LangGraph ReAct 循环，包含 3 个节点：
 
 ```text
-load_context
-check_pending_state
-classify_intent
-extract_info
-route_intent
-handle_create_event
-handle_query_events
-handle_create_task
-handle_plan_day
-handle_update_event
-handle_delete_event
-handle_confirm
-detect_conflicts
-generate_response
-save_agent_log
+agent: ReAct 循环核心，LLM 自主判断意图并调用工具
+tools: LangGraph ToolNode，执行 @tool 装饰器定义的工具函数
+human: interrupt 确认节点，暂停等待用户输入后恢复执行
 ```
 
-禁止将以下逻辑交给 LangGraph 或 LLM 直接处理：
+工具函数定义在 `backend/app/agent/tools.py`，使用 LangChain `@tool` 装饰器，共 18 个工具。
+
+禁止将以下逻辑交给 LLM 直接处理：
 
 ```text
-数据库 CRUD
-权限校验
-微信消息发送
-精确冲突算法
-用户身份识别
+数据库 CRUD（由工具函数完成）
+权限校验（由系统上下文注入）
+微信消息发送（由 WeChat Channel Adapter 完成）
+精确冲突算法（由 ConflictService 完成）
+用户身份识别（由 set_user_id() 注入）
 密码、邀请码、系统设置
 ```
 
@@ -486,41 +467,28 @@ Agent 必须实现 5 层安全防御：
 
 ### AgentState 要求
 
-AgentState 必须至少包含：
+AgentState 定义在 `backend/app/agent/graph.py`，使用 LangGraph `TypedDict`：
 
 ```text
-user_id
-conversation_id
-channel
-input_text
-current_time
-timezone
-user_settings
-pending_state
-intent
-extracted
-candidate_events
-events
-tasks
-free_slots
-conflicts
-draft_plan
-tool_calls
-tool_results
-final_response
-success
-error
+messages: Annotated[list, add_messages]  # 消息列表（LangGraph 核心）
+user_id: str
+conversation_id: str
+timezone: str
+current_time: str
+user_settings: dict | None
+tool_calls: list[dict]   # 工具调用记录
+tool_results: list[dict] # 工具执行结果
+needs_confirmation: bool  # 是否需要用户确认
+confirmation_prompt: str  # 确认提示内容
+confirmed_action: str | None  # 用户确认动作
 ```
 
-### Tool Executor 要求
+### 工具系统要求
 
-- 所有工具必须注册到 ToolRegistry。
-- 所有工具参数必须使用 Pydantic Schema 校验。
-- 所有工具结果必须返回统一 ToolResult。
-- ToolExecutor 自动注入 `user_id`。
-- ToolExecutor 自动注入 `conversation_id`。
-- ToolExecutor 不允许接受模型传入的 `user_id`。
-- 工具调用必须记录到 `agent_run_logs`。
+- 所有工具使用 LangChain `@tool` 装饰器定义在 `backend/app/agent/tools.py`。
+- 工具函数使用 `set_user_id()` 从上下文注入 `user_id`，不允许接受模型传入的 `user_id`。
+- 工具函数内部创建 `SessionLocal()` 数据库会话，不依赖外部注入。
+- 工具调用记录通过 `AgentLogService` 写入 `agent_run_logs`。
 
 ### 工具列表
 
@@ -562,7 +530,7 @@ ask_user_clarification
 - 存在冲突时必须询问用户。
 - 多候选时必须让用户选择。
 - 信息不足时必须追问。
-- 用户回复“确认”“取消”“1”“2”“3”时，必须优先检查 pending_state。
+- 用户回复”确认””取消””1””2””3”时，由 LangGraph interrupt 机制自动恢复执行。
 - Reminder 不经过 Agent，不调用 LLM。
 
 ## 微信通道规范
@@ -901,9 +869,9 @@ RBAC 权限
 计划确认
 冲突检测
 Reminder Worker
-ToolExecutor
 SchedulePlanningGraph
-pending_state
+LangGraph ReAct 循环
+interrupt 确认机制
 ```
 
 ### Agent 测试用例
@@ -1038,8 +1006,8 @@ git push --force
 5. 日程 / 任务 / 计划 / 提醒业务服务
 6. 冲突检测
 7. Reminder Worker
-8. ToolExecutor
-9. LLMClient
+8. LangChain @tool 工具函数
+9. LangGraph ReAct Agent
 10. SchedulePlanningGraph 基础版
 11. Agent 支持任务和计划
 12. Agent 支持冲突处理
@@ -1064,9 +1032,9 @@ Agent 先行，消息通道后置。
 ```text
 Debug API 输入自然语言
   ↓
-SchedulePlanningGraph 识别日程
+SchedulePlanningGraph ReAct 循环
   ↓
-ToolExecutor 执行业务工具
+@tool 工具函数执行业务逻辑
   ↓
 数据库写入 / 查询 / 修改 / 删除
   ↓
@@ -1089,8 +1057,8 @@ FastAPI 后端内部按模块拆分，但物理上保持单体服务：
 
 ```text
 API Server
-SchedulePlanningGraph
-ToolExecutor
+SchedulePlanningGraph (ReAct Agent)
+LangChain @tool 工具函数
 Business Services
 Reminder Worker
 ```
@@ -1110,8 +1078,8 @@ Agent 和业务服务复用方便
 新增功能时必须遵守：
 
 ```text
-Agent 节点负责流程判断
-ToolExecutor 负责工具调用
+Agent 节点负责流程判断（ReAct 循环）
+@tool 工具函数负责工具调用
 Service 负责业务逻辑
 Model 负责数据映射
 Schema 负责输入输出校验

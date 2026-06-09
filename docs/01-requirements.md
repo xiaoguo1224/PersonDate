@@ -353,8 +353,7 @@ member 注册流程：
 3. 查询明天已有日程。
 4. 查找可用空闲时间。
 5. 生成安排草案。
-6. 保存 `agent_pending_state`。
-7. 通过微信请求用户确认。
+6. 生成安排草案并通过微信请求用户确认（使用 LangGraph interrupt 机制）。
 
 回复示例：
 
@@ -690,7 +689,7 @@ Agent 日志页
 
 ```text
 后端：FastAPI + Python 3.11+
-Agent：LangGraph + OpenAI-compatible SDK
+Agent：LangGraph ReAct Agent + langchain_openai.ChatOpenAI
 数据库：PostgreSQL
 ORM：SQLAlchemy 2.0
 迁移：Alembic
@@ -707,7 +706,7 @@ Schema：Pydantic v2
 
 ### 阶段一：Agent 能力闭环
 
-通过 Debug API 验证 Agent 能识别日程并完成创建、查询、修改、删除、任务规划、冲突检测和 pending state。
+通过 Debug API 验证 Agent 能识别日程并完成创建、查询、修改、删除、任务规划、冲突检测和用户确认。
 
 ### 阶段二：Web Dashboard
 

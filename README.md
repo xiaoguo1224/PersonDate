@@ -130,9 +130,8 @@ PersonDate/
 ├── backend/                  # FastAPI backend
 │   ├── app/
 │   │   ├── api/routes/       # REST API endpoints
-│   │   ├── agent/            # LangGraph Agent (graph, security, tools)
+│   │   ├── agent/            # LangGraph ReAct Agent (graph, tools, security)
 │   │   ├── core/             # Core modules (config, security, redis, cache)
-│   │   ├── tools/            # Agent tool registry and executor
 │   │   ├── services/         # Business logic services (with structured logging + cache)
 │   │   ├── models/           # SQLAlchemy ORM models (ScheduledItem, TaskItem, etc.)
 │   │   ├── schemas/          # Pydantic request/response schemas

@@ -29,8 +29,7 @@ LangGraph SchedulePlanningGraph
 5. 支持固定日程、弹性任务、每日计划。
 6. 支持日程冲突检测和冲突记录。
 7. 支持到点提醒和提醒重试。
-8. 支持 Agent 多轮对话 pending state。
-9. 支持 Agent 执行日志和工具调用记录。
+8. 支持 Agent 执行日志和工具调用记录。
 10. 支持 Web Dashboard 查询展示。
 11. 预留外部日历同步扩展。
 
@@ -60,7 +59,6 @@ LangGraph SchedulePlanningGraph
 
 Agent 域：
 - agent_run_logs
-- agent_pending_states
 
 系统配置域：
 - system_settings
@@ -280,16 +278,9 @@ cancelled
 failed
 ```
 
-### 4.18 pending_state_type
+### 4.18 pending_state_type（已废弃）
 
-```text
-waiting_plan_confirmation
-waiting_event_selection
-waiting_conflict_resolution
-waiting_missing_info
-waiting_delete_confirmation
-waiting_update_confirmation
-```
+此枚举已废弃。当前架构使用 LangGraph `interrupt()` 机制实现用户确认，不再使用数据库持久化 pending state。
 
 ## 5. 用户与权限域
 
@@ -869,32 +860,9 @@ GIN(graph_trace)
 GIN(tools_called)
 ```
 
-## 8.2 agent_pending_states
+## 8.2 agent_pending_states（已废弃）
 
-Agent 连续对话状态表。
-
-### 字段设计
-
-```text
-id UUID PK
-user_id UUID NOT NULL FK -> users.id
-conversation_id VARCHAR(255) NOT NULL
-state_type VARCHAR(64) NOT NULL
-state_payload JSONB NOT NULL
-expires_at TIMESTAMPTZ NOT NULL
-status VARCHAR(32) NOT NULL DEFAULT 'active'
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-### 索引
-
-```text
-INDEX(user_id, conversation_id, status)
-INDEX(expires_at)
-GIN(state_payload)
-UNIQUE(user_id, conversation_id) WHERE status = 'active'
-```
+此表已废弃。当前架构使用 LangGraph `interrupt()` 机制实现用户确认，待确认状态由图运行时管理，无需数据库持久化。
 
 ## 9. 系统配置域
 
@@ -949,8 +917,7 @@ users
   │     └── plan_items
   ├── schedule_conflicts
   ├── reminder_jobs
-  ├── agent_run_logs
-  └── agent_pending_states
+  └── agent_run_logs
 ```
 
 ## 11. 数据隔离规则
@@ -967,7 +934,6 @@ plan_items
 schedule_conflicts
 reminder_jobs
 agent_run_logs
-agent_pending_states
 wechat_accounts
 wechat_login_sessions
 channel_message_logs
@@ -1032,7 +998,7 @@ UUID 主键
 +
 TIMESTAMPTZ 时间
 +
-JSONB 保存 Agent trace / tool results / pending state
+JSONB 保存 Agent trace / tool results
 ```
 
 ## 15. 性能索引
