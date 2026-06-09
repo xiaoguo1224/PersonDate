@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "0010_reminder_conversation_id_nullable"
-down_revision: str = "0009_scheduled_items_unification"
+down_revision: str = "559ee28570f6"
 branch_labels: str | None = None
 depends_on: str | None = None
 
