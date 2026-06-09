@@ -19,7 +19,7 @@ def run_agent_message(
     channel: str,
 ) -> DebugMessageResponse:
     graph = SchedulePlanningGraph(db)
-    state = graph.invoke(
+    result = graph.invoke(
         current_user=current_user,
         message=message,
         conversation_id=conversation_id,
@@ -27,14 +27,14 @@ def run_agent_message(
     )
     db.commit()
     return DebugMessageResponse(
-        success=state.success,
-        final_response=state.final_response,
-        intent=state.intent,
-        tool_calls=state.tool_calls,
-        tool_results=state.tool_results,
-        pending_state=state.pending_state,
-        graph_trace=state.graph_trace,
-        error=state.error,
+        success=result.get("success", True),
+        final_response=result.get("final_response", ""),
+        intent=result.get("intent", ""),
+        tool_calls=result.get("tool_calls", []),
+        tool_results=result.get("tool_results", []),
+        pending_state=result.get("pending_state"),
+        graph_trace=result.get("graph_trace", []),
+        error=result.get("error"),
     )
 
 

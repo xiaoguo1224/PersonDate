@@ -139,19 +139,20 @@ class WechatChannelAdapter:
 
         inbound_log.user_id = user.id
         graph = self.graph_cls(self.db)
-        state = graph.invoke(
+        result = graph.invoke(
             current_user=user,
             message=content,
             conversation_id=payload.conversation_id,
             channel="wechat",
         )
-        inbound_log.status = "processed" if state.success else "failed"
-        inbound_log.error_message = state.error
+        inbound_log.status = "processed" if result.get("success") else "failed"
+        inbound_log.error_message = result.get("error")
         self.db.commit()
+        final_response = result.get("final_response", "")
         return WechatInboundHandlingResult(
             response=WechatInboundResponse(
                 handled=True,
-                reply=state.final_response or "处理完成。",
+                reply=final_response or "处理完成。",
             ),
-            message=state.final_response or "处理完成",
+            message=final_response or "处理完成",
         )
