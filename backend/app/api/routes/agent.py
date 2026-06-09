@@ -32,7 +32,7 @@ def run_agent_message(
         intent=result.get("intent", ""),
         tool_calls=result.get("tool_calls", []),
         tool_results=result.get("tool_results", []),
-        pending_state=result.get("pending_state"),
+
         graph_trace=result.get("graph_trace", []),
         error=result.get("error"),
     )

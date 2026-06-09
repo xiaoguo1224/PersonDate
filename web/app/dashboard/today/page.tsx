@@ -899,7 +899,7 @@ export default function TodayPage() {
           meta:
             [
               result.intent ? `intent: ${result.intent}` : null,
-              result.pending_state ? "当前处于待处理状态" : null,
+              null,
             ]
               .filter(Boolean)
               .join(" · ") || null,

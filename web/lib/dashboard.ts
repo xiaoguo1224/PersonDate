@@ -327,7 +327,7 @@ export type AgentMessageResponse = {
   intent?: string | null;
   tool_calls: Array<Record<string, unknown>>;
   tool_results: Array<Record<string, unknown>>;
-  pending_state?: Record<string, unknown> | null;
+
   graph_trace: string[];
   error?: string | null;
 };

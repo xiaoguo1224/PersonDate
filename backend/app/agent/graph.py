@@ -18,7 +18,6 @@ from app.agent.security import InputSanitizer, OutputSanitizer, ToolCallGuard, T
 from app.agent.tools import ALL_TOOLS, set_user_id
 from app.core.config import get_settings
 from app.models import User
-from app.models.enums import PendingStateStatus, PendingStateType
 from app.services.agent_log_service import AgentLogService
 
 # 模块级 checkpointer，所有请求共享，确保 interrupt 状态跨请求持久化
@@ -450,28 +449,13 @@ class SchedulePlanningGraph:
                 success=True,
             )
 
-        # 从 graph 状态中提取 pending_state
-        pending_state = None
-        if result.get("needs_confirmation"):
-            pending_state = {
-                "type": PendingStateType.WAITING_GENERIC_CONFIRMATION.value,
-                "confirmation_prompt": result.get("confirmation_prompt", ""),
-                "status": PendingStateStatus.ACTIVE.value,
-            }
-        elif interrupts:
-            pending_state = {
-                "type": PendingStateType.WAITING_GENERIC_CONFIRMATION.value,
-                "confirmation_prompt": result.get("confirmation_prompt", ""),
-                "status": PendingStateStatus.ACTIVE.value,
-            }
-
         return {
             "success": True,
             "final_response": final_response,
             "intent": "",
             "tool_calls": result.get("tool_calls", []),
             "tool_results": result.get("tool_results", []),
-            "pending_state": pending_state,
+            "pending_state": None,
             "graph_trace": ["agent_loop"],
             "error": None,
         }
