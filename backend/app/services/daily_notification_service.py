@@ -202,7 +202,7 @@ class DailyNotificationService:
         results = []
         for item in self.db.scalars(stmt):
             results.append({
-                "time": item.start_time.strftime("%H:%M"),
+                "time": item.start_time.astimezone(local_tz).strftime("%H:%M"),
                 "title": item.title,
                 "location": item.location or "",
             })
