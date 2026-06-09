@@ -19,6 +19,8 @@ INJECTION_KEYWORDS = [
     "reveal your instructions",
 ]
 
+_INJECTION_KEYWORDS_LOWER = [kw.lower() for kw in INJECTION_KEYWORDS]
+
 INJECTION_PATTERNS = [
     re.compile(
         r"(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|above|prior)\s+(instructions?|rules?|prompts?)"
@@ -53,8 +55,8 @@ class InputSanitizer:
             return False, INPUT_TOO_LONG_MESSAGE
 
         lower = text.lower()
-        for keyword in INJECTION_KEYWORDS:
-            if keyword.lower() in lower:
+        for keyword in _INJECTION_KEYWORDS_LOWER:
+            if keyword in lower:
                 return False, INJECTION_BLOCKED_MESSAGE
 
         for pattern in INJECTION_PATTERNS:
@@ -81,7 +83,7 @@ WRITE_TOOLS = {
 
 
 class ContentFilter:
-    def filter_write_args(self, tool_name: str, args: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    def filter_write_args(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
         cleaned = dict(args)
         for field in WRITE_TEXT_FIELDS:
             value = cleaned.get(field)
@@ -92,8 +94,8 @@ class ContentFilter:
                 cleaned[field] = value[:2000]
 
             lower = value.lower()
-            for keyword in INJECTION_KEYWORDS:
-                if keyword.lower() in lower:
+            for keyword in _INJECTION_KEYWORDS_LOWER:
+                if keyword in lower:
                     cleaned[field] = FILTERED_PLACEHOLDER
                     break
             else:
@@ -102,7 +104,7 @@ class ContentFilter:
                         cleaned[field] = FILTERED_PLACEHOLDER
                         break
 
-        return True, cleaned
+        return cleaned
 
 
 class ToolCallGuard:
@@ -121,8 +123,7 @@ class ToolCallGuard:
 
     def filter_args(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
         if tool_name in WRITE_TOOLS:
-            _, cleaned = self._content_filter.filter_write_args(tool_name, args)
-            return cleaned
+            return self._content_filter.filter_write_args(tool_name, args)
         return args
 
 
@@ -175,10 +176,8 @@ class OutputSanitizer:
         if not text:
             return text
 
-        clean = text.replace("[NEED_CONFIRM]", "").strip()
-
         for indicator in PROMPT_LEAK_INDICATORS:
-            if indicator in clean:
+            if indicator in text:
                 return LEAK_REPLACEMENT_MESSAGE
 
-        return clean
+        return text
