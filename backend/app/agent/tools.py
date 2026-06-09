@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from langchain_core.tools import tool
 
 from app.db.session import SessionLocal
-from app.models import TaskItem
+from app.models import TaskItem, User, UserSettings
 from app.models.enums import ReminderTargetType, ScheduledItemStatus
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.conflict_service import ConflictService
@@ -16,15 +16,27 @@ from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
 
 _user_id: str = ""
+_user_settings: UserSettings | None = None
 
 
-def set_user_id(user_id: str) -> None:
-    global _user_id
+def set_user_id(user_id: str, db=None) -> None:
+    global _user_id, _user_settings
     _user_id = user_id
+    if db:
+        user = db.query(User).filter(User.id == user_id).first()
+        _user_settings = user.settings if user else None
+    else:
+        _user_settings = None
 
 
 def _get_user_id() -> str:
     return _user_id
+
+
+def _get_default_remind_minutes() -> int:
+    if _user_settings and _user_settings.default_remind_before_minutes:
+        return _user_settings.default_remind_before_minutes
+    return 0
 
 
 def _item_to_dict(item: object) -> dict[str, Any]:
@@ -69,7 +81,7 @@ def create_scheduled_item(
         start_time: 开始时间，ISO 8601 格式（如 2026-06-10T15:00:00+08:00）
         end_time: 结束时间，可选，默认开始后1小时
         location: 地点，可选
-        remind_before_minutes: 提前提醒分钟数，默认0
+        remind_before_minutes: 提前提醒分钟数，默认0表示使用用户设置的默认值
         timezone: 时区，默认 Asia/Shanghai
     """
     user_id = _get_user_id()
@@ -79,6 +91,9 @@ def create_scheduled_item(
         start = datetime.fromisoformat(start_time)
         end = datetime.fromisoformat(end_time) if end_time else start + timedelta(hours=1)
 
+        # 当 remind_before_minutes 为 0 时，使用用户的默认设置
+        actual_remind_minutes = remind_before_minutes if remind_before_minutes > 0 else _get_default_remind_minutes()
+
         item = service.create(
             user_id=user_id,
             title=title,
@@ -86,7 +101,7 @@ def create_scheduled_item(
             end_time=end,
             timezone=timezone,
             location=location,
-            remind_before_minutes=remind_before_minutes,
+            remind_before_minutes=actual_remind_minutes,
             source="agent",
         )
         trigger_time = start - timedelta(minutes=remind_before_minutes)
@@ -99,9 +114,18 @@ def create_scheduled_item(
             trigger_time=trigger_time,
             conversation_id=real_conversation_id,
         )
-        ConflictService(db).detect_item_conflicts(user_id, item)
+        conflicts = ConflictService(db).detect_item_conflicts(user_id, item)
         db.commit()
-        return {"success": True, "data": _item_to_dict(item), "message": "安排已创建"}
+        conflict_info = []
+        if conflicts:
+            conflict_info = [
+                {"id": c.id, "title": c.title, "status": c.status}
+                for c in conflicts
+            ]
+        msg = "安排已创建"
+        if conflict_info:
+            msg += f"，检测到 {len(conflict_info)} 个冲突"
+        return {"success": True, "data": _item_to_dict(item), "conflicts": conflict_info, "message": msg}
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}
