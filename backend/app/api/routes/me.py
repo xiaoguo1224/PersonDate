@@ -20,6 +20,7 @@ def _to_settings_response(settings: Any) -> UserSettingsResponse:
         daily_plan_push_time=settings.daily_plan_push_time,
         default_remind_before_minutes=settings.default_remind_before_minutes,
         daily_plan_push_enabled=settings.daily_plan_push_enabled,
+        city=settings.city,
     )
 
 

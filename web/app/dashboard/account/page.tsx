@@ -17,6 +17,7 @@ type SettingsForm = {
   daily_plan_push_time?: string | null;
   default_remind_before_minutes?: number | null;
   daily_plan_push_enabled: boolean;
+  city?: string | null;
 };
 
 function normalizeText(value?: string | null) {
@@ -49,6 +50,7 @@ export default function AccountPage() {
           daily_plan_push_time: normalizeText(result.daily_plan_push_time),
           default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
           daily_plan_push_enabled: result.daily_plan_push_enabled,
+          city: normalizeText(result.city),
         });
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");
@@ -81,6 +83,7 @@ export default function AccountPage() {
         daily_plan_push_time: normalizeText(result.daily_plan_push_time),
         default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
         daily_plan_push_enabled: result.daily_plan_push_enabled,
+        city: normalizeText(result.city),
       });
       message.success("设置已保存");
     } catch (caughtError: unknown) {
@@ -158,6 +161,10 @@ export default function AccountPage() {
               valuePropName="checked"
             >
               <Switch />
+            </Form.Item>
+
+            <Form.Item label="所在城市（用于天气推送）" name="city">
+              <Input placeholder="如：北京、上海、广州" />
             </Form.Item>
 
             <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>

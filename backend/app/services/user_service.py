@@ -11,6 +11,7 @@ from app.core.cache_invalidator import invalidate_user_settings
 from app.core.security import hash_password
 from app.models import User, UserSettings, UserStatus
 from app.schemas.user_settings import UpdateUserSettingsRequest
+from app.services.system_setting_service import SystemSettingService
 
 _USER_SETTINGS_TTL = 1800  # 30 分钟
 
@@ -57,10 +58,20 @@ class UserService:
         settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
         if settings:
             return settings
-        settings = UserSettings(user_id=user_id)
+
+        # 从系统设置中读取默认值
+        system_service = SystemSettingService(self.db)
+        default_timezone = system_service.get_value("DEFAULT_TIMEZONE") or "Asia/Shanghai"
+        default_remind_minutes = system_service.get_value("DEFAULT_REMIND_BEFORE_MINUTES") or 0
+
+        settings = UserSettings(
+            user_id=user_id,
+            default_timezone=default_timezone,
+            default_remind_before_minutes=default_remind_minutes,
+        )
         self.db.add(settings)
         self.db.flush()
-        logger.info("创建用户配置 user_id=%s", user_id)
+        logger.info("创建用户配置 user_id=%s timezone=%s remind_minutes=%s", user_id, default_timezone, default_remind_minutes)
         return settings
 
     def mark_login(self, user: User) -> None:
@@ -119,6 +130,9 @@ class UserService:
         if payload.daily_plan_push_enabled is not None:
             settings.daily_plan_push_enabled = payload.daily_plan_push_enabled
             changed_fields.append("daily_plan_push_enabled")
+        if payload.city is not None:
+            settings.city = payload.city
+            changed_fields.append("city")
         logger.info("更新用户配置 user_id=%s 字段=%s", user_id, ",".join(changed_fields))
         invalidate_user_settings(user_id)
         return settings

@@ -27,6 +27,7 @@ export type UserSettingsResponse = {
   daily_plan_push_time?: string | null;
   default_remind_before_minutes?: number | null;
   daily_plan_push_enabled: boolean;
+  city?: string | null;
 };
 
 export type AgentLogItem = {
