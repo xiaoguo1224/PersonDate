@@ -245,6 +245,19 @@ class WechatChannelService:
             account.last_active_time = datetime.now(UTC)
 
         channel_user_id = wechat_user_id or account_id
+
+        # 禁用该用户其他活跃的微信绑定，保证同时只有一个活跃通道
+        other_active = self.db.scalars(
+            select(ChannelIdentity).where(
+                ChannelIdentity.user_id == owner_user_id,
+                ChannelIdentity.channel == "wechat",
+                ChannelIdentity.status == "active",
+                ChannelIdentity.channel_user_id != channel_user_id,
+            )
+        )
+        for old in other_active:
+            old.status = "disabled"
+
         identity = self.db.scalar(
             select(ChannelIdentity).where(
                 ChannelIdentity.channel == "wechat",
