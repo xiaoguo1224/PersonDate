@@ -127,15 +127,34 @@ export default function WechatBindingPage() {
     void loadAccounts();
   }, [loadAccounts, loadIdentities, loginSessionDetail?.status]);
 
+  const accountBindings = useMemo(() => {
+    const grouped = new Map<string, ChannelIdentityItem[]>();
+    for (const identity of identities) {
+      const key = identity.channel_user_id;
+      const list = grouped.get(key) ?? [];
+      list.push(identity);
+      grouped.set(key, list);
+    }
+
+    const result: { channel_user_id: string; active: ChannelIdentityItem | null; latest: ChannelIdentityItem; total: number }[] = [];
+    for (const [channel_user_id, list] of grouped) {
+      const sorted = [...list].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      const active = sorted.find((item) => item.status === "active") ?? null;
+      result.push({ channel_user_id, active, latest: sorted[0], total: list.length });
+    }
+    return result;
+  }, [identities]);
+
   const summary = useMemo(() => {
     return {
-      total: identities.length,
-      active: identities.filter((item) => item.status === "active").length,
-      disabled: identities.filter((item) => item.status === "disabled").length,
+      accountCount: accountBindings.length,
+      activeCount: accountBindings.filter((item) => item.active).length,
       accountTotal: accounts.length,
       accountActive: accounts.filter((item) => item.status === "active").length,
     };
-  }, [accounts, identities]);
+  }, [accountBindings, accounts]);
 
   const handleCreateLoginSession = async () => {
     if (!accessToken) {
@@ -218,11 +237,10 @@ export default function WechatBindingPage() {
             这里可以创建二维码登录会话、查看当前绑定状态并解绑。微信只负责通道收发，不改变 Agent 的日程处理主流程。
           </Paragraph>
           <Space wrap>
-            <Tag color="blue">{summary.total} 个绑定</Tag>
-            <Tag color="green">{summary.active} 个激活</Tag>
-            <Tag color="default">{summary.disabled} 个禁用</Tag>
-            <Tag color="cyan">{summary.accountTotal} 个账号</Tag>
-            <Tag color="geekblue">{summary.accountActive} 个活跃账号</Tag>
+            <Tag color="blue">{summary.accountCount} 个绑定账号</Tag>
+            <Tag color="green">{summary.activeCount} 个已激活</Tag>
+            <Tag color="cyan">{summary.accountTotal} 个通道账号</Tag>
+            <Tag color="geekblue">{summary.accountActive} 个活跃通道</Tag>
           </Space>
           <Space wrap>
             <Button type="primary" icon={generating ? <LoadingOutlined /> : <QrcodeOutlined />} onClick={() => void handleCreateLoginSession()} loading={generating}>
@@ -299,40 +317,44 @@ export default function WechatBindingPage() {
         />
       ) : null}
 
-      {identities.length ? (
+      {accountBindings.length ? (
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          {identities.map((identity) => (
-            <Card
-              key={identity.id}
-              className="section-card"
-              variant="borderless"
-              extra={
-                identity.status === "active" ? (
-                  <Button danger size="small" icon={<StopOutlined />} onClick={() => void handleUnbind(identity.id)}>
-                    解绑
-                  </Button>
-                ) : (
-                  <Tag color={getStatusColor(identity.status)}>{identity.status}</Tag>
-                )
-              }
-            >
-              <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                <Space wrap>
-                  <Text strong>{identity.display_name || identity.channel_user_id}</Text>
-                  <Tag color={getStatusColor(identity.status)}>{identity.status}</Tag>
-                  <Tag>{identity.channel}</Tag>
+          {accountBindings.map((binding) => {
+            const display = binding.active ?? binding.latest;
+            const isActive = binding.active !== null;
+            return (
+              <Card
+                key={binding.channel_user_id}
+                className="section-card"
+                variant="borderless"
+                extra={
+                  isActive ? (
+                    <Button danger size="small" icon={<StopOutlined />} onClick={() => void handleUnbind(display.id)}>
+                      解绑
+                    </Button>
+                  ) : (
+                    <Tag color={getStatusColor(display.status)}>{display.status}</Tag>
+                  )
+                }
+              >
+                <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                  <Space wrap>
+                    <Text strong>{display.display_name || binding.channel_user_id}</Text>
+                    <Tag color={isActive ? "green" : "default"}>{isActive ? "已绑定" : "未绑定"}</Tag>
+                    <Tag>{display.channel}</Tag>
+                    {binding.total > 1 && <Tag color="orange">共 {binding.total} 条记录</Tag>}
+                  </Space>
+                  <Text className="muted-text">账号标识：{binding.channel_user_id}</Text>
+                  {isActive && (
+                    <Text className="muted-text">会话标识：{display.conversation_id}</Text>
+                  )}
+                  <Text className="muted-text">
+                    {isActive ? "绑定时间" : "最后绑定时间"}：{display.bound_at ? formatDateTime(display.bound_at, timezone) : "未知"}
+                  </Text>
                 </Space>
-                <Text className="muted-text">channel_user_id：{identity.channel_user_id}</Text>
-                <Text className="muted-text">conversation_id：{identity.conversation_id}</Text>
-                <Text className="muted-text">
-                  绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at, timezone) : "未知"}
-                </Text>
-                <Text className="muted-text">
-                  创建时间：{formatDateTime(identity.created_at, timezone)}
-                </Text>
-              </Space>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </Space>
       ) : (
         <Card className="section-card" variant="borderless">
