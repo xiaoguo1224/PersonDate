@@ -19,3 +19,4 @@ dist/
 .playwright-mcp/
 .mypy_*/.claude/worktrees/
 docker-push.sh
+app.db
