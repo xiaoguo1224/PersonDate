@@ -211,15 +211,16 @@ def update_scheduled_item(
             location=location,
             remind_before_minutes=remind_before_minutes,
         )
-        if start is not None:
-            remind_before = remind_before_minutes if remind_before_minutes is not None else (item.remind_before_minutes or 0)
+        if start is not None or remind_before_minutes is not None:
+            effective_start = start or item.start_time
+            effective_remind_before = remind_before_minutes if remind_before_minutes is not None else (item.remind_before_minutes or 0)
             ReminderService(db).cancel_by_target(user_id=user_id, target_id=item.id)
             ReminderService(db).create_for_target(
                 user_id=user_id,
                 target_type=ReminderTargetType.SCHEDULED_ITEM.value,
                 target_id=item.id,
                 title=item.title,
-                trigger_time=start - timedelta(minutes=remind_before),
+                trigger_time=effective_start - timedelta(minutes=effective_remind_before),
             )
         db.commit()
         return {"success": True, "data": _item_to_dict(item), "message": "安排已更新"}

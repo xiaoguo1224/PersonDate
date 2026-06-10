@@ -168,6 +168,23 @@ def update_scheduled_item(
         status=payload.status,
     )
 
+    # 同步更新提醒（时间或提前提醒分钟数变动时重建提醒）
+    if payload.start_time is not None or payload.remind_before_minutes is not None:
+        from datetime import timedelta
+        from app.models.enums import ReminderTargetType
+        from app.services.reminder_service import ReminderService
+
+        effective_start = payload.start_time or item.start_time
+        effective_remind_before = payload.remind_before_minutes if payload.remind_before_minutes is not None else (item.remind_before_minutes or 0)
+        ReminderService(db).cancel_by_target(user_id=current_user.id, target_id=item.id)
+        ReminderService(db).create_for_target(
+            user_id=current_user.id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+            target_id=item.id,
+            title=item.title,
+            trigger_time=effective_start - timedelta(minutes=effective_remind_before),
+        )
+
     # 更新后检测冲突
     conflict_service = ConflictService(db)
     conflicts = conflict_service.detect_item_conflicts(current_user.id, item)
