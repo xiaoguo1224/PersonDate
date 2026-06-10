@@ -121,6 +121,13 @@ class DailyNotificationService:
             self._mark_push_today(user.id, today_str)
             logger.info("推送成功 user_id=%s conversation_id=%s push_date=%s", user.id, identity.conversation_id, today_str)
             logger.info("推送内容: %s", message.replace('\n', ' | '))
+        else:
+            logger.error(
+                "推送失败: user_id=%s, conversation_id=%s, "
+                "error_code=%s, error_message=%s",
+                user.id, identity.conversation_id,
+                log.error_code, log.error_message,
+            )
         return log.status == "sent"
 
     def get_weather(self, city: str, provider: str | None = None, api_key: str | None = None) -> dict[str, Any]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,8 @@ from app.models import ReminderJob, ReminderStatus, ScheduledItem, UserSettings
 from app.models.enums import ReminderTargetType
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.wechat_channel_service import WechatChannelService
+
+logger = logging.getLogger(__name__)
 
 
 class ReminderWorker:
@@ -66,11 +69,28 @@ class ReminderWorker:
                 job.status = ReminderStatus.FIRED.value
                 job.fired_at = current_time
                 job.error_message = None
+                logger.info(
+                    "提醒发送成功: job_id=%s, title=%s, user_id=%s, conversation_id=%s",
+                    job.id, job.title, job.user_id, conversation_id,
+                )
                 continue
 
             job.retry_count += 1
             job.error_message = log.error_message
+            logger.error(
+                "提醒发送失败: job_id=%s, title=%s, user_id=%s, conversation_id=%s, "
+                "error_code=%s, error_message=%s, retry_count=%s/%s",
+                job.id, job.title, job.user_id, conversation_id,
+                log.error_code, log.error_message,
+                job.retry_count, job.max_retries,
+            )
             if job.retry_count >= job.max_retries:
                 job.status = ReminderStatus.FAILED.value
+                logger.error(
+                    "提醒已达最大重试次数，标记为失败: job_id=%s, title=%s, user_id=%s, "
+                    "error_code=%s, error_message=%s, retry_count=%s",
+                    job.id, job.title, job.user_id,
+                    log.error_code, log.error_message, job.retry_count,
+                )
         self.db.commit()
         return jobs

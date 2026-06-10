@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict, cast
@@ -31,6 +32,8 @@ from app.schemas.wechat_channel import (
     WechatSendTypingResponse,
 )
 from wechat_channel.ilink_client import ILinkClient, ILinkSessionExpired
+
+logger = logging.getLogger(__name__)
 
 
 def _as_utc(datetime_value: datetime) -> datetime:
@@ -706,6 +709,12 @@ class WechatChannelService:
             to_user_id=resolved_channel_user_id,
         )
         if account is None:
+            logger.error(
+                "发送消息无可用的微信账号: conversation_id=%s, user_id=%s, channel_user_id=%s",
+                conversation_id,
+                resolved_user_id,
+                resolved_channel_user_id,
+            )
             return self.create_message_log(
                 user_id=resolved_user_id,
                 message_id=message_id,
@@ -762,7 +771,7 @@ class WechatChannelService:
                     except Exception:
                         pass
 
-                if success:
+                if success.success:
                     status = "sent"
                     error_code = None
                     error_message = None
@@ -770,8 +779,21 @@ class WechatChannelService:
                     account.last_active_time = datetime.now(UTC)
                     break
 
-                error_message = "微信消息发送失败"
                 error_code = "SEND_FAILED"
+                error_message = (
+                    f"微信消息发送失败: ret={success.ret}, err_msg={success.err_msg}"
+                )
+                logger.error(
+                    "微信消息发送失败: conversation_id=%s, user_id=%s, ret=%s, "
+                    "err_msg=%s, content_preview=%s, attempt=%s/%s",
+                    conversation_id,
+                    resolved_user_id,
+                    success.ret,
+                    success.err_msg,
+                    content[:100],
+                    attempt_count,
+                    self.SEND_TEXT_MAX_ATTEMPTS,
+                )
                 if (
                     not self._is_retryable_send_failure(error_code, error_message)
                     or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
@@ -783,12 +805,30 @@ class WechatChannelService:
                 status = "failed"
                 error_code = "SESSION_EXPIRED"
                 error_message = str(exc)
+                logger.error(
+                    "发送消息会话过期: conversation_id=%s, user_id=%s, "
+                    "account_id=%s, error=%s",
+                    conversation_id,
+                    resolved_user_id,
+                    account.account_id if account else "unknown",
+                    exc,
+                )
                 account.status = "expired"
                 self.db.flush()
                 break
             except Exception as exc:
                 error_message = str(exc)
                 error_code = exc.__class__.__name__.upper()
+                logger.error(
+                    "发送消息异常: conversation_id=%s, user_id=%s, "
+                    "error_code=%s, error=%s, attempt=%s/%s",
+                    conversation_id,
+                    resolved_user_id,
+                    error_code,
+                    exc,
+                    attempt_count,
+                    self.SEND_TEXT_MAX_ATTEMPTS,
+                )
                 if not self._is_retryable_send_exception(exc) or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS:
                     outbound_retry_count = retry_count + attempt_count - 1
                     break

@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.models import ChannelIdentity, ReminderJob, ReminderStatus
 from app.workers.reminder_worker import ReminderWorker
+from wechat_channel.ilink_client import SendResult
 
 
 class FakeIlinkClient:
@@ -23,9 +24,11 @@ class FakeIlinkClient:
     def send_typing(self, bot_token: str, user_id: str, ticket: str, status: int = 1) -> None:
         pass
 
-    def send_message(self, bot_token: str, to_user_id: str, text: str, context_token: str) -> bool:
+    def send_message(self, bot_token: str, to_user_id: str, text: str, context_token: str) -> SendResult:
         self.calls.append((to_user_id, text))
-        return self.success
+        if self.success:
+            return SendResult(success=True)
+        return SendResult(success=False, ret=-1, err_msg="mock send failure")
 
 
 def _build_session():

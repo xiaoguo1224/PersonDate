@@ -28,6 +28,13 @@ class QRStatus:
 
 
 @dataclass
+class SendResult:
+    success: bool
+    ret: int = 0
+    err_msg: str = ""
+
+
+@dataclass
 class UpdatesResult:
     msgs: list[dict[str, Any]]
     new_cursor: str
@@ -109,7 +116,7 @@ class ILinkClient:
 
     def send_message(
         self, bot_token: str, to_user_id: str, text: str, context_token: str,
-    ) -> bool:
+    ) -> SendResult:
         client_id = f"openclaw-weixin-{secrets.token_hex(4)}"
         payload = {
             "msg": {
@@ -130,13 +137,14 @@ class ILinkClient:
         )
         # ret=0 成功, ret=-2 排队中（iLink 正常行为）, 其他值失败
         ret = data.get("ret", 0)
+        err_msg = data.get("err_msg") or data.get("message") or ""
         if ret not in (0, -2):
-            err_msg = data.get("err_msg") or data.get("message") or ""
             logger.warning(
                 "iLink 发送消息失败: ret=%s, err_msg=%s, to_user_id=%s, content_preview=%s",
                 ret, err_msg, to_user_id, text[:50],
             )
-        return ret in (0, -2)
+            return SendResult(success=False, ret=ret, err_msg=err_msg)
+        return SendResult(success=True, ret=ret, err_msg="")
 
     def get_typing_ticket(
         self, bot_token: str, user_id: str, context_token: str,

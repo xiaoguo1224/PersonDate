@@ -132,7 +132,7 @@ class TestSendMessage:
             bot_token="bt_1", to_user_id="wx_user_1",
             text="回复内容", context_token="ctx_1"
         )
-        assert result is True
+        assert result.success is True
 
     def test_fails_on_error_ret(self, client, mock_ilink):
         mock_ilink.post("/ilink/bot/sendmessage").respond(
@@ -142,7 +142,9 @@ class TestSendMessage:
             bot_token="bt_1", to_user_id="wx_user_1",
             text="hi", context_token="ctx_1"
         )
-        assert result is False
+        assert result.success is False
+        assert result.ret == -1
+        assert result.err_msg == "send failed"
 
 
 class TestGetTypingTicket:

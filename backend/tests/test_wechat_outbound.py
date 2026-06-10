@@ -17,7 +17,7 @@ from app.models import (
 from app.schemas.auth import LoginRequest
 from app.services.auth_service import AuthService
 from app.services.wechat_channel_service import WechatChannelService
-from wechat_channel.ilink_client import ILinkClient
+from wechat_channel.ilink_client import ILinkClient, SendResult
 
 
 def _make_owner_account_and_identity(db_session):
@@ -56,7 +56,7 @@ def _mock_ilink_client() -> MagicMock:
     client = MagicMock(spec=ILinkClient)
     client.get_typing_ticket.return_value = None
     client.send_typing.return_value = None
-    client.send_message.return_value = True
+    client.send_message.return_value = SendResult(success=True)
     return client
 
 
@@ -81,7 +81,7 @@ def test_wechat_channel_service_send_text_records_outbound_log(db_session) -> No
     db_session.commit()
 
     mock_client = _mock_ilink_client()
-    mock_client.send_message.return_value = True
+    mock_client.send_message.return_value = SendResult(success=True)
 
     service = WechatChannelService(db_session)
 
@@ -125,7 +125,7 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log(db_session
     db_session.commit()
 
     mock_client = _mock_ilink_client()
-    mock_client.send_message.return_value = False
+    mock_client.send_message.return_value = SendResult(success=False, ret=-1, err_msg="mock error")
 
     service = WechatChannelService(db_session)
     service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
@@ -134,7 +134,8 @@ def test_wechat_channel_service_send_text_records_failed_outbound_log(db_session
 
     assert log.status == "failed"
     assert log.error_code == "SEND_FAILED"
-    assert log.error_message == "微信消息发送失败"
+    assert "ret=-1" in log.error_message
+    assert "err_msg=mock error" in log.error_message
 
 
 def test_wechat_channel_service_send_text_creates_outbound_message_on_success(db_session) -> None:
@@ -158,7 +159,7 @@ def test_wechat_channel_service_send_text_creates_outbound_message_on_success(db
     db_session.commit()
 
     mock_client = _mock_ilink_client()
-    mock_client.send_message.return_value = True
+    mock_client.send_message.return_value = SendResult(success=True)
 
     service = WechatChannelService(db_session)
     service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
@@ -278,7 +279,7 @@ def test_wechat_channel_service_send_text_retries_transient_errors(db_session) -
     mock_client.send_message.side_effect = [
         TimeoutError("timeout"),
         TimeoutError("timeout"),
-        True,
+        SendResult(success=True),
     ]
 
     service = WechatChannelService(db_session)
