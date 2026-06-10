@@ -1,8 +1,13 @@
 "use client";
 
 import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, Typography } from "antd";
+import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, TimePicker, Typography } from "antd";
 import { useEffect, useState } from "react";
+
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.extend(customParseFormat);
 
 import { useAuth } from "@/components/auth-provider";
 import { requestJson } from "@/lib/api";
@@ -12,9 +17,9 @@ const { Title, Paragraph, Text } = Typography;
 
 type SettingsForm = {
   default_timezone: string;
-  workday_start_time?: string | null;
-  workday_end_time?: string | null;
-  daily_plan_push_time?: string | null;
+  workday_start_time?: dayjs.Dayjs | null;
+  workday_end_time?: dayjs.Dayjs | null;
+  daily_plan_push_time?: dayjs.Dayjs | null;
   default_remind_before_minutes?: number | null;
   daily_plan_push_enabled: boolean;
   city?: string | null;
@@ -45,9 +50,9 @@ export default function AccountPage() {
         const result = await requestJson<UserSettingsResponse>("/api/me/settings", {}, accessToken);
         form.setFieldsValue({
           default_timezone: result.default_timezone,
-          workday_start_time: normalizeText(result.workday_start_time),
-          workday_end_time: normalizeText(result.workday_end_time),
-          daily_plan_push_time: normalizeText(result.daily_plan_push_time),
+          workday_start_time: result.workday_start_time ? dayjs(result.workday_start_time, ["HH:mm:ss", "HH:mm"]) : null,
+          workday_end_time: result.workday_end_time ? dayjs(result.workday_end_time, ["HH:mm:ss", "HH:mm"]) : null,
+          daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
           default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
           daily_plan_push_enabled: result.daily_plan_push_enabled,
           city: normalizeText(result.city),
@@ -68,19 +73,25 @@ export default function AccountPage() {
     }
     setSaving(true);
     try {
+      const body = {
+        ...values,
+        workday_start_time: values.workday_start_time?.format("HH:mm") ?? null,
+        workday_end_time: values.workday_end_time?.format("HH:mm") ?? null,
+        daily_plan_push_time: values.daily_plan_push_time?.format("HH:mm") ?? null,
+      };
       const result = await requestJson<UserSettingsResponse>(
         "/api/me/settings",
         {
           method: "PATCH",
-          body: JSON.stringify(values),
+          body: JSON.stringify(body),
         },
         accessToken,
       );
       form.setFieldsValue({
         default_timezone: result.default_timezone,
-        workday_start_time: normalizeText(result.workday_start_time),
-        workday_end_time: normalizeText(result.workday_end_time),
-        daily_plan_push_time: normalizeText(result.daily_plan_push_time),
+        workday_start_time: result.workday_start_time ? dayjs(result.workday_start_time, ["HH:mm:ss", "HH:mm"]) : null,
+        workday_end_time: result.workday_end_time ? dayjs(result.workday_end_time, ["HH:mm:ss", "HH:mm"]) : null,
+        daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
         default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
         daily_plan_push_enabled: result.daily_plan_push_enabled,
         city: normalizeText(result.city),
@@ -129,6 +140,7 @@ export default function AccountPage() {
               default_timezone: "Asia/Shanghai",
               default_remind_before_minutes: 0,
               daily_plan_push_enabled: false,
+              daily_plan_push_time: dayjs("09:00", "HH:mm"),
             }}
           >
             <Form.Item
@@ -140,15 +152,15 @@ export default function AccountPage() {
             </Form.Item>
 
             <Form.Item label="工作开始时间" name="workday_start_time">
-              <Input placeholder="09:00:00" />
+              <TimePicker format="HH:mm" style={{ width: "100%" }} />
             </Form.Item>
 
             <Form.Item label="工作结束时间" name="workday_end_time">
-              <Input placeholder="18:00:00" />
+              <TimePicker format="HH:mm" style={{ width: "100%" }} />
             </Form.Item>
 
             <Form.Item label="每日计划推送时间" name="daily_plan_push_time">
-              <Input placeholder="08:00:00" />
+              <TimePicker format="HH:mm" style={{ width: "100%" }} />
             </Form.Item>
 
             <Form.Item label="默认提醒提前分钟数" name="default_remind_before_minutes">

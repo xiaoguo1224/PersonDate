@@ -32,8 +32,18 @@ class DailyNotificationService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    @staticmethod
+    def _last_push_key(user_id: str) -> str:
+        return f"schedule:user:{user_id}:last_daily_push_date"
+
+    def _has_pushed_today(self, user_id: str, today: str) -> bool:
+        return cache_get(self._last_push_key(user_id)) == today
+
+    def _mark_push_today(self, user_id: str, today: str) -> None:
+        cache_set(self._last_push_key(user_id), today, 86400)
+
     def get_due_users(self) -> list[User]:
-        """查找当前时间点需要推送的用户。"""
+        """查找需要推送的用户：当前时间 >= 推送时间 且 今日尚未推送。"""
         stmt = (
             select(User)
             .join(UserSettings)
@@ -51,9 +61,10 @@ class DailyNotificationService:
                 local_now = current_time_utc.astimezone(ZoneInfo(timezone_name))
             except Exception:
                 local_now = current_time_utc.astimezone(ZoneInfo("Asia/Shanghai"))
+            today_str = local_now.strftime("%Y-%m-%d")
             current_time = local_now.strftime("%H:%M")
             push_time = (settings.daily_plan_push_time or "08:00")[:5]
-            if push_time == current_time:
+            if current_time >= push_time and not self._has_pushed_today(user.id, today_str):
                 due_users.append(user)
         return due_users
 
@@ -112,7 +123,10 @@ class DailyNotificationService:
             user_id=user.id,
         )
         if log.status == "sent":
-            logger.info("推送成功 user_id=%s conversation_id=%s", user.id, identity.conversation_id)
+            today_str = datetime.now(UTC).astimezone(ZoneInfo(settings.default_timezone or "Asia/Shanghai")).strftime("%Y-%m-%d")
+            self._mark_push_today(user.id, today_str)
+            logger.info("推送成功 user_id=%s conversation_id=%s push_date=%s", user.id, identity.conversation_id, today_str)
+            logger.info("推送内容: %s", message.replace('\n', ' | '))
         return log.status == "sent"
 
     def get_weather(self, city: str, provider: str | None = None, api_key: str | None = None) -> dict[str, Any]:

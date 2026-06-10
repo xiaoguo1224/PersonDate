@@ -105,6 +105,7 @@ def run_daily_notification_scan(
                     pushed_count += 1
             except Exception:
                 logger.exception("推送失败: user=%s", user.id)
+        db.commit()
         return pushed_count
     finally:
         db.close()
