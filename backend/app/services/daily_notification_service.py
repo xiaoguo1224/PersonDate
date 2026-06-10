@@ -15,6 +15,7 @@ from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.schedule import TaskItem
 from app.models.scheduled_item import ScheduledItem
 from app.models.user import User, UserSettings
+from app.services.channel_identity_service import ChannelIdentityService
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,6 @@ class DailyNotificationService:
     def notify_user(self, user: User) -> bool:
         """向单个用户推送今日安排 + 天气。"""
         logger.info("开始推送用户 user_id=%s", user.id)
-        from app.models.channel import ChannelIdentity
         from app.services.wechat_channel_service import WechatChannelService
 
         events = self._get_today_events(user.id)
@@ -105,13 +105,7 @@ class DailyNotificationService:
             tasks=tasks,
         )
 
-        identity = self.db.scalar(
-            select(ChannelIdentity).where(
-                ChannelIdentity.channel == "wechat",
-                ChannelIdentity.user_id == user.id,
-                ChannelIdentity.status == "active",
-            )
-        )
+        identity = ChannelIdentityService(self.db).get_active_wechat_identity(user.id)
         if identity is None:
             logger.info("用户 %s 没有绑定微信，跳过推送", user.id)
             return False
