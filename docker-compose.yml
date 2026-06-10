@@ -4,6 +4,7 @@ services:
     platform: linux/amd64
     container_name: schedule-agent-postgres
     environment:
+      TZ: Asia/Shanghai
       POSTGRES_DB: schedule_agent
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -24,6 +25,8 @@ services:
     image: redis:7-alpine
     platform: linux/amd64
     container_name: schedule-agent-redis
+    environment:
+      TZ: Asia/Shanghai
     expose:
       - "6379"
     volumes:
@@ -49,6 +52,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      TZ: Asia/Shanghai
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:3001
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
@@ -81,6 +85,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      TZ: Asia/Shanghai
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
@@ -117,6 +122,7 @@ services:
     platform: linux/amd64
     container_name: schedule-agent-web
     environment:
+      TZ: Asia/Shanghai
       NEXT_PUBLIC_API_BASE_URL: /api
     depends_on:
       - backend
