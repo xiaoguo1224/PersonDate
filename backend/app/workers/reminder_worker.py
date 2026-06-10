@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ReminderJob, ReminderStatus
+from app.models import ReminderJob, ReminderStatus, ScheduledItem, UserSettings
+from app.models.enums import ReminderTargetType
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.wechat_channel_service import WechatChannelService
 
@@ -15,6 +17,35 @@ class ReminderWorker:
         self.db = db
         self.wechat = WechatChannelService(db, sender=sender)
         self.channel_identities = ChannelIdentityService(db)
+
+    def _build_message(self, job: ReminderJob) -> str:
+        if job.target_type != ReminderTargetType.SCHEDULED_ITEM.value:
+            return f"提醒：{job.title}即将开始。"
+
+        item = self.db.get(ScheduledItem, job.target_id)
+        if not item:
+            return f"提醒：{job.title}即将开始。"
+
+        tz_name = "Asia/Shanghai"
+        settings = self.db.scalar(
+            select(UserSettings).where(UserSettings.user_id == job.user_id)
+        )
+        if settings:
+            tz_name = settings.default_timezone
+        try:
+            local_tz = ZoneInfo(tz_name)
+        except Exception:
+            local_tz = ZoneInfo("Asia/Shanghai")
+
+        start_str = item.start_time.astimezone(local_tz).strftime("%H:%M")
+        end_str = item.end_time.astimezone(local_tz).strftime("%H:%M")
+        date_str = item.start_time.astimezone(local_tz).strftime("%m月%d日")
+
+        lines = [f"提醒：{job.title}", f"时间：{date_str} {start_str} - {end_str}"]
+        if item.location:
+            lines.append(f"地点：{item.location}")
+
+        return "\n".join(lines)
 
     def run_once(self, now: datetime | None = None) -> list[ReminderJob]:
         current_time = now or datetime.now(UTC)
@@ -28,7 +59,7 @@ class ReminderWorker:
             conversation_id = self.channel_identities.get_conversation_id(job.user_id)
             log = self.wechat.send_text(
                 conversation_id=conversation_id,
-                content=f"提醒：{job.title}即将开始。",
+                content=self._build_message(job),
                 user_id=job.user_id,
             )
             if log.status == "sent":
