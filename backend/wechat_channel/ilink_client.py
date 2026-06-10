@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import secrets
 import struct
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from typing import Any
 
 import httpx
 
+logger = logging.getLogger(__name__)
 ILINK_API_BASE = "https://ilinkai.weixin.qq.com"
 
 
@@ -128,6 +130,12 @@ class ILinkClient:
         )
         # ret=0 成功, ret=-2 排队中（iLink 正常行为）, 其他值失败
         ret = data.get("ret", 0)
+        if ret not in (0, -2):
+            err_msg = data.get("err_msg") or data.get("message") or ""
+            logger.warning(
+                "iLink 发送消息失败: ret=%s, err_msg=%s, to_user_id=%s, content_preview=%s",
+                ret, err_msg, to_user_id, text[:50],
+            )
         return ret in (0, -2)
 
     def get_typing_ticket(
@@ -205,6 +213,9 @@ class ILinkClient:
                 code=-14,
                 message=data.get("err_msg") or data.get("message") or "session 过期",
             )
+        if ret != 0:
+            err_msg = data.get("err_msg") or data.get("message") or ""
+            logger.info("iLink API 返回非零 ret: ret=%s, err_msg=%s, path=%s", ret, err_msg, path)
         return data
 
     @staticmethod
