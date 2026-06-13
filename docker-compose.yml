@@ -54,7 +54,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/schedule_agent
-      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:3001
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:3001,http://localhost:3001,http://localhost:3002
       WECHAT_CHANNEL_BASE_URL: http://wechat-channel:18789
       REDIS_URL: redis://redis:6379/0
     depends_on:
@@ -65,8 +65,8 @@ services:
       wechat-channel:
         condition: service_healthy
     restart: unless-stopped
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     networks:
       - schedule_agent_network
     command: >
