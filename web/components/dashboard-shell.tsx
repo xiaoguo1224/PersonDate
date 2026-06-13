@@ -205,6 +205,8 @@ function DashboardShellContent({
   accessToken?: string;
 }>) {
   const preferences = useDashboardTimezone();
+  const { themeName } = useTheme();
+  const isDarkTheme = themeName === "black-gold";
   const dateLabel = getHeaderDateLabel(preferences.timezone);
 
   const [weather, setWeather] = useState<{
@@ -376,7 +378,7 @@ function DashboardShellContent({
         </div>
 
         <Menu
-          theme="light"
+          theme={isDarkTheme ? "dark" : "light"}
           mode="inline"
           selectedKeys={[pathname]}
           items={menuItems}
