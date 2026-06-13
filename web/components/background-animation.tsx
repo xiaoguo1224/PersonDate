@@ -84,7 +84,9 @@ export default function BackgroundAnimation() {
           backgroundPosition: "center, center",
           backgroundRepeat: "no-repeat, no-repeat",
           opacity: prevTheme ? 0 : 1,
-          animation: prevTheme ? "themeBackdropFadeIn 420ms ease both" : undefined,
+          animation: prevTheme
+            ? "themeBackdropFadeIn 420ms ease both, themeBackdropDrift 28s ease-in-out infinite alternate"
+            : "themeBackdropDrift 28s ease-in-out infinite alternate",
           transform: "translateZ(0)",
         }}
       />
@@ -100,7 +102,7 @@ export default function BackgroundAnimation() {
             backgroundPosition: "center, center",
             backgroundRepeat: "no-repeat, no-repeat",
             opacity: 1,
-            animation: "themeBackdropFadeOut 420ms ease forwards",
+            animation: "themeBackdropFadeOut 420ms ease forwards, themeBackdropDrift 28s ease-in-out infinite alternate",
             transform: "translateZ(0)",
           }}
         />

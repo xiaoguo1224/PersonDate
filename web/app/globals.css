@@ -4856,23 +4856,29 @@ body {
 @keyframes themeBackdropFadeIn {
   from {
     opacity: 0;
-    transform: scale(1.015);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
 @keyframes themeBackdropFadeOut {
   from {
     opacity: 1;
-    transform: scale(1);
   }
 
   to {
     opacity: 0;
-    transform: scale(1.01);
+  }
+}
+
+@keyframes themeBackdropDrift {
+  from {
+    transform: scale(1.03) translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: scale(1.08) translate3d(0.9%, -1.2%, 0);
   }
 }

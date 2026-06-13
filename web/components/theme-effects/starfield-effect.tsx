@@ -11,9 +11,9 @@ interface StarfieldEffectProps {
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 160,
-  medium: 260,
-  high: 360,
+  low: 260,
+  medium: 420,
+  high: 620,
 };
 
 const STAR_COLORS = [
@@ -36,8 +36,8 @@ function createMeteor(container: HTMLDivElement, accentColor: string) {
     borderRadius: "999px",
     pointerEvents: "none",
     willChange: "transform, opacity",
-    background: `linear-gradient(90deg, transparent 0%, ${accentColor}88 58%, ${accentColor} 82%, #fff 100%)`,
-    boxShadow: `0 0 10px 2px ${accentColor}66, 0 0 24px 5px ${accentColor}33, 0 0 46px 8px ${accentColor}18`,
+    background: `linear-gradient(90deg, transparent 0%, ${accentColor}bb 58%, ${accentColor} 82%, #fff 100%)`,
+    boxShadow: `0 0 14px 4px ${accentColor}88, 0 0 32px 8px ${accentColor}44, 0 0 60px 14px ${accentColor}22`,
   });
   container.appendChild(meteor);
 
@@ -50,10 +50,10 @@ function createMeteor(container: HTMLDivElement, accentColor: string) {
       rotation: gsap.utils.random(28, 42),
     },
     {
-      x: gsap.utils.random(-280, -120),
+      x: gsap.utils.random(-360, -120),
       y: vh * gsap.utils.random(0.45, 0.82),
       opacity: 1,
-      duration: gsap.utils.random(1.0, 1.8),
+      duration: gsap.utils.random(0.9, 1.6),
       ease: "none",
       onUpdate: function () {
         const progress = this.progress();
@@ -71,7 +71,7 @@ function createMeteor(container: HTMLDivElement, accentColor: string) {
 function createNebula(container: HTMLDivElement, accentColor: string) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const size = gsap.utils.random(180, 360);
+  const size = gsap.utils.random(220, 440);
 
   const nebula = document.createElement("div");
   Object.assign(nebula.style, {
@@ -81,8 +81,8 @@ function createNebula(container: HTMLDivElement, accentColor: string) {
     borderRadius: "50%",
     pointerEvents: "none",
     willChange: "transform, opacity",
-    background: `radial-gradient(circle, ${accentColor}1f, ${accentColor}0a 52%, transparent 74%)`,
-    filter: "blur(24px)",
+    background: `radial-gradient(circle, ${accentColor}30, ${accentColor}0d 52%, transparent 74%)`,
+    filter: "blur(18px)",
   });
   container.appendChild(nebula);
 
@@ -121,9 +121,9 @@ function createNebula(container: HTMLDivElement, accentColor: string) {
 
 function createConstellation(container: HTMLDivElement) {
   const clusters = [
-    { left: "10%", top: "26%", width: "220px", rotate: "-12deg" },
-    { left: "62%", top: "18%", width: "280px", rotate: "8deg" },
-    { left: "46%", top: "64%", width: "180px", rotate: "18deg" },
+    { left: "10%", top: "26%", width: "260px", rotate: "-12deg" },
+    { left: "62%", top: "18%", width: "340px", rotate: "8deg" },
+    { left: "46%", top: "64%", width: "220px", rotate: "18deg" },
   ];
 
   clusters.forEach((cluster, index) => {
@@ -137,9 +137,9 @@ function createConstellation(container: HTMLDivElement) {
       transform: `rotate(${cluster.rotate})`,
       transformOrigin: "left center",
       pointerEvents: "none",
-      opacity: String(0.16 + index * 0.04),
+      opacity: String(0.24 + index * 0.08),
       background:
-        "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), rgba(212, 168, 83, 0.5), rgba(255, 255, 255, 0.1), transparent)",
+        "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.48), rgba(212, 168, 83, 0.72), rgba(255, 255, 255, 0.16), transparent)",
       filter: "blur(0.2px)",
     });
     container.appendChild(line);
@@ -163,8 +163,8 @@ function createAurora(container: HTMLDivElement) {
     pointerEvents: "none",
     opacity: "0.52",
     background:
-      "linear-gradient(90deg, transparent 0%, rgba(212, 168, 83, 0.1) 18%, rgba(255, 255, 255, 0.05) 42%, rgba(212, 168, 83, 0.1) 60%, transparent 100%)",
-    filter: "blur(30px)",
+      "linear-gradient(90deg, transparent 0%, rgba(212, 168, 83, 0.18) 18%, rgba(255, 255, 255, 0.08) 42%, rgba(212, 168, 83, 0.18) 60%, transparent 100%)",
+    filter: "blur(22px)",
     transform: "rotate(-10deg)",
     mixBlendMode: "screen",
   });
@@ -201,14 +201,14 @@ export default function StarfieldEffect({
         getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#d4a853";
 
       stars.forEach((star) => {
-        const size = gsap.utils.random(0.6, 3.8);
+        const size = gsap.utils.random(0.8, 4.8);
         const pulseSize = Math.max(size * 1.1, 1);
         const x = gsap.utils.random(0, 100);
         const y = gsap.utils.random(0, 100);
         const colorFn = STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)];
-        const alpha = gsap.utils.random(0.22, 0.88);
-        const hasGlow = size > 2.2 && Math.random() > 0.72;
-        const twinkle = gsap.utils.random(1.1, 4.2);
+        const alpha = gsap.utils.random(0.4, 1);
+        const hasGlow = size > 2 && Math.random() > 0.58;
+        const twinkle = gsap.utils.random(0.8, 2.8);
 
         gsap.set(star, {
           x: `${x}vw`,
@@ -218,12 +218,12 @@ export default function StarfieldEffect({
           borderRadius: "50%",
           backgroundColor: colorFn(alpha),
           boxShadow: hasGlow
-            ? `0 0 ${pulseSize * 2}px ${colorFn(0.28)}, 0 0 ${pulseSize * 3.5}px ${colorFn(0.12)}`
+            ? `0 0 ${pulseSize * 2.8}px ${colorFn(0.4)}, 0 0 ${pulseSize * 5}px ${colorFn(0.18)}`
             : "none",
         });
 
         gsap.to(star, {
-          opacity: gsap.utils.random(0.22, 1),
+          opacity: gsap.utils.random(0.3, 1),
           duration: twinkle,
           repeat: -1,
           yoyo: true,
@@ -231,10 +231,10 @@ export default function StarfieldEffect({
           delay: gsap.utils.random(0, 4),
         });
 
-        if (Math.random() > 0.94) {
+        if (Math.random() > 0.9) {
           gsap.to(star, {
-            scale: gsap.utils.random(1.06, 1.28),
-            duration: gsap.utils.random(1.8, 4.2),
+            scale: gsap.utils.random(1.1, 1.42),
+            duration: gsap.utils.random(1.2, 3.2),
             repeat: -1,
             yoyo: true,
             ease: "sine.inOut",
@@ -252,9 +252,9 @@ export default function StarfieldEffect({
         const meteorCtx = gsap.context(() => {
           const spawnMeteor = () => {
             createMeteor(container, accentColor);
-            gsap.delayedCall(gsap.utils.random(2.5, 4.5), spawnMeteor);
+            gsap.delayedCall(gsap.utils.random(1.8, 3.6), spawnMeteor);
           };
-          gsap.delayedCall(gsap.utils.random(2, 4), spawnMeteor);
+          gsap.delayedCall(gsap.utils.random(1.4, 3), spawnMeteor);
         });
         cleanupFns.push(() => meteorCtx.revert());
       }
@@ -263,9 +263,9 @@ export default function StarfieldEffect({
         const nebulaCtx = gsap.context(() => {
           const spawnNebula = () => {
             createNebula(container, accentColor);
-            gsap.delayedCall(gsap.utils.random(14, 24), spawnNebula);
+            gsap.delayedCall(gsap.utils.random(10, 18), spawnNebula);
           };
-          gsap.delayedCall(gsap.utils.random(4, 10), spawnNebula);
+          gsap.delayedCall(gsap.utils.random(2.5, 6), spawnNebula);
         });
         cleanupFns.push(() => nebulaCtx.revert());
       }
@@ -325,8 +325,8 @@ export default function StarfieldEffect({
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(circle at 18% 18%, rgba(212, 168, 83, 0.08), transparent 22%), radial-gradient(circle at 82% 14%, rgba(125, 211, 252, 0.06), transparent 20%), radial-gradient(circle at 52% 8%, rgba(255, 255, 255, 0.06), transparent 26%)",
-          opacity: 0.9,
+            "radial-gradient(circle at 18% 18%, rgba(212, 168, 83, 0.16), transparent 20%), radial-gradient(circle at 82% 14%, rgba(125, 211, 252, 0.1), transparent 18%), radial-gradient(circle at 52% 8%, rgba(255, 255, 255, 0.1), transparent 24%)",
+          opacity: 0.96,
           mixBlendMode: "screen",
         }}
       />
