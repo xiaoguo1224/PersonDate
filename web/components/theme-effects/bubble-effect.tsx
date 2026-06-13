@@ -11,9 +11,9 @@ interface CloudEffectProps {
 }
 
 const COUNT_MAP: Record<PerformanceLevel, number> = {
-  low: 8,
-  medium: 12,
-  high: 18,
+  low: 5,
+  medium: 8,
+  high: 12,
 };
 
 interface CloudDef {
@@ -29,30 +29,30 @@ function generateCloudDefs(count: number): CloudDef[] {
   return Array.from({ length: count }, () => {
     const laneRoll = Math.random();
     const lane: CloudDef["lane"] =
-      laneRoll < 0.28 ? "high" : laneRoll < 0.66 ? "mid" : "low";
-    const size = gsap.utils.random(160, 380);
+      laneRoll < 0.3 ? "high" : laneRoll < 0.68 ? "mid" : "low";
+    const size = gsap.utils.random(170, 330);
 
     return {
       size,
       y:
-        lane === "high"
-          ? gsap.utils.random(6, 22)
+          lane === "high"
+          ? gsap.utils.random(5, 18)
           : lane === "mid"
-            ? gsap.utils.random(24, 46)
-            : gsap.utils.random(48, 76),
+            ? gsap.utils.random(22, 42)
+            : gsap.utils.random(46, 70),
       opacity:
         lane === "high"
-          ? gsap.utils.random(0.58, 0.78)
+          ? gsap.utils.random(0.4, 0.58)
           : lane === "mid"
-            ? gsap.utils.random(0.66, 0.84)
-            : gsap.utils.random(0.72, 0.92),
+            ? gsap.utils.random(0.48, 0.68)
+            : gsap.utils.random(0.56, 0.76),
       speedFactor:
         lane === "high"
-          ? gsap.utils.random(0.88, 1.15)
+          ? gsap.utils.random(0.9, 1.15)
           : lane === "mid"
-            ? gsap.utils.random(0.56, 0.84)
-            : gsap.utils.random(0.34, 0.56),
-      blur: lane === "high" ? gsap.utils.random(1.5, 2.4) : gsap.utils.random(0.8, 1.8),
+            ? gsap.utils.random(0.56, 0.78)
+            : gsap.utils.random(0.38, 0.56),
+      blur: lane === "high" ? gsap.utils.random(1.2, 2) : gsap.utils.random(0.8, 1.4),
       lane,
     };
   });
@@ -62,8 +62,8 @@ function CloudShape({ def }: { def: CloudDef }) {
   const w = def.size;
   const h = def.size * 0.56;
   const base = `rgba(255, 255, 255, ${def.opacity})`;
-  const highlight = `rgba(255, 255, 255, ${Math.min(def.opacity + 0.18, 0.98)})`;
-  const shadow = `rgba(255, 255, 255, ${Math.max(def.opacity - 0.22, 0.22)})`;
+  const highlight = `rgba(255, 255, 255, ${Math.min(def.opacity + 0.12, 0.9)})`;
+  const shadow = `rgba(255, 255, 255, ${Math.max(def.opacity - 0.16, 0.16)})`;
 
   return (
     <div
@@ -124,7 +124,7 @@ function CloudShape({ def }: { def: CloudDef }) {
           width: "72%",
           height: "34%",
           borderRadius: "999px",
-          background: "rgba(255, 255, 255, 0.18)",
+          background: "rgba(255, 255, 255, 0.12)",
         }}
       />
     </div>
@@ -158,7 +158,7 @@ export default function CloudEffect({
 
         const duration = gsap.utils.random(20, 42) / def.speedFactor;
         const delay = gsap.utils.random(0, duration);
-        const drift = gsap.utils.random(10, 24);
+        const drift = gsap.utils.random(8, 18);
 
         gsap.set(cloud, {
           x: -def.size - 120,
@@ -186,8 +186,8 @@ export default function CloudEffect({
 
         if (performance === "high") {
           gsap.to(cloud, {
-            scale: `+=${gsap.utils.random(0.02, 0.06)}`,
-            duration: gsap.utils.random(6, 10),
+            scale: `+=${gsap.utils.random(0.02, 0.04)}`,
+            duration: gsap.utils.random(8, 12),
             repeat: -1,
             yoyo: true,
             ease: "sine.inOut",
@@ -252,8 +252,8 @@ export default function CloudEffect({
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.4), transparent 22%), radial-gradient(circle at 82% 16%, rgba(147, 197, 253, 0.22), transparent 20%), radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.16), transparent 26%)",
-          opacity: 0.95,
+            "radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.22), transparent 22%), radial-gradient(circle at 82% 16%, rgba(147, 197, 253, 0.14), transparent 20%), radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.1), transparent 26%)",
+          opacity: 0.9,
         }}
       />
       <div
@@ -262,8 +262,8 @@ export default function CloudEffect({
           inset: "-12% -10% auto -10%",
           height: "42vh",
           background:
-            "linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04), transparent)",
-          filter: "blur(28px)",
+            "linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03), transparent)",
+          filter: "blur(24px)",
           transform: "rotate(-2deg)",
         }}
       />
