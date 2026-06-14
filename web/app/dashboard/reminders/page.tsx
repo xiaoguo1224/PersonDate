@@ -38,7 +38,7 @@ export default function RemindersPage() {
   const [filterDate, setFilterDate] = useState<Dayjs | null>(null);
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
   const [savingDefault, setSavingDefault] = useState(false);
   const [page, setPage] = useState(1);
@@ -77,8 +77,7 @@ export default function RemindersPage() {
       setLoading(false);
       return;
     }
-    setPage(1);
-    fetchReminders(1);
+    fetchReminders();
   }, [accessToken, fetchReminders]);
 
   useEffect(() => {
@@ -269,22 +268,6 @@ export default function RemindersPage() {
               setFilterDate(null);
               setSearchKeyword("");
               setKeyword("");
-              if (accessToken) {
-                const params = new URLSearchParams();
-                if (key !== "all") params.set("status", key);
-                params.set("page", "1");
-                params.set("page_size", String(pageSize));
-                setLoading(true);
-                requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
-                  .then((result) => {
-                    setReminders(result.items);
-                    setTotal(result.total);
-                  })
-                  .catch((caughtError: unknown) => {
-                    setError(caughtError instanceof Error ? caughtError.message : "未知错误");
-                  })
-                  .finally(() => setLoading(false));
-              }
             }}
             items={[
               { key: "all", label: "全部" },
@@ -417,7 +400,6 @@ export default function RemindersPage() {
             onChange={(p, ps) => {
               setPage(p);
               setPageSize(ps);
-              fetchReminders(p, ps);
             }}
           />
         </div>
