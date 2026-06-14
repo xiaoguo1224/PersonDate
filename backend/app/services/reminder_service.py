@@ -92,7 +92,10 @@ class ReminderService:
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
             self.db.scalars(
-                base.order_by(ReminderJob.created_at.desc())
+                base.order_by(
+                    ReminderJob.trigger_time.asc(),
+                    ReminderJob.created_at.asc(),
+                )
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
