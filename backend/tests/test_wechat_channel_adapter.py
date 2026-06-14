@@ -55,6 +55,27 @@ class FakeGraph:
         )
 
 
+class CrashGraph:
+    def __init__(self, db) -> None:  # noqa: ANN001
+        self.db = db
+
+    def invoke(  # noqa: ANN001
+        self,
+        *,
+        current_user: User,
+        message: str,
+        conversation_id: str = "debug",
+        channel: str = "wechat",
+    ):
+        raise RuntimeError("LLM 服务不可用")
+
+
+class InitCrashGraph:
+    def __init__(self, db) -> None:  # noqa: ANN001
+        self.db = db
+        raise RuntimeError("缺少大模型凭据")
+
+
 def test_wechat_channel_adapter_handles_inbound_message(db_session) -> None:
     member = _seed_member(db_session)
     db_session.add(
@@ -92,3 +113,81 @@ def test_wechat_channel_adapter_handles_inbound_message(db_session) -> None:
     )
     assert stored_log is not None
     assert stored_log.context_token == "ctx_001"
+
+
+def test_wechat_channel_adapter_persists_inbound_log_when_graph_crashes(db_session) -> None:
+    member = _seed_member(db_session)
+    db_session.add(
+        ChannelIdentity(
+            user_id=member.id,
+            channel="wechat",
+            channel_user_id="wx_user_member",
+            conversation_id="wx_user_member",
+            display_name="成员一号",
+            status="active",
+        )
+    )
+    db_session.commit()
+
+    adapter = WechatChannelAdapter(db_session, graph_cls=CrashGraph)
+    result = adapter.handle_inbound_message(
+        WechatInboundRequest(
+            message_id="wx_msg_crash_001",
+            conversation_id="wx_user_member",
+            channel_user_id="wx_user_member",
+            content_type="text",
+            content="明天下午 3 点开会",
+            context_token="ctx_crash_001",
+            raw_payload={},
+        ),
+        channel_token=get_settings().wechat_channel_token,
+    )
+
+    assert result.response.handled is True
+    assert "LLM 服务不可用" in result.response.reply
+
+    stored_log = db_session.scalar(
+        db_session.query(ChannelMessageLog).filter_by(message_id="wx_msg_crash_001").statement
+    )
+    assert stored_log is not None
+    assert stored_log.status == "failed"
+    assert "LLM 服务不可用" in (stored_log.error_message or "")
+
+
+def test_wechat_channel_adapter_persists_inbound_log_when_graph_init_crashes(db_session) -> None:
+    member = _seed_member(db_session)
+    db_session.add(
+        ChannelIdentity(
+            user_id=member.id,
+            channel="wechat",
+            channel_user_id="wx_user_member",
+            conversation_id="wx_user_member",
+            display_name="成员一号",
+            status="active",
+        )
+    )
+    db_session.commit()
+
+    adapter = WechatChannelAdapter(db_session, graph_cls=InitCrashGraph)
+    result = adapter.handle_inbound_message(
+        WechatInboundRequest(
+            message_id="wx_msg_init_crash_001",
+            conversation_id="wx_user_member",
+            channel_user_id="wx_user_member",
+            content_type="text",
+            content="明天下午 3 点开会",
+            context_token="ctx_init_crash_001",
+            raw_payload={},
+        ),
+        channel_token=get_settings().wechat_channel_token,
+    )
+
+    assert result.response.handled is True
+    assert "缺少大模型凭据" in result.response.reply
+
+    stored_log = db_session.scalar(
+        db_session.query(ChannelMessageLog).filter_by(message_id="wx_msg_init_crash_001").statement
+    )
+    assert stored_log is not None
+    assert stored_log.status == "failed"
+    assert "缺少大模型凭据" in (stored_log.error_message or "")

@@ -680,6 +680,148 @@ class WechatChannelService:
         self.db.flush()
         return log
 
+    def _deliver_outbound_text(
+        self,
+        *,
+        account: WechatAccount,
+        to_user_id: str,
+        conversation_id: str,
+        content: str,
+        context_token: str | None,
+        user_id: str | None,
+        retry_count: int = 0,
+    ) -> dict[str, Any]:
+        ilink = self._get_ilink_client()
+        status = "failed"
+        error_code = None
+        error_message = None
+        outbound_retry_count = retry_count
+        attempt_count = 0
+        last_ret = None
+
+        while attempt_count < self.SEND_TEXT_MAX_ATTEMPTS:
+            attempt_count += 1
+            try:
+                ticket = ilink.get_typing_ticket(
+                    bot_token=account.bot_token,
+                    user_id=to_user_id,
+                    context_token=context_token or "",
+                )
+
+                if ticket:
+                    ilink.send_typing(
+                        bot_token=account.bot_token,
+                        user_id=to_user_id,
+                        ticket=ticket,
+                        status=1,
+                    )
+
+                send_result = ilink.send_message(
+                    bot_token=account.bot_token,
+                    to_user_id=to_user_id,
+                    text=content,
+                    context_token=context_token or "",
+                )
+                last_ret = send_result.ret
+
+                if ticket:
+                    try:
+                        ilink.send_typing(
+                            bot_token=account.bot_token,
+                            user_id=to_user_id,
+                            ticket=ticket,
+                            status=2,
+                        )
+                    except Exception:
+                        pass
+
+                if send_result.success:
+                    status = "sent"
+                    error_code = None
+                    error_message = None
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    account.last_active_time = datetime.now(UTC)
+                    logger.info(
+                        "微信消息发送成功: account_id=%s, conversation_id=%s, user_id=%s, "
+                        "ret=%s, attempt=%s/%s, content_preview=%s",
+                        account.account_id,
+                        conversation_id,
+                        user_id,
+                        send_result.ret,
+                        attempt_count,
+                        self.SEND_TEXT_MAX_ATTEMPTS,
+                        content[:100],
+                    )
+                    break
+
+                error_code = "SEND_FAILED"
+                error_message = (
+                    f"微信消息发送失败: ret={send_result.ret}, err_msg={send_result.err_msg}"
+                )
+                logger.error(
+                    "微信消息发送失败: account_id=%s, conversation_id=%s, user_id=%s, "
+                    "ret=%s, err_msg=%s, content_preview=%s, attempt=%s/%s",
+                    account.account_id,
+                    conversation_id,
+                    user_id,
+                    send_result.ret,
+                    send_result.err_msg,
+                    content[:100],
+                    attempt_count,
+                    self.SEND_TEXT_MAX_ATTEMPTS,
+                )
+                if (
+                    not self._is_retryable_send_failure(error_code, error_message)
+                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
+                ):
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    break
+
+            except ILinkSessionExpired as exc:
+                status = "failed"
+                error_code = "SESSION_EXPIRED"
+                error_message = str(exc)
+                logger.error(
+                    "发送消息会话过期: conversation_id=%s, user_id=%s, "
+                    "account_id=%s, error=%s",
+                    conversation_id,
+                    user_id,
+                    account.account_id,
+                    exc,
+                )
+                account.status = "expired"
+                self.db.flush()
+                break
+            except Exception as exc:
+                error_message = str(exc)
+                error_code = exc.__class__.__name__.upper()
+                logger.error(
+                    "发送消息异常: account_id=%s, conversation_id=%s, user_id=%s, "
+                    "error_code=%s, error=%s, attempt=%s/%s",
+                    account.account_id,
+                    conversation_id,
+                    user_id,
+                    error_code,
+                    exc,
+                    attempt_count,
+                    self.SEND_TEXT_MAX_ATTEMPTS,
+                )
+                if (
+                    not self._is_retryable_send_exception(exc)
+                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
+                ):
+                    outbound_retry_count = retry_count + attempt_count - 1
+                    break
+
+        return {
+            "status": status,
+            "retry_count": outbound_retry_count,
+            "error_code": error_code,
+            "error_message": error_message,
+            "sent_at": datetime.now(UTC) if status == "sent" else None,
+            "ret": last_ret,
+        }
+
     def send_text(
         self,
         *,
@@ -717,6 +859,7 @@ class WechatChannelService:
             )
             return self.create_message_log(
                 user_id=resolved_user_id,
+                account_id=None,
                 message_id=message_id,
                 conversation_id=conversation_id,
                 channel_user_id=resolved_channel_user_id,
@@ -729,136 +872,42 @@ class WechatChannelService:
                 error_message="当前没有可用的微信账号",
             )
 
-        ilink = self._get_ilink_client()
-        status = "failed"
-        error_code = None
-        error_message = None
-        outbound_retry_count = retry_count
-        attempt_count = 0
-
-        while attempt_count < self.SEND_TEXT_MAX_ATTEMPTS:
-            attempt_count += 1
-            try:
-                ticket = ilink.get_typing_ticket(
-                    bot_token=account.bot_token,
-                    user_id=resolved_channel_user_id or conversation_id,
-                    context_token=resolved_context_token or "",
-                )
-
-                if ticket:
-                    ilink.send_typing(
-                        bot_token=account.bot_token,
-                        user_id=resolved_channel_user_id or conversation_id,
-                        ticket=ticket,
-                        status=1,
-                    )
-
-                success = ilink.send_message(
-                    bot_token=account.bot_token,
-                    to_user_id=resolved_channel_user_id or conversation_id,
-                    text=content,
-                    context_token=resolved_context_token or "",
-                )
-
-                if ticket:
-                    try:
-                        ilink.send_typing(
-                            bot_token=account.bot_token,
-                            user_id=resolved_channel_user_id or conversation_id,
-                            ticket=ticket,
-                            status=2,
-                        )
-                    except Exception:
-                        pass
-
-                if success.success:
-                    status = "sent"
-                    error_code = None
-                    error_message = None
-                    outbound_retry_count = retry_count + attempt_count - 1
-                    account.last_active_time = datetime.now(UTC)
-                    break
-
-                error_code = "SEND_FAILED"
-                error_message = (
-                    f"微信消息发送失败: ret={success.ret}, err_msg={success.err_msg}"
-                )
-                logger.error(
-                    "微信消息发送失败: conversation_id=%s, user_id=%s, ret=%s, "
-                    "err_msg=%s, content_preview=%s, attempt=%s/%s",
-                    conversation_id,
-                    resolved_user_id,
-                    success.ret,
-                    success.err_msg,
-                    content[:100],
-                    attempt_count,
-                    self.SEND_TEXT_MAX_ATTEMPTS,
-                )
-                if (
-                    not self._is_retryable_send_failure(error_code, error_message)
-                    or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS
-                ):
-                    outbound_retry_count = retry_count + attempt_count - 1
-                    break
-
-            except ILinkSessionExpired as exc:
-                status = "failed"
-                error_code = "SESSION_EXPIRED"
-                error_message = str(exc)
-                logger.error(
-                    "发送消息会话过期: conversation_id=%s, user_id=%s, "
-                    "account_id=%s, error=%s",
-                    conversation_id,
-                    resolved_user_id,
-                    account.account_id if account else "unknown",
-                    exc,
-                )
-                account.status = "expired"
-                self.db.flush()
-                break
-            except Exception as exc:
-                error_message = str(exc)
-                error_code = exc.__class__.__name__.upper()
-                logger.error(
-                    "发送消息异常: conversation_id=%s, user_id=%s, "
-                    "error_code=%s, error=%s, attempt=%s/%s",
-                    conversation_id,
-                    resolved_user_id,
-                    error_code,
-                    exc,
-                    attempt_count,
-                    self.SEND_TEXT_MAX_ATTEMPTS,
-                )
-                if not self._is_retryable_send_exception(exc) or attempt_count >= self.SEND_TEXT_MAX_ATTEMPTS:
-                    outbound_retry_count = retry_count + attempt_count - 1
-                    break
-
-        if account:
-            self.create_outbound_message(
-                account=account,
-                to_user_id=resolved_channel_user_id or conversation_id,
-                conversation_id=conversation_id,
-                content=content,
-                context_token=resolved_context_token,
-                status=status,
-                retry_count=outbound_retry_count,
-                error_code=error_code,
-                error_message=error_message,
-            )
+        send_result = self._deliver_outbound_text(
+            account=account,
+            to_user_id=resolved_channel_user_id or conversation_id,
+            conversation_id=conversation_id,
+            content=content,
+            context_token=resolved_context_token,
+            user_id=resolved_user_id,
+            retry_count=retry_count,
+        )
+        outbound = self.create_outbound_message(
+            account=account,
+            to_user_id=resolved_channel_user_id or conversation_id,
+            conversation_id=conversation_id,
+            content=content,
+            context_token=resolved_context_token,
+            message_id=message_id,
+            status=send_result["status"],
+            retry_count=send_result["retry_count"],
+            error_code=send_result["error_code"],
+            error_message=send_result["error_message"],
+        )
 
         return self.create_message_log(
             user_id=resolved_user_id,
-            message_id=message_id,
+            account_id=account.account_id,
+            message_id=outbound.message_id,
             conversation_id=conversation_id,
             channel_user_id=resolved_channel_user_id,
             direction=MessageDirection.OUTBOUND.value,
             content_type="text",
             content=content,
             context_token=resolved_context_token,
-            status=status,
-            retry_count=outbound_retry_count,
-            error_code=error_code,
-            error_message=error_message,
+            status=send_result["status"],
+            retry_count=send_result["retry_count"],
+            error_code=send_result["error_code"],
+            error_message=send_result["error_message"],
         )
 
     def create_outbound_message(
@@ -920,7 +969,6 @@ class WechatChannelService:
             return 0
 
         dispatched_count = 0
-        now = datetime.now(UTC)
         for message in queued_messages:
             account = self.get_account_by_account_id(message.account_id)
             if account is None or account.status != "active":
@@ -937,20 +985,30 @@ class WechatChannelService:
                 )
                 continue
 
-            message.status = "sent"
-            message.sent_at = now
-            message.error_code = None
-            message.error_message = None
-            account.last_active_time = now
+            send_result = self._deliver_outbound_text(
+                account=account,
+                to_user_id=message.to_user_id,
+                conversation_id=message.conversation_id,
+                content=message.content,
+                context_token=message.context_token,
+                user_id=None,
+                retry_count=message.retry_count,
+            )
+            message.status = send_result["status"]
+            message.sent_at = send_result["sent_at"]
+            message.retry_count = send_result["retry_count"]
+            message.error_code = send_result["error_code"]
+            message.error_message = send_result["error_message"]
             self._sync_outbound_message_log(
                 account_id=message.account_id,
                 message_id=message.message_id,
-                status="sent",
+                status=message.status,
                 retry_count=message.retry_count,
-                error_code=None,
-                error_message=None,
+                error_code=message.error_code,
+                error_message=message.error_message,
             )
-            dispatched_count += 1
+            if message.status == "sent":
+                dispatched_count += 1
 
         self.db.flush()
         return dispatched_count

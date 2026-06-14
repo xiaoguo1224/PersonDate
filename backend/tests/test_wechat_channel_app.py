@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.schemas.wechat_channel import WechatGetUpdatesResponse
 from app.services.wechat_channel_service import WechatChannelService
+from wechat_channel.ilink_client import SendResult
 
 
 def _build_client():
@@ -308,6 +309,13 @@ def test_wechat_channel_app_sendmessage_persists_outbound_record(monkeypatch) ->
     assert outbound_row.status == "queued"
     assert outbound_row.retry_count == 0
     assert outbound_row.sent_at is None
+    outbound_log = session.execute(
+        text(
+            "select status, message_id from channel_message_logs where direction = 'outbound' limit 1"
+        )
+    ).one()
+    assert outbound_log.status == "queued"
+    assert outbound_log.message_id == body["message_id"]
 
 
 def test_wechat_channel_app_dispatches_queued_outbound_messages(monkeypatch) -> None:
@@ -364,6 +372,16 @@ def test_wechat_channel_app_dispatches_queued_outbound_messages(monkeypatch) -> 
     assert response.json()["success"] is True
     assert response.json()["message_id"] is not None
 
+    mock_client = SimpleNamespace(
+        get_typing_ticket=lambda **kwargs: None,
+        send_typing=lambda **kwargs: None,
+        send_message=lambda **kwargs: SendResult(success=True),
+    )
+    monkeypatch.setattr(
+        WechatChannelService,
+        "_get_ilink_client",
+        lambda self: mock_client,
+    )
     processed = run_wechat_outbound_dispatch_scan(session_factory=lambda: session)
     session.commit()
 

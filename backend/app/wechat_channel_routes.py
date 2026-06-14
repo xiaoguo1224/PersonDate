@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models import WechatAccount, WechatChannelOutboundMessage
+from app.models import ChannelIdentity, WechatAccount, WechatChannelOutboundMessage
 from app.schemas.wechat_channel import (
     WechatChannelOutboundMessageItem,
     WechatChannelOutboundMessageListResponse,
@@ -147,6 +148,23 @@ def send_message(
         _ensure_active_account(account)
 
     conversation_id = payload.conversation_id or payload.to_user_id
+    identity = None
+    if conversation_id:
+        identity = db.scalar(
+            select(ChannelIdentity).where(
+                ChannelIdentity.channel == "wechat",
+                ChannelIdentity.status == "active",
+                ChannelIdentity.conversation_id == conversation_id,
+            )
+        )
+    if identity is None:
+        identity = db.scalar(
+            select(ChannelIdentity).where(
+                ChannelIdentity.channel == "wechat",
+                ChannelIdentity.status == "active",
+                ChannelIdentity.channel_user_id == payload.to_user_id,
+            )
+        )
     outbound = service.create_outbound_message(
         account=account,
         to_user_id=payload.to_user_id,
@@ -159,6 +177,24 @@ def send_message(
             "content": payload.content,
             "context_token": payload.context_token,
         },
+    )
+    service.create_message_log(
+        user_id=identity.user_id if identity else None,
+        account_id=account.account_id,
+        message_id=outbound.message_id,
+        conversation_id=conversation_id,
+        channel_user_id=identity.channel_user_id if identity else payload.to_user_id,
+        direction="outbound",
+        content_type="text",
+        content=payload.content,
+        context_token=payload.context_token,
+        raw_payload={
+            "to_user_id": payload.to_user_id,
+            "conversation_id": conversation_id,
+            "content": payload.content,
+            "context_token": payload.context_token,
+        },
+        status="queued",
     )
     db.commit()
 

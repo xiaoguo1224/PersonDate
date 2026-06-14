@@ -62,13 +62,20 @@ def test_wechat_inbound_binding_success(monkeypatch, client, db_session) -> None
     class _FakeClient:
         def get_channel_qr_code(self) -> dict[str, str]:
             return {"qr_img_content": "base64_fake", "qrcode_id": "qr_test_001"}
+
         def get_channel_qr_code_status(self, _: str) -> dict[str, object]:
-            return {"status": "created", "bot_token": None, "base_url": None, "wechat_user_id": None}
+            return {
+                "status": "created",
+                "bot_token": None,
+                "base_url": None,
+                "wechat_user_id": None,
+            }
 
     monkeypatch.setattr(
         "app.api.routes.wechat.build_wechat_channel_client",
         lambda: _FakeClient(),
     )
+    monkeypatch.setattr("app.api.routes.wechat.SchedulePlanningGraph", FakeGraph)
 
     member = _seed_member(db_session)
     from app.services.auth_service import AuthService

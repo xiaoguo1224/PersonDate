@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.schemas.wechat import WechatInboundRequest
 from app.services.wechat_channel_adapter import WechatChannelAdapter
 from app.services.wechat_channel_service import WechatChannelService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -73,37 +76,75 @@ class WechatChannelPoller:
 
         processed_count = 0
         for message in result.messages:
-            inbound_request = WechatInboundRequest(
-                message_id=message.message_id,
-                account_id=account.account_id,
-                conversation_id=message.conversation_id,
-                channel_user_id=message.channel_user_id,
-                display_name=message.display_name,
-                context_token=message.context_token,
-                content_type=message.content_type,
-                content=message.content,
-                raw_payload=message.raw_payload,
-            )
-            handling = self.adapter.handle_inbound_message(
-                inbound_request,
-                channel_token=None,
-                require_auth=False,
-            )
-            if handling.response.handled:
-                processed_count += 1
-                reply = handling.response.reply
-                if reply and message.context_token:
-                    try:
-                        service.send_text(
-                            conversation_id=message.conversation_id,
-                            content=reply,
-                            context_token=message.context_token,
-                            user_id=None,
-                            channel_user_id=message.channel_user_id,
-                        )
-                        self.db.commit()
-                    except Exception:
-                        self.db.rollback()
+            try:
+                inbound_request = WechatInboundRequest(
+                    message_id=message.message_id,
+                    account_id=account.account_id,
+                    conversation_id=message.conversation_id,
+                    channel_user_id=message.channel_user_id,
+                    display_name=message.display_name,
+                    context_token=message.context_token,
+                    content_type=message.content_type,
+                    content=message.content,
+                    raw_payload=message.raw_payload,
+                )
+                handling = self.adapter.handle_inbound_message(
+                    inbound_request,
+                    channel_token=None,
+                    require_auth=False,
+                )
+                if handling.response.handled:
+                    processed_count += 1
+                    reply = handling.response.reply
+                    if reply and message.context_token:
+                        try:
+                            service.send_text(
+                                conversation_id=message.conversation_id,
+                                content=reply,
+                                context_token=message.context_token,
+                                user_id=None,
+                                channel_user_id=message.channel_user_id,
+                            )
+                            self.db.commit()
+                        except Exception:
+                            self.db.rollback()
+            except Exception as exc:
+                logger.exception(
+                    "处理微信入站消息失败: account_id=%s message_id=%s conversation_id=%s",
+                    account.account_id,
+                    message.message_id,
+                    message.conversation_id,
+                )
+                self.db.rollback()
+                existing_log = None
+                if message.message_id is not None:
+                    existing_log = service.get_message_log_by_message_id(
+                        message.message_id,
+                        account_id=account.account_id,
+                    )
+                error_message = str(exc) or exc.__class__.__name__
+                if existing_log is not None:
+                    existing_log.status = "failed"
+                    existing_log.error_code = "INBOUND_PROCESS_ERROR"
+                    existing_log.error_message = error_message
+                else:
+                    service.create_message_log(
+                        user_id=None,
+                        account_id=account.account_id,
+                        message_id=message.message_id,
+                        conversation_id=message.conversation_id,
+                        channel_user_id=message.channel_user_id,
+                        direction="inbound",
+                        content_type=message.content_type,
+                        content=message.content,
+                        context_token=message.context_token,
+                        raw_payload=message.raw_payload,
+                        status="failed",
+                        error_code="INBOUND_PROCESS_ERROR",
+                        error_message=error_message,
+                    )
+                self.db.commit()
+                continue
 
         service.update_account_cursor(
             account_id=account.account_id,

@@ -60,6 +60,20 @@ class FakeAdapter:
         )
 
 
+class FlakyAdapter:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def handle_inbound_message(self, payload, channel_token=None, *, require_auth=True):  # noqa: ANN001
+        self.calls.append(payload.message_id)
+        if payload.message_id == "msg_001":
+            raise RuntimeError("LLM 服务不可用")
+        return WechatInboundHandlingResult(
+            response=WechatInboundResponse(handled=True, reply="已处理"),
+            message="已处理",
+        )
+
+
 def test_poll_account_once_updates_cursor_and_dispatches_messages() -> None:
     session = _build_session()
     account = WechatAccount(
@@ -132,3 +146,55 @@ def test_poll_account_once_marks_expired_on_auth_failure() -> None:
     refreshed = session.get(WechatAccount, account.id)
     assert refreshed is not None
     assert refreshed.status == "expired"
+
+
+def test_poll_account_once_continues_after_single_message_failure() -> None:
+    session = _build_session()
+    account = WechatAccount(
+        owner_user_id="owner-1",
+        account_id="wx_account_003",
+        wechat_user_id="wx_user_003",
+        bot_token="token_001",
+        base_url="https://wechat.example.com",
+        cursor="cursor_0",
+        status="active",
+    )
+    session.add(account)
+    session.commit()
+
+    adapter = FlakyAdapter()
+    client = FakeUpdatesClient(
+        payload={
+            "messages": [
+                {
+                    "message_id": "msg_001",
+                    "from_user_id": "wx_user_001",
+                    "to_user_id": "wx_account_003",
+                    "session_id": "wx_user_001",
+                    "display_name": "测试用户",
+                    "message_type": "text",
+                    "text": "坏消息",
+                },
+                {
+                    "message_id": "msg_002",
+                    "from_user_id": "wx_user_002",
+                    "to_user_id": "wx_account_003",
+                    "session_id": "wx_user_002",
+                    "display_name": "测试用户2",
+                    "message_type": "text",
+                    "text": "好消息",
+                },
+            ],
+            "get_updates_buf": "cursor_2",
+        }
+    )
+
+    poller = WechatChannelPoller(session, client, adapter)
+    processed = poller.poll_account_once("wx_account_003")
+
+    assert processed == 1
+    assert adapter.calls == ["msg_001", "msg_002"]
+
+    refreshed = session.get(WechatAccount, account.id)
+    assert refreshed is not None
+    assert refreshed.cursor == "cursor_2"

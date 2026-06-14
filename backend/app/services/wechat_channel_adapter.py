@@ -6,10 +6,15 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.agent.graph import SchedulePlanningGraph
+from app.agent.graph import (
+    SchedulePlanningGraph,
+    build_agent_error_message,
+    get_result_value,
+)
 from app.core.config import get_settings
-from app.models import ChannelIdentity, WechatAccount
+from app.models import ChannelIdentity, ChannelMessageLog, WechatAccount
 from app.schemas.wechat import WechatInboundRequest, WechatInboundResponse
+from app.services.agent_log_service import AgentLogService
 from app.services.channel_identity_service import ChannelIdentityService
 from app.services.user_service import UserService
 from app.services.wechat_channel_service import WechatChannelService
@@ -78,6 +83,9 @@ class WechatChannelAdapter:
             context_token=context_token,
             raw_payload=payload.raw_payload,
         )
+        self.db.commit()
+        self.db.refresh(inbound_log)
+        inbound_log_id = inbound_log.id
 
         if payload.content_type.lower() != "text":
             inbound_log.status = "ignored"
@@ -138,17 +146,50 @@ class WechatChannelAdapter:
             )
 
         inbound_log.user_id = user.id
-        graph = self.graph_cls(self.db)
-        result = graph.invoke(
-            current_user=user,
-            message=content,
-            conversation_id=payload.conversation_id,
-            channel="wechat",
-        )
-        inbound_log.status = "processed" if result.get("success") else "failed"
-        inbound_log.error_message = result.get("error")
+        user_id = user.id
+        try:
+            graph = self.graph_cls(self.db)
+            result = graph.invoke(
+                current_user=user,
+                message=content,
+                conversation_id=payload.conversation_id,
+                channel="wechat",
+            )
+        except Exception as exc:
+            self.db.rollback()
+            error_message = build_agent_error_message(exc)
+            stored_log = self.db.get(ChannelMessageLog, inbound_log_id)
+            if stored_log is not None:
+                stored_log.user_id = user_id
+                stored_log.status = "failed"
+                stored_log.error_message = error_message
+            AgentLogService(self.db).create_log(
+                user_id=user_id,
+                channel="wechat",
+                conversation_id=payload.conversation_id,
+                input_text=content,
+                intent="",
+                graph_trace=["agent_loop", "invoke_failed"],
+                tools_called=[],
+                tool_args=[],
+                tool_results=[],
+                final_response=error_message,
+                success=False,
+                error_message=error_message,
+            )
+            self.db.commit()
+            return WechatInboundHandlingResult(
+                response=WechatInboundResponse(
+                    handled=True,
+                    reply=error_message,
+                ),
+                message=error_message,
+            )
+
+        inbound_log.status = "processed" if get_result_value(result, "success") else "failed"
+        inbound_log.error_message = get_result_value(result, "error")
         self.db.commit()
-        final_response = result.get("final_response", "")
+        final_response = get_result_value(result, "final_response", "")
         return WechatInboundHandlingResult(
             response=WechatInboundResponse(
                 handled=True,

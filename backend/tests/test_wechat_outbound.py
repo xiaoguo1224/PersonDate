@@ -230,10 +230,13 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs(db_session) -
     db_session.commit()
 
     service = WechatChannelService(db_session)
+    mock_client = _mock_ilink_client()
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
     processed = service.dispatch_outbound_messages_once()
     db_session.commit()
 
     assert processed == 1
+    assert mock_client.send_message.call_count == 1
     outbound_row = db_session.scalar(
         db_session.query(WechatChannelOutboundMessage)
         .filter_by(message_id="wx_out_001")
@@ -338,7 +341,7 @@ def test_admin_send_test_route_returns_send_result(monkeypatch, db_session) -> N
     db_session.commit()
 
     mock_client = _mock_ilink_client()
-    mock_client.send_message.return_value = True
+    mock_client.send_message.return_value = SendResult(success=True)
 
     monkeypatch.setattr(
         WechatChannelService,
