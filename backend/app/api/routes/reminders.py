@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -66,11 +67,19 @@ def list_reminders(
     current_user: User = Depends(get_current_user),
     status: str | None = None,
     keyword: str | None = None,
+    sort_order: Literal["trigger_time_asc", "trigger_time_desc"] = Query(default="trigger_time_asc"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> ApiResponse[ReminderListResponse]:
     service = ReminderService(db)
-    jobs, total = service.list_jobs(current_user.id, status=status, keyword=keyword, page=page, page_size=page_size)
+    jobs, total = service.list_jobs(
+        current_user.id,
+        status=status,
+        keyword=keyword,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
     item_map = _load_scheduled_items_map(db, jobs)
     items = [_to_item(job, item_map.get(job.target_id)) for job in jobs]
     return ApiResponse(data=ReminderListResponse(items=items, total=total, page=page, page_size=page_size))

@@ -95,3 +95,35 @@ def test_list_jobs_paginates_after_trigger_time_sorting() -> None:
 
     assert total == 3
     assert [job.title for job in jobs] == ["第二条"]
+
+
+def test_list_jobs_supports_trigger_time_descending() -> None:
+    session = _build_session()
+    service = ReminderService(session)
+
+    session.add_all(
+        [
+            ReminderJob(
+                user_id="user-1",
+                target_type="scheduled_item",
+                target_id="item-1",
+                title="最早的提醒",
+                trigger_time=datetime.now(UTC) + timedelta(minutes=10),
+                status=ReminderStatus.PENDING.value,
+            ),
+            ReminderJob(
+                user_id="user-1",
+                target_type="scheduled_item",
+                target_id="item-2",
+                title="最晚的提醒",
+                trigger_time=datetime.now(UTC) + timedelta(hours=2),
+                status=ReminderStatus.PENDING.value,
+            ),
+        ]
+    )
+    session.commit()
+
+    jobs, total = service.list_jobs("user-1", sort_order="trigger_time_desc", page=1, page_size=10)
+
+    assert total == 2
+    assert [job.title for job in jobs] == ["最晚的提醒", "最早的提醒"]

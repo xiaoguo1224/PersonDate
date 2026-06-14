@@ -103,7 +103,7 @@ def create_scheduled_item(
             remind_before_minutes=actual_remind_minutes,
             source="agent",
         )
-        trigger_time = start - timedelta(minutes=remind_before_minutes)
+        trigger_time = start - timedelta(minutes=actual_remind_minutes)
         ReminderService(db).create_for_target(
             user_id=user_id,
             target_type=ReminderTargetType.SCHEDULED_ITEM.value,

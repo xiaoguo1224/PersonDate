@@ -80,6 +80,7 @@ class ReminderService:
         user_id: str,
         status: str | None = None,
         keyword: str | None = None,
+        sort_order: str = "trigger_time_asc",
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ReminderJob], int]:
@@ -90,11 +91,14 @@ class ReminderService:
             pattern = f"%{keyword}%"
             base = base.where(ReminderJob.title.ilike(pattern))
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
+        is_desc = sort_order == "trigger_time_desc"
+        trigger_time_order = ReminderJob.trigger_time.desc() if is_desc else ReminderJob.trigger_time.asc()
+        created_at_order = ReminderJob.created_at.desc() if is_desc else ReminderJob.created_at.asc()
         items = list(
             self.db.scalars(
                 base.order_by(
-                    ReminderJob.trigger_time.asc(),
-                    ReminderJob.created_at.asc(),
+                    trigger_time_order,
+                    created_at_order,
                 )
                 .offset((page - 1) * page_size)
                 .limit(page_size)
@@ -106,12 +110,17 @@ class ReminderService:
         stmt = select(ReminderJob).where(ReminderJob.user_id == user_id, ReminderJob.id == job_id)
         return self.db.scalar(stmt)
 
-    def list_jobs_cached(self, user_id: str, status: str | None = None) -> list[dict]:
-        cache_key = f"schedule:user:{user_id}:reminders:status:{status or 'all'}"
+    def list_jobs_cached(
+        self,
+        user_id: str,
+        status: str | None = None,
+        sort_order: str = "trigger_time_asc",
+    ) -> list[dict]:
+        cache_key = f"schedule:user:{user_id}:reminders:status:{status or 'all'}:sort:{sort_order}"
         cached = cache_get(cache_key)
         if cached is not None:
             return cached
-        items, _ = self.list_jobs(user_id, status=status, page_size=100)
+        items, _ = self.list_jobs(user_id, status=status, sort_order=sort_order, page_size=100)
         result = [
             {
                 "id": item.id,

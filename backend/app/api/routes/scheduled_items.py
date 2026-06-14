@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -79,6 +79,18 @@ def create_scheduled_item(
     # 检测冲突
     conflict_service = ConflictService(db)
     conflicts = conflict_service.detect_item_conflicts(current_user.id, item)
+
+    if item.remind_before_minutes is not None:
+        from app.models.enums import ReminderTargetType
+        from app.services.reminder_service import ReminderService
+
+        ReminderService(db).create_for_target(
+            user_id=current_user.id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+            target_id=item.id,
+            title=item.title,
+            trigger_time=item.start_time - timedelta(minutes=item.remind_before_minutes),
+        )
 
     # 如果有冲突，尝试调整弹性任务
     if conflicts:
