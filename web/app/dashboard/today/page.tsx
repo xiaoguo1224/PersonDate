@@ -131,6 +131,20 @@ function createChatId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function buildAgentFailureDisplay(errorMessage: string) {
+  const trimmed = errorMessage.trim() || "Agent 暂时不可用";
+  if (trimmed.includes("大模型服务调用失败")) {
+    return {
+      content: `本次未处理成功。\n\n原因：${trimmed}`,
+      meta: "大模型异常",
+    };
+  }
+  return {
+    content: trimmed,
+    meta: "Agent 发送失败",
+  };
+}
+
 function createWelcomeMessage(): ChatMessage {
   return {
     id: "welcome",
@@ -915,13 +929,14 @@ export default function TodayPage() {
       refreshData();
     } catch (caughtError: unknown) {
       const errorMessage = caughtError instanceof Error ? caughtError.message : "发送失败";
+      const failureDisplay = buildAgentFailureDisplay(errorMessage);
       setAgentMessages((prev) => [
         ...prev.filter((messageItem) => !messageItem.pending),
         {
           id: createChatId(),
           role: "system",
-          content: errorMessage,
-          meta: "Agent 发送失败",
+          content: failureDisplay.content,
+          meta: failureDisplay.meta,
           timestamp: getChatTimeLabel(),
         },
       ]);
