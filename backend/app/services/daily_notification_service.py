@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.cache import cache_get, cache_set
 from app.core.config import get_settings
 from app.models.enums import ScheduledItemStatus, TaskStatus
+from app.services.system_setting_service import SystemSettingService
 from app.models.schedule import TaskItem
 from app.models.scheduled_item import ScheduledItem
 from app.models.user import User, UserSettings
@@ -43,8 +44,20 @@ class DailyNotificationService:
     def _mark_push_today(self, user_id: str, today: str) -> None:
         cache_set(self._last_push_key(user_id), today, 86400)
 
+    def _is_system_push_enabled(self) -> bool:
+        value = SystemSettingService(self.db).get_value("SYSTEM_DAILY_PUSH_ENABLED")
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in {"1", "true", "yes", "on"}
+        return False
+
     def get_due_users(self) -> list[User]:
         """查找需要推送的用户：当前时间 >= 推送时间 且 今日尚未推送。"""
+        if not self._is_system_push_enabled():
+            logger.info("系统每日推送已关闭，跳过每日推送扫描")
+            return []
         stmt = (
             select(User)
             .join(UserSettings)

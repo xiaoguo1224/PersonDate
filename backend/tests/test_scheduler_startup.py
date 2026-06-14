@@ -50,6 +50,41 @@ def test_build_reminder_scheduler_registers_interval_job(monkeypatch) -> None:
     assert reminder_job["coalesce"] is True
 
 
+def test_build_reminder_scheduler_prefers_db_interval(monkeypatch, db_session) -> None:
+    from app.schemas.system_setting import UpdateSystemSettingsRequest
+    from app.services.system_setting_service import SystemSettingService
+    from app.core import scheduler as scheduler_module
+
+    fake_scheduler = FakeScheduler()
+    monkeypatch.setattr(scheduler_module, "BackgroundScheduler", lambda **kwargs: fake_scheduler)
+    monkeypatch.setattr(
+        scheduler_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            reminder_scan_interval_seconds=15,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.system_setting_service.get_settings",
+        lambda: SimpleNamespace(jwt_secret="test-secret"),
+    )
+
+    SystemSettingService(db_session).update_settings(
+        UpdateSystemSettingsRequest(REMINDER_SCAN_INTERVAL_SECONDS=27)
+    )
+    db_session.commit()
+
+    scheduler = scheduler_module.build_reminder_scheduler(
+        session_factory=lambda: db_session,
+        sender_provider=lambda: None,
+    )
+
+    assert scheduler is fake_scheduler
+    assert len(fake_scheduler.jobs) == 1
+    reminder_job = fake_scheduler.jobs[0]
+    assert reminder_job["seconds"] == 27
+
+
 def test_create_app_starts_and_stops_scheduler(monkeypatch) -> None:
     from app import main as main_module
 
@@ -143,3 +178,41 @@ def test_run_wechat_poll_scan_dispatches_active_accounts(monkeypatch) -> None:
 
     assert processed == 1
     assert getattr(fake_session, "closed", False) is True
+
+
+def test_run_daily_notification_scan_handles_notify_errors(monkeypatch) -> None:
+    from app.core import scheduler as scheduler_module
+
+    class FakeUser:
+        id = "user-1"
+
+    class FakeService:
+        def __init__(self, db) -> None:  # noqa: ANN001
+            self.db = db
+
+        def get_due_users(self):
+            return [FakeUser()]
+
+        def notify_user(self, user):  # noqa: ANN001
+            raise RuntimeError("push failed")
+
+    class FakeSession:
+        committed = False
+        closed = False
+
+        def commit(self) -> None:
+            self.committed = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_session = FakeSession()
+    monkeypatch.setattr(scheduler_module, "DailyNotificationService", FakeService)
+
+    processed = scheduler_module.run_daily_notification_scan(
+        session_factory=lambda: fake_session,
+    )
+
+    assert processed == 0
+    assert fake_session.committed is True
+    assert fake_session.closed is True

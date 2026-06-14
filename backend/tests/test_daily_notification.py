@@ -31,9 +31,14 @@ def service(db_session):
 class TestGetDueUsers:
     def test_returns_users_with_matching_time(self, service, db_session):
         from app.models.user import User, UserSettings
+        from app.schemas.system_setting import UpdateSystemSettingsRequest
+        from app.services.system_setting_service import SystemSettingService
         user = User(username="test", display_name="Test", password_hash="hash")
         db_session.add(user)
         db_session.flush()
+        SystemSettingService(db_session).update_settings(
+            UpdateSystemSettingsRequest(SYSTEM_DAILY_PUSH_ENABLED=True)
+        )
         settings = UserSettings(
             user_id=user.id,
             daily_plan_push_enabled=True,
@@ -49,6 +54,32 @@ class TestGetDueUsers:
             users = service.get_due_users()
             assert len(users) == 1
             assert users[0].id == user.id
+
+    def test_skips_users_when_system_push_disabled(self, service, db_session):
+        from app.models.user import User, UserSettings
+        from app.schemas.system_setting import UpdateSystemSettingsRequest
+        from app.services.system_setting_service import SystemSettingService
+
+        user = User(username="test_disabled", password_hash="hash")
+        db_session.add(user)
+        db_session.flush()
+        SystemSettingService(db_session).update_settings(
+            UpdateSystemSettingsRequest(SYSTEM_DAILY_PUSH_ENABLED=False)
+        )
+        settings = UserSettings(
+            user_id=user.id,
+            daily_plan_push_enabled=True,
+            daily_plan_push_time="16:00",
+            default_timezone="Asia/Shanghai",
+        )
+        db_session.add(settings)
+        db_session.commit()
+
+        fixed_now = datetime(2026, 6, 6, 8, 0, tzinfo=UTC)
+        with patch("app.services.daily_notification_service.datetime") as mock_datetime:
+            mock_datetime.now.return_value = fixed_now
+            users = service.get_due_users()
+            assert len(users) == 0
 
     def test_skips_disabled_users(self, service, db_session):
         from app.models.user import User, UserSettings
@@ -102,13 +133,23 @@ class TestBuildMessage:
 
 class TestGetWeather:
     def test_caches_weather(self, service):
-        from app.services.daily_notification_service import WEATHER_CACHE, WEATHER_CACHE_TIMESTAMP
-        WEATHER_CACHE.clear()
-        WEATHER_CACHE_TIMESTAMP.clear()
+        from app.services import daily_notification_service as daily_notification_module
 
-        with patch.object(service, '_fetch_weather_from_api') as mock_fetch:
+        cache_store: dict[str, object] = {}
+
+        def fake_cache_get(key: str):
+            return cache_store.get(key)
+
+        def fake_cache_set(key: str, value: object, ttl: int) -> None:
+            cache_store[key] = value
+
+        with (
+            patch.object(daily_notification_module, "cache_get", side_effect=fake_cache_get),
+            patch.object(daily_notification_module, "cache_set", side_effect=fake_cache_set),
+            patch.object(service, "_fetch_weather_from_api") as mock_fetch,
+        ):
             mock_fetch.return_value = {"desc": "晴", "temp": 26, "icon": "☀️"}
-            result1 = service.get_weather("北京")
-            result2 = service.get_weather("北京")
+            result1 = service.get_weather("测试城市-缓存")
+            result2 = service.get_weather("测试城市-缓存")
             assert result1 == result2
             assert mock_fetch.call_count == 1  # 第二次走缓存

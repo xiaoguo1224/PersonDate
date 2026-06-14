@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
@@ -19,9 +20,11 @@ from app.agent.tools import ALL_TOOLS, set_user_id
 from app.core.config import get_settings
 from app.models import User
 from app.services.agent_log_service import AgentLogService
+from app.services.system_setting_service import SystemSettingService
 
 # 模块级 checkpointer，所有请求共享，确保 interrupt 状态跨请求持久化
 _module_checkpointer = MemorySaver()
+logger = logging.getLogger(__name__)
 
 
 class AgentState(TypedDict):
@@ -36,6 +39,57 @@ class AgentState(TypedDict):
     needs_confirmation: bool
     confirmation_prompt: str
     confirmed_action: str | None
+
+
+def get_result_value(result: Any, key: str, default: Any = None) -> Any:
+    if isinstance(result, dict):
+        return result.get(key, default)
+    return getattr(result, key, default)
+
+
+def build_agent_error_message(exc: Exception) -> str:
+    detail = str(exc).strip()
+    if detail:
+        return f"大模型服务调用失败：{detail}"
+    return f"大模型服务调用失败：{exc.__class__.__name__}"
+
+
+def _resolve_llm_runtime_config(db: Any | None) -> dict[str, str | None]:
+    settings = get_settings()
+    config = {
+        "base_url": settings.llm_base_url,
+        "api_key": settings.llm_api_key,
+        "model": settings.llm_model or "gpt-4o-mini",
+    }
+    if db is None:
+        return config
+
+    try:
+        service = SystemSettingService(db)
+        config["base_url"] = service.get_value("LLM_BASE_URL") or config["base_url"]
+        config["api_key"] = service.get_value("LLM_API_KEY") or config["api_key"]
+        config["model"] = service.get_value("LLM_MODEL") or config["model"]
+    except Exception:
+        logger.exception("读取数据库 LLM 配置失败，回退到环境变量配置")
+    return config
+
+
+def _resolve_timezone_name(current_user: User, db: Any | None) -> str:
+    settings = get_settings()
+    user_settings = getattr(current_user, "__dict__", {}).get("settings")
+    if user_settings and getattr(user_settings, "default_timezone", None):
+        return user_settings.default_timezone
+
+    if db is not None:
+        try:
+            service = SystemSettingService(db)
+            default_timezone = service.get_value("DEFAULT_TIMEZONE")
+            if isinstance(default_timezone, str) and default_timezone.strip():
+                return default_timezone
+        except Exception:
+            logger.exception("读取数据库默认时区失败，回退到环境变量配置")
+
+    return settings.default_timezone
 
 
 def _build_system_prompt(state: AgentState) -> str:
@@ -150,12 +204,12 @@ def _detect_confirmation_needed(content: str, has_tool_calls: bool) -> bool:
     return any(pattern in content for pattern in _CONFIRM_PATTERNS)
 
 
-def _create_agent_node():
-    settings = get_settings()
+def _create_agent_node(db: Any | None = None):
+    runtime_config = _resolve_llm_runtime_config(db)
     model = ChatOpenAI(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model=settings.llm_model or "gpt-4o-mini",
+        base_url=runtime_config["base_url"],
+        api_key=runtime_config["api_key"],
+        model=runtime_config["model"] or "gpt-4o-mini",
     ).bind_tools(ALL_TOOLS)
 
     def agent_node(state: AgentState) -> dict:
@@ -321,8 +375,8 @@ def should_continue(state: AgentState) -> str:
     return END
 
 
-def build_graph(checkpointer=None):
-    agent_node = _create_agent_node()
+def build_graph(checkpointer=None, db: Any | None = None):
+    agent_node = _create_agent_node(db)
     tool_node = _create_tool_node()
     human_node = _create_human_node()
 
@@ -347,7 +401,7 @@ def build_graph(checkpointer=None):
 class SchedulePlanningGraph:
     def __init__(self, db=None):
         self.db = db
-        self.app = build_graph(_module_checkpointer)
+        self.app = build_graph(_module_checkpointer, db=db)
         self.logs = AgentLogService(db) if db else None
         self.input_sanitizer = InputSanitizer()
         self.output_sanitizer = OutputSanitizer()
@@ -360,12 +414,7 @@ class SchedulePlanningGraph:
         conversation_id: str = "debug",
         channel: str = "wechat",
     ) -> dict:
-        settings = get_settings()
-        tz_name = (
-            current_user.settings.default_timezone
-            if current_user.settings
-            else settings.default_timezone
-        )
+        tz_name = _resolve_timezone_name(current_user, self.db)
         now_local = datetime.now(UTC).astimezone(ZoneInfo(tz_name))
 
         is_safe, sanitized_message = self.input_sanitizer.sanitize(message)
@@ -390,12 +439,13 @@ class SchedulePlanningGraph:
 
         # 获取用户设置
         user_settings_dict = None
-        if current_user.settings:
+        current_user_settings = getattr(current_user, "__dict__", {}).get("settings")
+        if current_user_settings:
             user_settings_dict = {
-                "default_remind_before_minutes": current_user.settings.default_remind_before_minutes or 0,
-                "default_timezone": current_user.settings.default_timezone,
-                "workday_start_time": current_user.settings.workday_start_time,
-                "workday_end_time": current_user.settings.workday_end_time,
+                "default_remind_before_minutes": current_user_settings.default_remind_before_minutes or 0,
+                "default_timezone": current_user_settings.default_timezone,
+                "workday_start_time": current_user_settings.workday_start_time,
+                "workday_end_time": current_user_settings.workday_end_time,
             }
 
         if is_interrupted:

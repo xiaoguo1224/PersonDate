@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import logging
 from typing import cast
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -10,13 +11,39 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.daily_notification_service import DailyNotificationService
+from app.services.system_setting_service import SystemSettingService
 from app.services.wechat_channel_poller import WechatChannelPoller, WechatUpdatesClient
 from app.services.wechat_channel_service import WechatChannelService
 from app.workers.reminder_worker import ReminderWorker
 
+logger = logging.getLogger(__name__)
+
 SessionFactory = Callable[[], Session]
 SenderProvider = Callable[[], object | None]
 UpdatesClientProvider = Callable[[], object | None]
+
+
+def _resolve_reminder_scan_interval_seconds(*, session_factory: SessionFactory = SessionLocal) -> int:
+    db = session_factory()
+    if db is None:
+        return get_settings().reminder_scan_interval_seconds
+    try:
+        try:
+            value = SystemSettingService(db).get_value("REMINDER_SCAN_INTERVAL_SECONDS")
+            if isinstance(value, int) and value > 0:
+                return value
+            if isinstance(value, str) and value.isdigit():
+                parsed = int(value)
+                if parsed > 0:
+                    return parsed
+        except Exception:
+            logger.exception("读取数据库提醒扫描间隔失败，回退到环境变量")
+        settings = get_settings()
+        return settings.reminder_scan_interval_seconds
+    finally:
+        close = getattr(db, "close", None)
+        if callable(close):
+            close()
 
 
 def run_reminder_scan(
@@ -71,12 +98,14 @@ def build_reminder_scheduler(
     session_factory: SessionFactory = SessionLocal,
     sender_provider: SenderProvider | None = None,
 ) -> BackgroundScheduler:
-    settings = get_settings()
+    reminder_scan_interval_seconds = _resolve_reminder_scan_interval_seconds(
+        session_factory=session_factory,
+    )
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(
         run_reminder_scan,
         trigger="interval",
-        seconds=settings.reminder_scan_interval_seconds,
+        seconds=reminder_scan_interval_seconds,
         id="reminder-scan",
         replace_existing=True,
         max_instances=1,

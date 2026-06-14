@@ -3,7 +3,11 @@ from __future__ import annotations
 # MUST be first: override DATABASE_URL before any app imports
 import os
 
-os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/schedule_agent_test"
+TEST_DB_NAME = f"schedule_agent_test_{os.getpid()}"
+DB_URL = f"postgresql+psycopg://postgres:postgres@localhost:5432/{TEST_DB_NAME}"
+ADMIN_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+
+os.environ["DATABASE_URL"] = DB_URL
 
 from collections.abc import Generator
 from typing import Any
@@ -12,6 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -22,14 +27,17 @@ from app.schemas.setup import OwnerInitRequest
 from app.services.auth_service import AuthService
 from app.services.setup_service import SetupService
 
-TEST_DB_NAME = "schedule_agent_test"
-DB_URL = f"postgresql+psycopg://postgres:postgres@localhost:5432/{TEST_DB_NAME}"
-ADMIN_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
-
-
 def _create_test_database() -> None:
     admin_engine = create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
+        conn.execute(
+            text(
+                "SELECT pg_terminate_backend(pid) "
+                "FROM pg_stat_activity "
+                "WHERE datname = :db_name AND pid <> pg_backend_pid()"
+            ),
+            {"db_name": TEST_DB_NAME},
+        )
         conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB_NAME}"))
         conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))
     admin_engine.dispose()
@@ -38,6 +46,14 @@ def _create_test_database() -> None:
 def _drop_test_database() -> None:
     admin_engine = create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
+        conn.execute(
+            text(
+                "SELECT pg_terminate_backend(pid) "
+                "FROM pg_stat_activity "
+                "WHERE datname = :db_name AND pid <> pg_backend_pid()"
+            ),
+            {"db_name": TEST_DB_NAME},
+        )
         conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB_NAME}"))
     admin_engine.dispose()
 
@@ -74,11 +90,24 @@ def db_session() -> Generator[Session, None, None]:
     connection = engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection, autoflush=False, autocommit=False)
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def _restart_savepoint(sess: Session, trans) -> None:  # noqa: ANN001
+        nonlocal nested
+        if trans.nested and not getattr(trans.parent, "nested", False):
+            if connection.closed:
+                return
+            nested = connection.begin_nested()
+
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
+        if nested.is_active:
+            nested.rollback()
+        if transaction.is_active:
+            transaction.rollback()
         connection.close()
         engine.dispose()
 

@@ -30,7 +30,7 @@ def get_redis() -> redis.Redis | None:
         _redis_client.ping()
         logger.info("Redis 连接成功: %s", settings.redis_url)
         return _redis_client
-    except (redis.ConnectionError, redis.TimeoutError) as exc:
+    except (redis.ConnectionError, redis.TimeoutError, redis.RedisError) as exc:
         logger.warning("Redis 连接失败，降级为无缓存模式: %s", exc)
         _redis_client = None
         return None
