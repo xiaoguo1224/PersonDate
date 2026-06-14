@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Modal, Pagination, Row, Space, Spin, Tabs, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -39,6 +39,7 @@ export default function RemindersPage() {
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [sortOrder, setSortOrder] = useState<"trigger_time_asc" | "trigger_time_desc">("trigger_time_asc");
   const [defaultRemindBefore, setDefaultRemindBefore] = useState(0);
   const [savingDefault, setSavingDefault] = useState(false);
   const [page, setPage] = useState(1);
@@ -59,6 +60,7 @@ export default function RemindersPage() {
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (searchKeyword) params.set("keyword", searchKeyword);
+    params.set("sort_order", sortOrder);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
     requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
@@ -70,7 +72,7 @@ export default function RemindersPage() {
         setError(caughtError instanceof Error ? caughtError.message : "未知错误");
       })
       .finally(() => setLoading(false));
-  }, [accessToken, statusFilter, searchKeyword, page, pageSize]);
+  }, [accessToken, statusFilter, searchKeyword, sortOrder, page, pageSize]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -293,6 +295,18 @@ export default function RemindersPage() {
               onChange={(e) => setKeyword(e.target.value)}
               onSearch={(value) => {
                 setSearchKeyword(value);
+                setPage(1);
+              }}
+            />
+            <Select
+              value={sortOrder}
+              style={{ width: 180 }}
+              options={[
+                { value: "trigger_time_asc", label: "触发时间升序" },
+                { value: "trigger_time_desc", label: "触发时间降序" },
+              ]}
+              onChange={(value) => {
+                setSortOrder(value as typeof sortOrder);
                 setPage(1);
               }}
             />
