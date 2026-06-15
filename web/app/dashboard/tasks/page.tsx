@@ -6,7 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatDateTime, loadTaskScheduledItems, type ScheduledItem, type TaskItem, type TaskListResponse } from "@/lib/dashboard";
+import {
+  formatDateTime,
+  loadTaskScheduledItems,
+  parseDateOnlyInTimeZone,
+  parseDateTimeInTimeZone,
+  toIsoStringInTimeZone,
+  type ScheduledItem,
+  type TaskItem,
+  type TaskListResponse,
+} from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -164,11 +173,11 @@ export default function TasksPage() {
       title: task.title,
       description: task.description,
       estimated_minutes: task.estimated_minutes,
-      deadline: task.deadline ? new Date(task.deadline) : undefined,
+      deadline: task.deadline ? parseDateTimeInTimeZone(task.deadline, timezone) : undefined,
       priority: task.priority,
       schedule_type: task.schedule_type,
-      start_date: task.start_date ? new Date(task.start_date) : undefined,
-      end_date: task.end_date ? new Date(task.end_date) : undefined,
+      start_date: task.start_date ? parseDateOnlyInTimeZone(task.start_date, timezone) : undefined,
+      end_date: task.end_date ? parseDateOnlyInTimeZone(task.end_date, timezone) : undefined,
       duration_days: task.duration_days,
       time_type: task.time_type,
       scheduled_time: task.scheduled_time ? new Date(`2000-01-01T${task.scheduled_time}`) : undefined,
@@ -186,7 +195,7 @@ export default function TasksPage() {
         title: values.title,
         description: values.description,
         estimated_minutes: values.estimated_minutes,
-        deadline: values.deadline?.toISOString(),
+        deadline: values.deadline ? toIsoStringInTimeZone(values.deadline, timezone) : undefined,
         priority: values.priority || "medium",
         schedule_type: values.schedule_type,
         start_date: values.start_date?.format("YYYY-MM-DD"),

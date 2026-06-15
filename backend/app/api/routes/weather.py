@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -112,7 +112,7 @@ async def get_weather(
 
     # 生成缓存键，使用经纬度的前4位小数（约11米精度）
     cache_key = f"{provider}_{lat:.4f}_{lon:.4f}"
-    now = datetime.now()
+    now = datetime.now(UTC)
 
     # 检查缓存是否有效
     if cache_key in _weather_cache:
@@ -134,6 +134,6 @@ async def get_weather(
 
         return ApiResponse(data=weather_data)
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail="天气数据获取失败")
+        raise HTTPException(status_code=e.response.status_code, detail="天气数据获取失败") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"天气数据获取失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"天气数据获取失败: {str(e)}") from e

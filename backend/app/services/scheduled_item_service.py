@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-
-logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
-
-from datetime import UTC
 
 from app.core.cache import cache_get, cache_set
 from app.core.cache_invalidator import invalidate_user_events
+from app.models import UserSettings
 from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.scheduled_item import ScheduledItem
+
+logger = logging.getLogger(__name__)
 
 _EVENTS_TTL = 600  # 10 分钟
 
@@ -52,7 +52,14 @@ class ScheduledItemService:
         self.db.add(item)
         self.db.flush()
         invalidate_user_events(user_id)
-        logger.info("创建日程 user_id=%s title=%s item_id=%s start=%s end=%s", user_id, title, item.id, start_time.isoformat(), end_time.isoformat())
+        logger.info(
+            "创建日程 user_id=%s title=%s item_id=%s start=%s end=%s",
+            user_id,
+            title,
+            item.id,
+            start_time.isoformat(),
+            end_time.isoformat(),
+        )
         return item
 
     def get(self, user_id: str, item_id: str) -> ScheduledItem | None:
@@ -82,12 +89,22 @@ class ScheduledItemService:
         return list(self.db.scalars(stmt))
 
     def list_by_date(self, user_id: str, plan_date: date) -> list[ScheduledItem]:
-        start = datetime(plan_date.year, plan_date.month, plan_date.day, tzinfo=UTC)
-        end = start.replace(hour=23, minute=59, second=59)
-        return self.list_by_date_range(user_id, start, end)
+        timezone_name = _get_user_timezone_name(self.db, user_id)
+        _, _, start_utc, end_utc = _get_day_bounds(plan_date, timezone_name)
+        stmt = select(ScheduledItem).where(
+            ScheduledItem.user_id == user_id,
+            ScheduledItem.start_time >= start_utc,
+            ScheduledItem.start_time < end_utc,
+            ScheduledItem.status != ScheduledItemStatus.DELETED.value,
+        ).order_by(ScheduledItem.start_time)
+        return list(self.db.scalars(stmt))
 
     def list_by_date_cached(self, user_id: str, plan_date: date) -> list[dict]:
-        cache_key = f"schedule:user:{user_id}:events:date:{plan_date.isoformat()}"
+        timezone_name = _get_user_timezone_name(self.db, user_id)
+        cache_key = (
+            f"schedule:user:{user_id}:events:date:{plan_date.isoformat()}:"
+            f"tz:{timezone_name}"
+        )
         cached = cache_get(cache_key)
         if cached is not None:
             return cached
@@ -168,20 +185,20 @@ class ScheduledItemService:
             ScheduledItem.status != ScheduledItemStatus.DELETED.value,
         ]
         if on_date:
-            start = datetime(on_date.year, on_date.month, on_date.day)
-            end = start.replace(hour=23, minute=59, second=59)
-            conditions.append(ScheduledItem.start_time >= start)
-            conditions.append(ScheduledItem.start_time <= end)
+            timezone_name = _get_user_timezone_name(self.db, user_id)
+            _, _, start_utc, end_utc = _get_day_bounds(on_date, timezone_name)
+            conditions.append(ScheduledItem.start_time >= start_utc)
+            conditions.append(ScheduledItem.start_time < end_utc)
         stmt = select(ScheduledItem).where(*conditions).order_by(ScheduledItem.start_time)
         return list(self.db.scalars(stmt))
 
     def confirm_drafts_for_date(self, user_id: str, plan_date: date) -> int:
-        start = datetime(plan_date.year, plan_date.month, plan_date.day)
-        end = start.replace(hour=23, minute=59, second=59)
+        timezone_name = _get_user_timezone_name(self.db, user_id)
+        _, _, start_utc, end_utc = _get_day_bounds(plan_date, timezone_name)
         stmt = select(ScheduledItem).where(
             ScheduledItem.user_id == user_id,
-            ScheduledItem.start_time >= start,
-            ScheduledItem.start_time <= end,
+            ScheduledItem.start_time >= start_utc,
+            ScheduledItem.start_time < end_utc,
             ScheduledItem.status == ScheduledItemStatus.DRAFT.value,
         )
         items = list(self.db.scalars(stmt))
@@ -189,7 +206,12 @@ class ScheduledItemService:
             item.status = ScheduledItemStatus.ACTIVE.value
         self.db.flush()
         invalidate_user_events(user_id)
-        logger.info("确认草稿 user_id=%s date=%s count=%d", user_id, plan_date.isoformat(), len(items))
+        logger.info(
+            "确认草稿 user_id=%s date=%s count=%d",
+            user_id,
+            plan_date.isoformat(),
+            len(items),
+        )
         return len(items)
 
     def list_pending_tasks(self, user_id: str) -> list:
@@ -212,7 +234,9 @@ class ScheduledItemService:
         return list(self.db.scalars(stmt))
 
     def generate_day_drafts(self, user_id: str, plan_date: date) -> list[ScheduledItem]:
-        existing = self.list_by_date(user_id, plan_date)
+        timezone_name = _get_user_timezone_name(self.db, user_id)
+        _, _, start_utc, end_utc = _get_day_bounds(plan_date, timezone_name)
+        existing = self.list_by_date_range(user_id, start_utc, end_utc)
         planned_task_ids = {
             si.source_task_id for si in existing if si.source_task_id
         }
@@ -225,7 +249,7 @@ class ScheduledItemService:
         if not pending_tasks:
             return []
 
-        base = datetime(plan_date.year, plan_date.month, plan_date.day, 9, 0, tzinfo=UTC)
+        base = _local_datetime(plan_date, 9, 0, timezone_name).astimezone(UTC)
         created: list[ScheduledItem] = []
         for task in pending_tasks:
             mins = task.estimated_minutes or 60
@@ -252,5 +276,39 @@ class ScheduledItemService:
             created.append(item)
             base = slot_end
 
-        logger.info("生成草稿 user_id=%s date=%s count=%d", user_id, plan_date.isoformat(), len(created))
+        logger.info(
+            "生成草稿 user_id=%s date=%s count=%d",
+            user_id,
+            plan_date.isoformat(),
+            len(created),
+        )
         return created
+
+
+def _get_user_timezone_name(db: Session, user_id: str) -> str:
+    settings = db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
+    tz_name = (
+        settings.default_timezone
+        if settings and settings.default_timezone
+        else "Asia/Shanghai"
+    )
+    try:
+        ZoneInfo(tz_name)
+    except Exception:
+        return "Asia/Shanghai"
+    return tz_name
+
+
+def _get_day_bounds(
+    plan_date: date,
+    timezone_name: str,
+) -> tuple[datetime, datetime, datetime, datetime]:
+    tz = ZoneInfo(timezone_name)
+    start_local = datetime(plan_date.year, plan_date.month, plan_date.day, tzinfo=tz)
+    end_local = start_local + timedelta(days=1)
+    return start_local, end_local, start_local.astimezone(UTC), end_local.astimezone(UTC)
+
+
+def _local_datetime(plan_date: date, hour: int, minute: int, timezone_name: str) -> datetime:
+    tz = ZoneInfo(timezone_name)
+    return datetime(plan_date.year, plan_date.month, plan_date.day, hour, minute, tzinfo=tz)

@@ -51,6 +51,8 @@ import {
   getDateKey,
   getTodayDateKey,
   loadScheduledItems,
+  parseDateTimeInTimeZone,
+  toIsoStringInTimeZone,
   updateScheduledItem,
   type ConflictItem,
   type ScheduledItem,
@@ -525,7 +527,7 @@ export default function CalendarPage() {
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [dayViewMode, setDayViewMode] = useState<"timeline" | "gantt">("timeline");
-  const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey()));
+  const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey("Asia/Shanghai")));
   const demoEvents = useMemo(() => buildDemoCalendarEvents(focusDate), [focusDate]);
   const [events, setEvents] = useState<ScheduledItem[]>([]);
   const [conflictItemIds, setConflictItemIds] = useState<Set<string>>(new Set());
@@ -695,8 +697,8 @@ export default function CalendarPage() {
       form.setFieldsValue({
         title: event.title,
         description: event.description ?? "",
-        start_time: dayjs(event.start_time),
-        end_time: event.end_time ? dayjs(event.end_time) : null,
+        start_time: parseDateTimeInTimeZone(event.start_time, timezone),
+        end_time: event.end_time ? parseDateTimeInTimeZone(event.end_time, timezone) : null,
         timezone: event.timezone || timezone,
         location: event.location ?? "",
         remind_before_minutes: event.remind_before_minutes ?? 0,
@@ -725,7 +727,10 @@ export default function CalendarPage() {
         messageApi.error("结束时间不能早于开始时间");
         return;
       }
-      const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
+      const effectiveTimezone = values.timezone || timezone || DEFAULT_TIMEZONE;
+      const endTime = values.end_time
+        ? toIsoStringInTimeZone(values.end_time, effectiveTimezone)
+        : toIsoStringInTimeZone(values.start_time.add(1, "hour"), effectiveTimezone);
       setSubmitting(true);
       try {
         let result;
@@ -734,8 +739,8 @@ export default function CalendarPage() {
             title: values.title.trim(),
             description: values.description?.trim() || null,
             end_time: endTime,
-            start_time: values.start_time.toISOString(),
-            timezone: values.timezone || timezone || DEFAULT_TIMEZONE,
+            start_time: toIsoStringInTimeZone(values.start_time, effectiveTimezone),
+            timezone: effectiveTimezone,
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
           }, accessToken);
@@ -743,9 +748,9 @@ export default function CalendarPage() {
           result = await createScheduledItem({
             title: values.title.trim(),
             description: values.description?.trim() || null,
-            start_time: values.start_time.toISOString(),
+            start_time: toIsoStringInTimeZone(values.start_time, effectiveTimezone),
             end_time: endTime,
-            timezone: values.timezone || timezone || DEFAULT_TIMEZONE,
+            timezone: effectiveTimezone,
             location: values.location?.trim() || null,
             remind_before_minutes: values.remind_before_minutes ?? 0,
           }, accessToken);

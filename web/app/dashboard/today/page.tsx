@@ -39,8 +39,11 @@ import {
   formatDateTime,
   formatRange,
   formatClock,
+  getDateKey,
   getTodayDateKey,
   loadScheduledItem,
+  parseDateTimeInTimeZone,
+  toIsoStringInTimeZone,
   sendAgentMessage,
   type ConflictItem,
   type DashboardSummary,
@@ -685,13 +688,17 @@ export default function TodayPage() {
   const { items: reminders, isLoading: remindersLoading, refresh: refreshReminders } = useReminders("pending");
 
   const loading = eventsLoading || tasksLoading || conflictsLoading || remindersLoading;
+  const todayEvents = useMemo(
+    () => events.filter((event) => getDateKey(event.start_time, timezone) === planDate),
+    [events, planDate, timezone],
+  );
 
   const viewData: TodayDashboardData = useMemo(() => ({
-    events,
+    events: todayEvents,
     tasks,
     conflicts,
     reminders,
-  }), [events, tasks, conflicts, reminders]);
+  }), [todayEvents, tasks, conflicts, reminders]);
 
   const summary = useMemo(() => ({
     eventsCount: viewData.events.length,
@@ -783,8 +790,8 @@ export default function TodayPage() {
       eventForm.setFieldsValue({
         title: item.title,
         description: item.description ?? "",
-        start_time: dayjs(item.start_time),
-        end_time: dayjs(item.end_time),
+        start_time: parseDateTimeInTimeZone(item.start_time, item.timezone || timezone || DEFAULT_TIMEZONE),
+        end_time: parseDateTimeInTimeZone(item.end_time, item.timezone || timezone || DEFAULT_TIMEZONE),
         timezone: item.timezone || timezone || DEFAULT_TIMEZONE,
         location: item.location ?? "",
         remind_before_minutes: item.remind_before_minutes ?? 0,
@@ -815,13 +822,16 @@ export default function TodayPage() {
     try {
       const values = await eventForm.validateFields();
       setEventSubmitting(true);
-      const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
+      const effectiveTimezone = values.timezone || timezone || DEFAULT_TIMEZONE;
+      const endTime = values.end_time
+        ? toIsoStringInTimeZone(values.end_time, effectiveTimezone)
+        : toIsoStringInTimeZone(values.start_time.add(1, "hour"), effectiveTimezone);
       const result = await createScheduledItem({
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
-        start_time: values.start_time.toISOString(),
+        start_time: toIsoStringInTimeZone(values.start_time, effectiveTimezone),
         end_time: endTime,
-        timezone: values.timezone,
+        timezone: effectiveTimezone,
         location: values.location?.trim() ? values.location.trim() : null,
         remind_before_minutes: values.remind_before_minutes ?? 0,
       }, accessToken);
@@ -852,13 +862,16 @@ export default function TodayPage() {
     try {
       const values = await eventForm.validateFields();
       setEventSubmitting(true);
-      const endTime = values.end_time ? values.end_time.toISOString() : values.start_time.add(1, "hour").toISOString();
+      const effectiveTimezone = values.timezone || timezone || DEFAULT_TIMEZONE;
+      const endTime = values.end_time
+        ? toIsoStringInTimeZone(values.end_time, effectiveTimezone)
+        : toIsoStringInTimeZone(values.start_time.add(1, "hour"), effectiveTimezone);
       const result = await updateScheduledItem(editingEvent.id, {
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
-        start_time: values.start_time.toISOString(),
+        start_time: toIsoStringInTimeZone(values.start_time, effectiveTimezone),
         end_time: endTime,
-        timezone: values.timezone,
+        timezone: effectiveTimezone,
         location: values.location?.trim() ? values.location.trim() : null,
         remind_before_minutes: values.remind_before_minutes ?? 0,
       }, accessToken);

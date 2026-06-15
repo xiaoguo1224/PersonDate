@@ -1,4 +1,11 @@
+import dayjs, { type Dayjs } from "dayjs";
+import timezonePlugin from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+
 import { requestJson } from "@/lib/api";
+
+dayjs.extend(utc);
+dayjs.extend(timezonePlugin);
 
 // ── 新类型: ScheduledItem（统一安排） ──────────────────────────
 
@@ -187,6 +194,28 @@ export function formatDateTime(value: string, timeZone?: string) {
   }).format(date);
 }
 
+export function parseDateTimeInTimeZone(value: string, timeZone?: string): Dayjs {
+  if (!timeZone) {
+    return dayjs(value);
+  }
+  return dayjs(value).tz(timeZone);
+}
+
+export function parseDateOnlyInTimeZone(value: string, timeZone?: string): Dayjs {
+  if (!timeZone) {
+    return dayjs(value);
+  }
+  return dayjs.tz(value, "YYYY-MM-DD", timeZone);
+}
+
+export function toIsoStringInTimeZone(value: Dayjs, timeZone?: string): string {
+  if (!timeZone) {
+    return value.toISOString();
+  }
+  const wallClock = value.format("YYYY-MM-DD HH:mm:ss");
+  return dayjs.tz(wallClock, "YYYY-MM-DD HH:mm:ss", timeZone).toISOString();
+}
+
 // ── 任务 API ─────────────────────────────────────────────
 
 export async function loadTasks(status?: string, accessToken?: string): Promise<TaskItem[]> {
@@ -366,7 +395,8 @@ export async function loadTodayDashboard(accessToken?: string, timezone?: string
     loadConflicts("open", accessToken),
     loadReminders("pending", accessToken),
   ]);
-  return { events, tasks, conflicts, reminders };
+  const filteredEvents = events.filter((event) => getDateKey(event.start_time, timezone) === today);
+  return { events: filteredEvents, tasks, conflicts, reminders };
 }
 
 export function formatRange(

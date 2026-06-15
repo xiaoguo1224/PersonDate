@@ -2,12 +2,12 @@
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
 import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
-import { formatClock, formatDateTime, type ReminderItem } from "@/lib/dashboard";
+import { formatClock, formatDateTime, getDateKey, type ReminderItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { UserSettingsResponse } from "@/lib/types";
 
@@ -199,10 +199,10 @@ export default function RemindersPage() {
     if (!filterDate) return reminders;
     const dateKey = filterDate.format("YYYY-MM-DD");
     return reminders.filter((r) => {
-      const triggerKey = dayjs(r.trigger_time).format("YYYY-MM-DD");
+      const triggerKey = getDateKey(r.trigger_time, timezone);
       return triggerKey === dateKey;
     });
-  }, [reminders, filterDate]);
+  }, [reminders, filterDate, timezone]);
 
   const summary = useMemo(() => {
     const pending = reminders.filter((item) => item.status === "pending").length;

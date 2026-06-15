@@ -2,18 +2,23 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
-
-logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get, cache_set
 from app.core.cache_invalidator import invalidate_user_tasks
 from app.models import ScheduleSource, TaskItem, TaskStatus
-from app.models.enums import ScheduledItemStatus, ScheduledItemSource, TaskScheduleType, TaskTimeType
+from app.models.enums import (
+    ScheduledItemSource,
+    ScheduledItemStatus,
+    TaskScheduleType,
+    TaskTimeType,
+)
 from app.models.scheduled_item import ScheduledItem
+
+logger = logging.getLogger(__name__)
 
 
 _TASKS_TTL = 600  # 10 分钟
@@ -114,7 +119,9 @@ class TaskService:
                 "duration_days": item.duration_days,
                 "time_type": item.time_type,
                 "scheduled_time": str(item.scheduled_time) if item.scheduled_time else None,
-                "scheduled_end_time": str(item.scheduled_end_time) if item.scheduled_end_time else None,
+                "scheduled_end_time": (
+                    str(item.scheduled_end_time) if item.scheduled_end_time else None
+                ),
                 "completed_days": item.completed_days,
             }
             for item in items
@@ -134,7 +141,12 @@ class TaskService:
             setattr(task, key, value)
             applied.append(key)
         invalidate_user_tasks(task.user_id)
-        logger.info("更新任务 user_id=%s task_id=%s 字段=%s", task.user_id, task.id, ",".join(applied))
+        logger.info(
+            "更新任务 user_id=%s task_id=%s 字段=%s",
+            task.user_id,
+            task.id,
+            ",".join(applied),
+        )
         return task
 
     def complete_task(self, task: TaskItem) -> TaskItem:
@@ -168,19 +180,29 @@ class TaskService:
         task.completed_days = (task.completed_days or 0) + 1
         return task
 
-    def get_dates_for_task(self, task: TaskItem, limit: int = 30) -> list[date]:
+    def get_dates_for_task(
+        self,
+        task: TaskItem,
+        limit: int = 30,
+        timezone: str = "Asia/Shanghai",
+    ) -> list[date]:
+        today = datetime.now(UTC).astimezone(_tzinfo(timezone)).date()
         if task.schedule_type == TaskScheduleType.DAILY:
-            start = task.start_date or date.today()
-            end = task.end_date or (task.deadline.date() if task.deadline else start + timedelta(days=limit - 1))
+            start = task.start_date or today
+            end = task.end_date or (
+                task.deadline.date() if task.deadline else start + timedelta(days=limit - 1)
+            )
             return _date_range(start, end)
 
         if task.schedule_type == TaskScheduleType.WEEKDAYS:
-            start = task.start_date or date.today()
-            end = task.end_date or (task.deadline.date() if task.deadline else start + timedelta(days=limit - 1))
+            start = task.start_date or today
+            end = task.end_date or (
+                task.deadline.date() if task.deadline else start + timedelta(days=limit - 1)
+            )
             return _weekday_range(start, end)
 
         if task.schedule_type == TaskScheduleType.DURATION_DAYS:
-            start = task.start_date or date.today()
+            start = task.start_date or today
             days = task.duration_days or 1
             return _date_range(start, start + timedelta(days=days - 1))
 
@@ -215,7 +237,7 @@ class TaskService:
             if item.source != ScheduledItemSource.MANUAL.value:
                 si_service.soft_delete(item)
 
-        dates = self.get_dates_for_task(task)
+        dates = self.get_dates_for_task(task, timezone=timezone)
         if not dates:
             return []
 
@@ -288,8 +310,9 @@ class TaskService:
         timezone: str = "Asia/Shanghai",
         exclude_id: str | None = None,
     ) -> tuple[datetime, datetime] | None:
-        day_start = datetime(plan_date.year, plan_date.month, plan_date.day, 8, 0, tzinfo=_tzinfo(timezone))
-        day_end = datetime(plan_date.year, plan_date.month, plan_date.day, 22, 0, tzinfo=_tzinfo(timezone))
+        tz = _tzinfo(timezone)
+        day_start = datetime(plan_date.year, plan_date.month, plan_date.day, 8, 0, tzinfo=tz)
+        day_end = datetime(plan_date.year, plan_date.month, plan_date.day, 22, 0, tzinfo=tz)
 
         stmt = select(ScheduledItem).where(
             ScheduledItem.user_id == user_id,
@@ -346,5 +369,4 @@ def _combine_local(d: date, t: time, tz_name: str) -> datetime:
 
 
 def _tzinfo(tz_name: str):
-    from zoneinfo import ZoneInfo
     return ZoneInfo(tz_name)
