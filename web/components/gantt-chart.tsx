@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import gsap from "gsap";
 import { useMemo, useRef } from "react";
 
-import { formatClock } from "@/lib/dashboard";
+import { formatClock, parseDateOnlyInTimeZone } from "@/lib/dashboard";
 
 export type GanttItem = {
   id: string;
@@ -47,7 +47,7 @@ function buildRows(
   baseDate: string,
   timezone: string,
 ): GanttRow[] {
-  const dayStart = dayjs(baseDate).startOf("day");
+  const dayStart = parseDateOnlyInTimeZone(baseDate, timezone).startOf("day");
   const nextDayStart = dayStart.add(1, "day");
   const totalMinutes = 24 * 60;
 

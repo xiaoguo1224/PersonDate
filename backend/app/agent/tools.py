@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta, time as dt_time
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 
 from app.db.session import SessionLocal
 from app.models import TaskItem, User, UserSettings
-from app.models.enums import ReminderTargetType, ScheduledItemStatus
+from app.models.enums import ReminderTargetType
 from app.services.conflict_service import ConflictService
 from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
@@ -91,7 +91,11 @@ def create_scheduled_item(
         end = datetime.fromisoformat(end_time) if end_time else start + timedelta(hours=1)
 
         # 当 remind_before_minutes 为 0 时，使用用户的默认设置
-        actual_remind_minutes = remind_before_minutes if remind_before_minutes > 0 else _get_default_remind_minutes()
+        actual_remind_minutes = (
+            remind_before_minutes
+            if remind_before_minutes > 0
+            else _get_default_remind_minutes()
+        )
 
         item = service.create(
             user_id=user_id,
@@ -122,7 +126,12 @@ def create_scheduled_item(
         msg = "安排已创建"
         if conflict_info:
             msg += f"，检测到 {len(conflict_info)} 个冲突"
-        return {"success": True, "data": _item_to_dict(item), "conflicts": conflict_info, "message": msg}
+        return {
+            "success": True,
+            "data": _item_to_dict(item),
+            "conflicts": conflict_info,
+            "message": msg,
+        }
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}
@@ -213,7 +222,11 @@ def update_scheduled_item(
         )
         if start is not None or remind_before_minutes is not None:
             effective_start = start or item.start_time
-            effective_remind_before = remind_before_minutes if remind_before_minutes is not None else (item.remind_before_minutes or 0)
+            effective_remind_before = (
+                remind_before_minutes
+                if remind_before_minutes is not None
+                else (item.remind_before_minutes or 0)
+            )
             ReminderService(db).cancel_by_target(user_id=user_id, target_id=item.id)
             ReminderService(db).create_for_target(
                 user_id=user_id,
@@ -410,8 +423,6 @@ def find_free_slots(
     user_id = _get_user_id()
     db = SessionLocal()
     try:
-        from datetime import UTC, datetime as dt
-
         d = date.fromisoformat(plan_date)
         service = ScheduledItemService(db)
         items = service.list_by_date(user_id, d)
@@ -419,13 +430,33 @@ def find_free_slots(
         user_tz = ZoneInfo(timezone)
         start_parts = workday_start.split(":")
         end_parts = workday_end.split(":")
-        day_start_local = dt(d.year, d.month, d.day, int(start_parts[0]), int(start_parts[1]), tzinfo=user_tz)
-        day_end_local = dt(d.year, d.month, d.day, int(end_parts[0]), int(end_parts[1]), tzinfo=user_tz)
+        day_start_local = datetime(
+            d.year,
+            d.month,
+            d.day,
+            int(start_parts[0]),
+            int(start_parts[1]),
+            tzinfo=user_tz,
+        )
+        day_end_local = datetime(
+            d.year,
+            d.month,
+            d.day,
+            int(end_parts[0]),
+            int(end_parts[1]),
+            tzinfo=user_tz,
+        )
         day_start = day_start_local.astimezone(UTC)
         day_end = day_end_local.astimezone(UTC)
 
         active_items = sorted(
-            [i for i in items if i.status == "active" and i.end_time.astimezone(UTC) > day_start and i.start_time.astimezone(UTC) < day_end],
+            [
+                i
+                for i in items
+                if i.status == "active"
+                and i.end_time.astimezone(UTC) > day_start
+                and i.start_time.astimezone(UTC) < day_end
+            ],
             key=lambda x: x.start_time,
         )
 
@@ -496,7 +527,11 @@ def confirm_plan(plan_date: str) -> dict:
         d = date.fromisoformat(plan_date)
         count = ScheduledItemService(db).confirm_drafts_for_date(user_id, d)
         db.commit()
-        return {"success": True, "data": {"confirmed_count": count}, "message": f"已确认 {count} 个安排"}
+        return {
+            "success": True,
+            "data": {"confirmed_count": count},
+            "message": f"已确认 {count} 个安排",
+        }
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}
@@ -560,7 +595,12 @@ def suggest_reschedule(conflict_id: str) -> dict:
         if item_a is None or item_b is None:
             return {"success": False, "error": "关联安排不存在"}
 
-        conflict_date = item_a.start_time.astimezone(UTC).date()
+        conflict_tz = (
+            getattr(item_a, "timezone", None)
+            or getattr(item_b, "timezone", None)
+            or "Asia/Shanghai"
+        )
+        conflict_date = item_a.start_time.astimezone(ZoneInfo(conflict_tz)).date()
         free_slots_result = find_free_slots.invoke(
             {"plan_date": conflict_date.isoformat()}
         )

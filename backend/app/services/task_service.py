@@ -190,14 +190,18 @@ class TaskService:
         if task.schedule_type == TaskScheduleType.DAILY:
             start = task.start_date or today
             end = task.end_date or (
-                task.deadline.date() if task.deadline else start + timedelta(days=limit - 1)
+                _local_date(task.deadline, timezone)
+                if task.deadline
+                else start + timedelta(days=limit - 1)
             )
             return _date_range(start, end)
 
         if task.schedule_type == TaskScheduleType.WEEKDAYS:
             start = task.start_date or today
             end = task.end_date or (
-                task.deadline.date() if task.deadline else start + timedelta(days=limit - 1)
+                _local_date(task.deadline, timezone)
+                if task.deadline
+                else start + timedelta(days=limit - 1)
             )
             return _weekday_range(start, end)
 
@@ -370,3 +374,7 @@ def _combine_local(d: date, t: time, tz_name: str) -> datetime:
 
 def _tzinfo(tz_name: str):
     return ZoneInfo(tz_name)
+
+
+def _local_date(value: datetime, tz_name: str) -> date:
+    return value.astimezone(_tzinfo(tz_name)).date()

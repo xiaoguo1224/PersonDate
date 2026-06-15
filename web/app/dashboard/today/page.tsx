@@ -42,6 +42,7 @@ import {
   getDateKey,
   getTodayDateKey,
   loadScheduledItem,
+  parseDateOnlyInTimeZone,
   parseDateTimeInTimeZone,
   toIsoStringInTimeZone,
   sendAgentMessage,
@@ -667,7 +668,7 @@ export default function TodayPage() {
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const planDate = useMemo(() => getTodayDateKey(timezone), [timezone]);
-  const selectedDate = useMemo(() => dayjs(planDate), [planDate]);
+  const selectedDate = useMemo(() => parseDateOnlyInTimeZone(planDate, timezone), [planDate, timezone]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { message } = App.useApp();
   const chatEndRef = useRef<HTMLDivElement | null>(null);

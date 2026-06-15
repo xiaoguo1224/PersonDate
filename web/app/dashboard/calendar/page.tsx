@@ -51,6 +51,7 @@ import {
   getDateKey,
   getTodayDateKey,
   loadScheduledItems,
+  parseDateOnlyInTimeZone,
   parseDateTimeInTimeZone,
   toIsoStringInTimeZone,
   updateScheduledItem,
@@ -527,7 +528,9 @@ export default function CalendarPage() {
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [dayViewMode, setDayViewMode] = useState<"timeline" | "gantt">("timeline");
-  const [focusDate, setFocusDate] = useState(() => dayjs(getTodayDateKey("Asia/Shanghai")));
+  const [focusDate, setFocusDate] = useState(() =>
+    parseDateOnlyInTimeZone(getTodayDateKey("Asia/Shanghai"), "Asia/Shanghai"),
+  );
   const demoEvents = useMemo(() => buildDemoCalendarEvents(focusDate), [focusDate]);
   const [events, setEvents] = useState<ScheduledItem[]>([]);
   const [conflictItemIds, setConflictItemIds] = useState<Set<string>>(new Set());
@@ -543,7 +546,7 @@ export default function CalendarPage() {
   const [conflictCurrentItemId, setConflictCurrentItemId] = useState<string>("");
 
   useEffect(() => {
-    setFocusDate(dayjs(getTodayDateKey(timezone)));
+    setFocusDate(parseDateOnlyInTimeZone(getTodayDateKey(timezone), timezone));
   }, [timezone]);
 
   const fetchEvents = useCallback(async () => {
