@@ -1,45 +1,106 @@
 # PersonDate
 
-[English](./README.md)
+> 微信里的 AI 智能日程规划助手，聊天就能管理日程、待办、计划和提醒。
 
-基于微信消息通道的轻量多用户智能日程规划系统。
+[![MIT 许可证](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](./LICENSE)
+[![微信优先](https://img.shields.io/badge/WeChat--first-0A84FF.svg?style=for-the-badge)](./README_zh-CN.md)
+[![LangGraph ReAct](https://img.shields.io/badge/LangGraph-ReAct-111827.svg?style=for-the-badge)](./README_zh-CN.md)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg?style=for-the-badge)](./README_zh-CN.md)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791.svg?style=for-the-badge)](./README_zh-CN.md)
 
-用户通过微信自然语言输入日程、任务、提醒，系统由 Agent 进行理解、拆解、规划、冲突检测和提醒。Web Dashboard 作为安排驾驶舱，展示今日安排、日历视图、待办、冲突事项、提醒任务和 Agent 日志。
+PersonDate 是一个可自托管的轻量多用户智能日程规划系统。你只需要在微信里说一句“明天下午 3 点开会”或者“明天写论文 2 小时，帮我安排一下”，系统就会理解你的自然语言，创建或调整安排，检测冲突，生成每日计划，并在合适的时间通过微信提醒你。
 
-## 核心功能
+## 它和普通工具的区别
 
-- **微信自然语言交互** — 通过与 Agent 对话创建日程、任务和提醒
-- **LangGraph Agent** — 意图识别、信息抽取、多轮确认、冲突处理
-- **统一安排表** — 单表存储所有时间类事项（日程、任务、计划）
-- **冲突检测** — 创建或编辑安排时自动检测时间重叠，交互式解决冲突
-- **每日计划生成** — 自动将待办任务安排到可用时间段
-- **提醒系统** — 基于 APScheduler 的提醒，通过微信发送
-- **Web 驾驶舱** — 今日安排、日历视图、任务池、冲突事项、提醒任务、Agent 日志
-- **邀请码多用户** — 轻量级用户体系，支持 owner/member 角色
-- **微信绑定** — 通过绑定码将微信账号与 Web 系统关联
-- **Redis 缓存层** — 查询缓存，写时失效，Redis 不可用时自动降级
-- **结构化日志** — 所有服务操作记录 user_id，便于生产环境排查
-- **安全防御** — 5 层安全机制：输入消毒、内容过滤、工具调用守卫、结果消毒、输出消毒
+大多数日程工具只做提醒或日历增删改查。PersonDate 更像一个真正的安排助手：
+
+- **从聊天开始** - 用户可以直接说自然语言，不需要填表
+- **能理解时间** - 任务、空闲时间、冲突和每日计划一起处理
+- **有真实执行链路** - Agent 调工具，工具调服务，服务落数据库
+- **关键逻辑可控** - 冲突检测和提醒由程序负责，不把关键结果交给模型猜
+- **不是一个单页小工具** - Web 驾驶舱、权限、绑定、日志、提醒都在同一套系统里
+
+## 界面预览
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./public/readme/persondate-hero-top.png" alt="PersonDate 首页预览" />
+      <br />
+      <sub>首页预览</sub>
+    </td>
+    <td width="50%">
+      <img src="./public/readme/persondate-dashboard-viewport.png" alt="PersonDate 驾驶舱预览" />
+      <br />
+      <sub>驾驶舱预览</sub>
+    </td>
+  </tr>
+</table>
+
+这个项目适合想做这些事情的人：
+
+- 把 AI 真正用在日程管理里，而不是只做演示聊天框
+- 做一个微信优先的个人效率工具
+- 研究 LangGraph ReAct、工具调用和确认流程
+- 用确定性服务处理冲突检测和提醒，而不是把一切都交给大模型
+- 自己部署一套完整的日程助手
+
+## 为什么值得关注
+
+- **微信是主入口** - 直接在你每天都在用的聊天场景里管理时间
+- **Agent 先行** - 核心能力是一个真实的规划图，而不是关键词匹配器
+- **业务逻辑确定性** - 冲突检测、提醒、数据隔离都由服务层完成
+- **支持多用户** - owner/member、邀请码、绑定、RBAC、数据隔离一整套都有
+- **可以自托管** - FastAPI、PostgreSQL、Redis、Next.js、Docker Compose
+- **适合扩展** - 工具、服务、页面边界清晰，方便二次开发
+
+## 它能做什么
+
+- 用自然语言创建日程
+- 创建待办任务并自动排进时间块
+- 根据可用时间生成每日计划
+- 检测冲突并给出调整建议
+- 通过微信发送提醒
+- 在 Web 驾驶舱里查看日程、待办、冲突、提醒和 Agent 日志
+- 支持邀请码注册和微信绑定
+- 清晰区分 owner 和 member 权限
+
+## 适合谁
+
+- 想要一个真正能用的 AI 时间助手的个人用户
+- 想研究 LangGraph 和工具调用的开发者
+- 想自托管、掌控数据和流程的人
+- 想在现有项目基础上继续扩展的团队
+
+## 示例输入
+
+```text
+明天下午 3 点开会
+明天有什么安排？
+明天写论文 2 小时，帮我安排一下
+把明天下午 3 点的会议改到 4 点
+删除明天下午 4 点的会议
+```
 
 ## 技术栈
 
-| 组件 | 技术 |
-|------|------|
+| 层级 | 技术 |
+| --- | --- |
 | 后端 | Python 3.11+ / FastAPI / SQLAlchemy 2.0 / Alembic |
-| Agent | LangGraph / OpenAI-compatible SDK / Pydantic v2 |
+| Agent | LangGraph / langchain_openai.ChatOpenAI / LangChain tools |
 | 数据库 | PostgreSQL |
-| 缓存 | Redis 7+（查询缓存、天气缓存、Agent 状态缓存） |
-| 提醒调度 | APScheduler |
-| 前端 | Next.js / React / TypeScript / Ant Design / SWR |
-| 微信通道 | openclaw-weixin（仅作为消息通道） |
+| 缓存 | Redis 7+ |
+| 调度 | APScheduler |
+| 前端 | Next.js / React / TypeScript / Ant Design |
+| 通道 | openclaw-weixin，仅作为消息通道 |
 | 部署 | Docker Compose |
 
 ## 系统架构
 
-```
+```text
 微信用户
   ↓
-openclaw-weixin（消息通道）
+openclaw-weixin
   ↓
 WeChat Channel Adapter
   ↓
@@ -47,17 +108,17 @@ FastAPI Schedule Agent Service
   ↓
 LangGraph SchedulePlanningGraph
   ↓
-Tool Executor → Business Services → Redis Cache → PostgreSQL
+工具调用 → 业务服务 → PostgreSQL / Redis
   ↓
 APScheduler Reminder Worker
   ↓
-WeChat Channel → 微信用户
+微信用户
 ```
 
 Web 访问链路：
 
-```
-Next.js Web Dashboard (SWR) → FastAPI REST API → Redis Cache → PostgreSQL
+```text
+Next.js Web Dashboard → FastAPI REST API → PostgreSQL / Redis
 ```
 
 ## 快速开始
@@ -68,10 +129,10 @@ Next.js Web Dashboard (SWR) → FastAPI REST API → Redis Cache → PostgreSQL
 - Node.js 18+
 - PostgreSQL 14+
 - Redis 7+
-- pnpm（推荐）或 npm
-- uv（推荐）或 pip
+- 推荐 `pnpm`
+- 推荐 `uv`
 
-### Docker Compose 启动（推荐）
+### 使用 Docker Compose 启动
 
 ```bash
 docker compose up -d --build
@@ -79,20 +140,20 @@ docker compose up -d --build
 
 启动后可访问：
 
+- 后端 API：`http://localhost:8000`
 - Web 驾驶舱：`http://localhost:3000`
-- 数据库：`localhost:5433`
 
-### 后端启动（本地开发）
+### 本地启动后端
 
 ```bash
 cd backend
 uv sync
-cp .env.example .env  # 编辑配置
+cp .env.example .env
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-### 前端启动（本地开发）
+### 本地启动前端
 
 ```bash
 cd web
@@ -102,7 +163,7 @@ pnpm dev
 
 ## 环境变量
 
-在 `backend/` 目录下创建 `.env` 文件：
+根据 `backend/.env.example` 创建 `backend/.env`。
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/persondate
@@ -117,59 +178,50 @@ WECHAT_CHANNEL_TOKEN=your-wechat-token
 ADMIN_PASSWORD=your-admin-password
 ```
 
-## 默认管理员账号
+## 仓库结构
 
-- 用户名：`admin`
-- 密码：查看 `backend/.env` 中的 `ADMIN_PASSWORD`
-
-## 项目结构
-
-```
+```text
 PersonDate/
-├── backend/                  # FastAPI 后端
-│   ├── app/
-│   │   ├── api/routes/       # REST API 接口
-│   │   ├── agent/            # LangGraph Agent（图、安全防护、工具）
-│   │   ├── core/             # 核心模块（配置、安全、Redis、缓存）
-│   │   ├── tools/            # Agent 工具注册和执行器
-│   │   ├── services/         # 业务逻辑服务（带结构化日志 + 缓存）
-│   │   ├── models/           # SQLAlchemy ORM 模型（ScheduledItem、TaskItem 等）
-│   │   ├── schemas/          # Pydantic 请求/响应 Schema
-│   │   └── workers/          # APScheduler 提醒 Worker
-│   └── alembic/              # 数据库迁移
-├── web/                      # Next.js 前端
-│   ├── app/
-│   │   ├── dashboard/        # 仪表盘页面（今日、日历、任务、冲突等）
-│   │   ├── login/            # 登录页
-│   │   └── register/         # 注册页
-│   ├── components/           # 共享 React 组件
-│   ├── hooks/                # SWR hooks（useScheduledItems、useTasks、useConflicts、useReminders）
-│   └── lib/                  # API 客户端、类型、工具函数
-├── docs/                     # 项目设计文档
-└── docker-compose.yml
+├── backend/       FastAPI 后端、Agent、业务服务、Worker、迁移
+├── web/           Next.js 驾驶舱
+├── docs/          设计文档和实现依据
+├── docker-compose.yml
+└── README*.md
 ```
 
-## 测试
+## 文档
 
-```bash
-# 后端
-cd backend
-uv run pytest
-uv run ruff check .
-uv run mypy app
+`docs/` 目录下的文档是本项目的实现依据，包含架构、数据模型、接口、Agent 流程、微信通道边界、Web 页面和开发顺序。
 
-# 前端
-cd web
-pnpm typecheck
-pnpm lint
-```
+- [需求文档](./docs/01-requirements.md)
+- [架构设计](./docs/02-architecture-design.md)
+- [数据库设计](./docs/03-database-design.md)
+- [接口设计](./docs/04-api-design.md)
+- [Agent 设计](./docs/05-agent-langgraph-design.md)
+- [微信通道设计](./docs/06-wechat-channel-design.md)
+- [Web 驾驶舱设计](./docs/07-web-dashboard-design.md)
+- [Codex 任务拆分](./docs/08-codex-tasks.md)
 
-## 开发说明
+## 路线图
 
-- Agent 先行，消息通道后置。必须先保证 Agent 能力闭环，再接入微信消息通道。
-- 微信通道使用 `openclaw-weixin` 仅作为消息收发通道，不使用 OpenClaw Runtime。
-- 新功能完成后需要先验证，再做独立 git 提交。
+- 完成 Agent 能力闭环
+- 完成 Web 驾驶舱和角色页面
+- 接入微信通道
+- 强化提醒和冲突处理体验
+- 补充测试和文档
+- 补全 GitHub 发布细节、徽章和新手引导
+
+## 参与贡献
+
+欢迎提交 Issue 和 Pull Request。
+
+如果你想帮这个项目提速，可以从下面几个方向入手：
+
+1. 优化 README 和上手流程
+2. 强化 Agent 行为和确认逻辑
+3. 补充日程、冲突和提醒测试
+4. 打磨 Web 驾驶舱体验
 
 ## 许可证
 
-个人使用项目，非开源。
+这个仓库已经补充了 `MIT` 许可证，可以直接作为开源项目对外发布。

@@ -1,45 +1,106 @@
 # PersonDate
 
-[简体中文](./README_zh-CN.md)
+> WeChat-native AI schedule planner for people who want to manage time by chatting naturally.
 
-A lightweight multi-user intelligent schedule planning system powered by WeChat and LangGraph Agent.
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](./LICENSE)
+[![WeChat-first](https://img.shields.io/badge/WeChat--first-0A84FF.svg?style=for-the-badge)](./README.md)
+[![LangGraph ReAct](https://img.shields.io/badge/LangGraph-ReAct-111827.svg?style=for-the-badge)](./README.md)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg?style=for-the-badge)](./README.md)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791.svg?style=for-the-badge)](./README.md)
 
-Users interact via natural language through WeChat to create schedules, manage tasks, generate daily plans, detect conflicts, and receive reminders. A Web Dashboard serves as the command center for viewing schedules, tasks, conflicts, reminders, and Agent logs.
+PersonDate is a self-hostable, multi-user intelligent scheduling system. You can tell it things like "Tomorrow at 3 PM meeting" or "Plan 2 hours for writing tomorrow," and it will understand the message, create or adjust schedules, detect conflicts, generate a daily plan, and send reminders back to WeChat.
 
-## Features
+## What makes it different
 
-- **WeChat Natural Language Interaction** — Create schedules, tasks, and reminders by chatting with the Agent
-- **LangGraph Agent** — Intent recognition, information extraction, multi-turn confirmation, conflict handling
-- **Unified Scheduled Items** — Single table for all time-based items (events, tasks, plans)
-- **Conflict Detection** — Automatic time overlap detection when creating or editing schedules, with interactive resolution flow
-- **Daily Plan Generation** — Automatically arrange pending tasks into available time slots
-- **Reminder System** — APScheduler-based reminders delivered via WeChat
-- **Web Dashboard** — Today's schedule, calendar views, task pool, conflicts, reminders, Agent logs
-- **Multi-user via Invite Codes** — Lightweight user system with owner/member roles
-- **WeChat Binding** — Bind your WeChat account to the web system via binding codes
-- **Redis Cache Layer** — Query caching with write-through invalidation, auto-degradation when Redis is unavailable
-- **Structured Logging** — All service operations logged with user_id for production troubleshooting
-- **Security Defense** — 5-layer security: input sanitization, content filtering, tool call guarding, result sanitization, output sanitization
+Most scheduling tools stop at reminders or calendar CRUD. PersonDate is designed as a real planning assistant:
+
+- **It starts from chat, not forms** - users can describe intent naturally
+- **It can reason over time** - tasks, free slots, conflicts, and daily plans are handled together
+- **It has a real execution loop** - the agent calls tools, tools call services, services write data
+- **It keeps control deterministic** - conflict detection and reminders are not left to the model
+- **It works as a system, not a widget** - web dashboard, permissions, binding, logs, and reminders all fit together
+
+## Preview
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./public/readme/persondate-hero-top.png" alt="PersonDate landing page preview" />
+      <br />
+      <sub>Landing page preview</sub>
+    </td>
+    <td width="50%">
+      <img src="./public/readme/persondate-dashboard-viewport.png" alt="PersonDate dashboard preview" />
+      <br />
+      <sub>Dashboard preview</sub>
+    </td>
+  </tr>
+</table>
+
+This project is built for developers who want:
+
+- a practical AI assistant instead of a demo chatbot
+- a WeChat-first scheduling experience
+- LangGraph ReAct agent flows with tool calling and confirmation
+- deterministic conflict detection and reminder delivery
+- a full web dashboard for review and administration
+
+## Why this project is worth a star
+
+- **WeChat as the main entry** - chat with your schedule where your attention already is
+- **Agent-first architecture** - the core workflow is a real planning graph, not keyword matching
+- **Deterministic business logic** - conflict detection and reminders are handled by services, not by guesswork
+- **Multi-user ready** - owner/member roles, invite codes, binding, RBAC, and data isolation
+- **Self-hostable** - FastAPI, PostgreSQL, Redis, Next.js, Docker Compose
+- **Built for extension** - clear boundaries for tools, services, and dashboards
+
+## What it can do
+
+- Create schedules from natural language
+- Create flexible tasks and turn them into time blocks
+- Generate daily plans from available time slots
+- Detect conflicts and suggest rescheduling options
+- Send reminders through WeChat
+- Review schedules, tasks, conflicts, reminders, and Agent logs in a web dashboard
+- Support invite-code registration and WeChat binding
+- Separate owner and member permissions cleanly
+
+## Best for
+
+- solo users who want a serious AI time assistant
+- developers exploring LangGraph and tool calling in a real product
+- self-hosters who want control over data and workflow
+- teams looking for an opinionated scheduling system they can extend
+
+## Example flows
+
+```text
+明天下午 3 点开会
+明天有什么安排？
+明天写论文 2 小时，帮我安排一下
+把明天下午 3 点的会议改到 4 点
+删除明天下午 4 点的会议
+```
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
+| Layer | Stack |
+| --- | --- |
 | Backend | Python 3.11+ / FastAPI / SQLAlchemy 2.0 / Alembic |
-| Agent | LangGraph / OpenAI-compatible SDK / Pydantic v2 |
+| Agent | LangGraph / langchain_openai.ChatOpenAI / LangChain tools |
 | Database | PostgreSQL |
-| Cache | Redis 7+ (query cache, weather cache, agent state cache) |
-| Reminders | APScheduler |
-| Frontend | Next.js / React / TypeScript / Ant Design / SWR |
-| WeChat Channel | openclaw-weixin (message channel only) |
+| Cache | Redis 7+ |
+| Scheduler | APScheduler |
+| Frontend | Next.js / React / TypeScript / Ant Design |
+| Channel | openclaw-weixin as message transport only |
 | Deployment | Docker Compose |
 
 ## Architecture
 
-```
+```text
 WeChat User
   ↓
-openclaw-weixin (message channel)
+openclaw-weixin
   ↓
 WeChat Channel Adapter
   ↓
@@ -47,53 +108,52 @@ FastAPI Schedule Agent Service
   ↓
 LangGraph SchedulePlanningGraph
   ↓
-Tool Executor → Business Services → Redis Cache → PostgreSQL
+Tool calls → Business services → PostgreSQL / Redis
   ↓
 APScheduler Reminder Worker
   ↓
-WeChat Channel → WeChat User
+WeChat User
 ```
 
 Web access path:
 
-```
-Next.js Web Dashboard (SWR) → FastAPI REST API → Redis Cache → PostgreSQL
+```text
+Next.js Web Dashboard → FastAPI REST API → PostgreSQL / Redis
 ```
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
 - Redis 7+
-- pnpm (recommended) or npm
-- uv (recommended) or pip
+- pnpm recommended
+- uv recommended
 
-### Docker Compose (Recommended)
+### Start with Docker Compose
 
 ```bash
 docker compose up -d --build
 ```
 
-Services will be available at:
+Expected entry points:
 
 - Backend API: `http://localhost:8000`
 - Web Dashboard: `http://localhost:3000`
-- Redis: `localhost:6380` (internal 6379)
 
-### Backend Setup (Local Development)
+### Local backend development
 
 ```bash
 cd backend
 uv sync
-cp .env.example .env  # Edit with your configuration
+cp .env.example .env
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-### Frontend Setup (Local Development)
+### Local frontend development
 
 ```bash
 cd web
@@ -103,7 +163,7 @@ pnpm dev
 
 ## Environment Variables
 
-Create a `.env` file in the `backend/` directory:
+Create `backend/.env` based on `.env.example`.
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/persondate
@@ -118,58 +178,50 @@ WECHAT_CHANNEL_TOKEN=your-wechat-token
 ADMIN_PASSWORD=your-admin-password
 ```
 
-## Default Admin Account
+## Repository Layout
 
-- Username: `admin`
-- Password: Check `ADMIN_PASSWORD` in `backend/.env`
-
-## Project Structure
-
-```
+```text
 PersonDate/
-├── backend/                  # FastAPI backend
-│   ├── app/
-│   │   ├── api/routes/       # REST API endpoints
-│   │   ├── agent/            # LangGraph ReAct Agent (graph, tools, security)
-│   │   ├── core/             # Core modules (config, security, redis, cache)
-│   │   ├── services/         # Business logic services (with structured logging + cache)
-│   │   ├── models/           # SQLAlchemy ORM models (ScheduledItem, TaskItem, etc.)
-│   │   ├── schemas/          # Pydantic request/response schemas
-│   │   └── workers/          # APScheduler reminder worker
-│   └── alembic/              # Database migrations
-├── web/                      # Next.js frontend
-│   ├── app/
-│   │   ├── dashboard/        # Dashboard pages (today, calendar, tasks, conflicts, etc.)
-│   │   ├── login/            # Login page
-│   │   └── register/         # Registration page
-│   ├── components/           # Shared React components
-│   ├── hooks/                # SWR hooks (useScheduledItems, useTasks, useConflicts, useReminders)
-│   └── lib/                  # API client, types, utilities
-├── docs/                     # Project design documents
-└── docker-compose.yml
+├── backend/       FastAPI backend, agent, services, workers, migrations
+├── web/           Next.js dashboard
+├── docs/          Design docs and implementation references
+├── docker-compose.yml
+└── README*.md
 ```
 
-## Testing
+## Documentation
 
-```bash
-# Backend
-cd backend
-uv run pytest
-uv run ruff check .
-uv run mypy app
+The design docs under `docs/` are the source of truth for architecture, data model, API design, agent flow, WeChat channel boundaries, dashboard pages, and implementation order.
 
-# Frontend
-cd web
-pnpm typecheck
-pnpm lint
-```
+- [Requirements](./docs/01-requirements.md)
+- [Architecture](./docs/02-architecture-design.md)
+- [Database](./docs/03-database-design.md)
+- [API](./docs/04-api-design.md)
+- [Agent](./docs/05-agent-langgraph-design.md)
+- [WeChat Channel](./docs/06-wechat-channel-design.md)
+- [Web Dashboard](./docs/07-web-dashboard-design.md)
+- [Codex Tasks](./docs/08-codex-tasks.md)
 
-## Development Notes
+## Roadmap
 
-- Agent-first approach: ensure Agent capabilities are complete before integrating WeChat message channel.
-- WeChat channel uses `openclaw-weixin` as a message transport only; OpenClaw Runtime is not used.
-- Each completed feature should be verified independently before committing.
+- Agent capability loop
+- Web dashboard and role-based pages
+- WeChat channel integration
+- Reminder and conflict polishing
+- Documentation and test coverage
+- GitHub release polish, badges, and onboarding improvements
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+If you want to help, the best starting points are:
+
+1. improve the README and onboarding flow
+2. strengthen agent behavior and confirmation logic
+3. add tests for scheduling, conflicts, and reminders
+4. refine the dashboard UX
 
 ## License
 
-Private project for personal use.
+This repository is intended to be published as an open-source project, but the final license has not been added yet. Add a LICENSE file before public release to match your preferred distribution terms.
