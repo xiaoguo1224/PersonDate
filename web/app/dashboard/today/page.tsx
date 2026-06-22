@@ -16,7 +16,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { useGSAP } from "@gsap/react";
-import { App, Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Space, Spin, Tag, Typography } from "antd";
+import { App, Button, Card, DatePicker, Empty, Form, Grid, Input, InputNumber, Modal, Popconfirm, Space, Spin, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import gsap from "gsap";
 import { useRouter } from "next/navigation";
@@ -155,7 +155,7 @@ function createWelcomeMessage(): ChatMessage {
     role: "assistant",
     content: "你可以直接告诉我今天要做什么，我会帮你整理安排、待办和冲突。",
     meta: "支持创建、修改、删除、规划和冲突处理",
-    timestamp: getChatTimeLabel(),
+    timestamp: "",
   };
 }
 
@@ -261,6 +261,7 @@ type TodayPageViewProps = Readonly<{
   onDeleteEvent: (id: string) => void;
   planDate: string;
   accessToken: string;
+  isCompactViewport: boolean;
 }>;
 
 function TodayPageView({
@@ -294,6 +295,7 @@ function TodayPageView({
   onDeleteEvent,
   planDate,
   accessToken,
+  isCompactViewport,
 }: TodayPageViewProps) {
   const conflictRows = viewData.conflicts;
   const reminderRows = viewData.reminders;
@@ -451,6 +453,7 @@ function TodayPageView({
               onCancel={() => setGanttModalOpen(false)}
               footer={null}
               width={960}
+              wrapClassName="today-gantt-modal"
               destroyOnHidden
             >
               <GanttChart
@@ -458,7 +461,8 @@ function TodayPageView({
                 baseDate={planDate}
                 timezone={timezone}
                 maxHeight={280}
-              />
+              compact={isCompactViewport}
+            />
             </Modal>
           </Card>
         </div>
@@ -517,7 +521,9 @@ function TodayPageView({
                             )}
                           </div>
                           {messageItem.meta ? <Text className="agent-chat-bubble__meta">{messageItem.meta}</Text> : null}
-                          <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
+                          {messageItem.timestamp ? (
+                            <Text className="agent-chat-bubble__time">{messageItem.timestamp}</Text>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -667,6 +673,8 @@ export default function TodayPage() {
   const router = useRouter();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isCompactViewport = screens.lg === false || screens.md === false;
   const planDate = useMemo(() => getTodayDateKey(timezone), [timezone]);
   const selectedDate = useMemo(() => parseDateOnlyInTimeZone(planDate, timezone), [planDate, timezone]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1025,6 +1033,7 @@ export default function TodayPage() {
         onDeleteEvent={(id) => void handleDeleteEvent(id)}
         planDate={planDate}
         accessToken={accessToken ?? ""}
+        isCompactViewport={isCompactViewport}
       />
 
       <Modal

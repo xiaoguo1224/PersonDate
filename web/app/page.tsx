@@ -79,35 +79,99 @@ const DEMO_EVENTS = [
   { time: "19:00", title: "健身", tag: "提醒", color: "#dc2626" },
 ];
 
+function useMotionPreferences() {
+  const [motion, setMotion] = useState({
+    reduceMotion: false,
+    isCompact: false,
+  });
+
+  useEffect(() => {
+    const reduceQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const compactQuery = window.matchMedia("(max-width: 767px)");
+
+    const update = () => {
+      setMotion({
+        reduceMotion: reduceQuery.matches,
+        isCompact: compactQuery.matches,
+      });
+    };
+
+    update();
+
+    const bind = (query: MediaQueryList) => {
+      if (query.addEventListener) {
+        query.addEventListener("change", update);
+        return () => query.removeEventListener("change", update);
+      }
+
+      query.addListener(update);
+      return () => query.removeListener(update);
+    };
+
+    const unbindReduce = bind(reduceQuery);
+    const unbindCompact = bind(compactQuery);
+
+    return () => {
+      unbindReduce();
+      unbindCompact();
+    };
+  }, []);
+
+  return motion;
+}
+
 /** Agent 写入日历演示 */
 function ScheduleDemo() {
   const [visibleCount, setVisibleCount] = useState(0);
   const [phase, setPhase] = useState<"idle" | "typing" | "writing">("idle");
+  const { reduceMotion, isCompact } = useMotionPreferences();
 
   useEffect(() => {
+    if (reduceMotion || isCompact) {
+      setVisibleCount(Math.min(3, DEMO_EVENTS.length));
+      setPhase("idle");
+      return;
+    }
+
+    let cancelled = false;
+    const timers: number[] = [];
+    const schedule = (callback: () => void, delay: number) => {
+      const timerId = window.setTimeout(() => {
+        if (!cancelled) {
+          callback();
+        }
+      }, delay);
+      timers.push(timerId);
+    };
+
     const start = () => {
       setVisibleCount(0);
       setPhase("idle");
 
-      DEMO_EVENTS.forEach((_, i) => {
-        setTimeout(() => {
+      DEMO_EVENTS.forEach((_, index) => {
+        const offset = index * 1800;
+        schedule(() => {
           setPhase("typing");
-          setTimeout(() => {
-            setPhase("writing");
-            setVisibleCount(i + 1);
-          }, 600);
-        }, i * 1800);
+        }, offset);
+        schedule(() => {
+          setPhase("writing");
+          setVisibleCount(index + 1);
+        }, offset + 620);
       });
 
-      setTimeout(() => {
+      schedule(() => {
         setPhase("idle");
         start();
-      }, DEMO_EVENTS.length * 1800 + 3000);
+      }, DEMO_EVENTS.length * 1800 + 2800);
     };
 
-    const tid = setTimeout(start, 1200);
-    return () => clearTimeout(tid);
-  }, []);
+    schedule(start, 1000);
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timerId) => window.clearTimeout(timerId));
+    };
+  }, [isCompact, reduceMotion]);
 
   return (
     <div className="demo-panel">
@@ -397,12 +461,20 @@ export default function LandingPage() {
 
               <Space size={14} className="landing-hero__actions">
                 <Link href="/login">
-                  <Button type="primary" size="large" icon={<DashboardOutlined />}>
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<DashboardOutlined />}
+                    className="landing-hero__action landing-hero__action--primary"
+                  >
                     进入驾驶舱
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button size="large" className="landing-btn-ghost">
+                  <Button
+                    size="large"
+                    className="landing-btn-ghost landing-hero__action landing-hero__action--secondary"
+                  >
                     注册体验
                   </Button>
                 </Link>
@@ -517,6 +589,7 @@ export default function LandingPage() {
 /** 粒子背景 */
 function ParticleBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { reduceMotion, isCompact } = useMotionPreferences();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -529,14 +602,14 @@ function ParticleBackground() {
     let animId: number;
 
     const particles: { x: number; y: number; vx: number; vy: number; r: number; a: number }[] = [];
-    const COUNT = 45;
+    const COUNT = reduceMotion ? 0 : isCompact ? 16 : 45;
 
     for (let i = 0; i < COUNT; i++) {
       particles.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
+        vx: (Math.random() - 0.5) * (isCompact ? 0.12 : 0.3),
+        vy: (Math.random() - 0.5) * (isCompact ? 0.12 : 0.3),
         r: Math.random() * 1.8 + 0.5,
         a: Math.random() * 0.15 + 0.04,
       });
@@ -559,26 +632,38 @@ function ParticleBackground() {
         ctx.fill();
       }
 
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 140) {
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(37, 99, 235, ${0.03 * (1 - dist / 140)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
+      if (!isCompact) {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 140) {
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.strokeStyle = `rgba(37, 99, 235, ${0.03 * (1 - dist / 140)})`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+            }
           }
         }
       }
 
-      animId = requestAnimationFrame(draw);
+      if (!reduceMotion && !isCompact) {
+        animId = requestAnimationFrame(draw);
+      }
     };
 
     draw();
+
+    if (reduceMotion || isCompact) {
+      return () => {
+        if (animId) {
+          cancelAnimationFrame(animId);
+        }
+      };
+    }
 
     const resize = () => {
       w = canvas.width = window.innerWidth;
@@ -590,7 +675,7 @@ function ParticleBackground() {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [isCompact, reduceMotion]);
 
   return (
     <canvas

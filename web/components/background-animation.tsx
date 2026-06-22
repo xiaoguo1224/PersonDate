@@ -47,13 +47,65 @@ export default function BackgroundAnimation() {
   const { themeName } = useTheme();
   const [currentTheme, setCurrentTheme] = useState<ThemeName>(themeName);
   const [prevTheme, setPrevTheme] = useState<ThemeName | null>(null);
+  const [motion, setMotion] = useState({
+    reduceMotion: false,
+    isCompact: false,
+  });
 
   useEffect(() => {
     if (themeName !== currentTheme) {
-      setPrevTheme(currentTheme);
+      if (!motion.reduceMotion && !motion.isCompact) {
+        setPrevTheme(currentTheme);
+        setCurrentTheme(themeName);
+        return;
+      }
+
+      setPrevTheme(null);
       setCurrentTheme(themeName);
     }
-  }, [themeName, currentTheme]);
+  }, [themeName, currentTheme, motion.isCompact, motion.reduceMotion]);
+
+  useEffect(() => {
+    if (!motion.reduceMotion && !motion.isCompact) {
+      return;
+    }
+
+    if (prevTheme) {
+      setPrevTheme(null);
+    }
+  }, [motion.isCompact, motion.reduceMotion, prevTheme]);
+
+  useEffect(() => {
+    const reduceQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const compactQuery = window.matchMedia("(max-width: 767px)");
+
+    const update = () => {
+      setMotion({
+        reduceMotion: reduceQuery.matches,
+        isCompact: compactQuery.matches,
+      });
+    };
+
+    update();
+
+    const bind = (query: MediaQueryList) => {
+      if (query.addEventListener) {
+        query.addEventListener("change", update);
+        return () => query.removeEventListener("change", update);
+      }
+
+      query.addListener(update);
+      return () => query.removeListener(update);
+    };
+
+    const unbindReduce = bind(reduceQuery);
+    const unbindCompact = bind(compactQuery);
+
+    return () => {
+      unbindReduce();
+      unbindCompact();
+    };
+  }, []);
 
   const handlePrevFadeOut = useCallback(() => {
     setPrevTheme(null);
@@ -63,6 +115,7 @@ export default function BackgroundAnimation() {
   const PrevEffect = prevTheme ? EFFECT_MAP[prevTheme] : null;
   const currentBackdrop = BACKDROP_MAP[currentTheme];
   const prevBackdrop = prevTheme ? BACKDROP_MAP[prevTheme] : null;
+  const shouldAnimate = !motion.reduceMotion && !motion.isCompact;
 
   return (
     <div
@@ -83,14 +136,16 @@ export default function BackgroundAnimation() {
           backgroundSize: "cover, cover",
           backgroundPosition: "center, center",
           backgroundRepeat: "no-repeat, no-repeat",
-          opacity: prevTheme ? 0 : 1,
-          animation: prevTheme
-            ? "themeBackdropFadeIn 420ms ease both, themeBackdropDrift 28s ease-in-out infinite alternate"
-            : "themeBackdropDrift 28s ease-in-out infinite alternate",
+          opacity: shouldAnimate && prevTheme ? 0 : 1,
+          animation: shouldAnimate
+            ? prevTheme
+              ? "themeBackdropFadeIn 420ms ease both, themeBackdropDrift 28s ease-in-out infinite alternate"
+              : "themeBackdropDrift 28s ease-in-out infinite alternate"
+            : "none",
           transform: "translateZ(0)",
         }}
       />
-      {prevBackdrop && (
+      {shouldAnimate && prevBackdrop && (
         <div
           key={`backdrop-${prevTheme}`}
           onAnimationEnd={() => setPrevTheme(null)}
@@ -107,10 +162,10 @@ export default function BackgroundAnimation() {
           }}
         />
       )}
-      {PrevEffect && (
+      {shouldAnimate && PrevEffect && (
         <PrevEffect visible={false} onFadeOutComplete={handlePrevFadeOut} />
       )}
-      <CurrentEffect visible={true} />
+      {shouldAnimate ? <CurrentEffect visible={true} /> : null}
     </div>
   );
 }
