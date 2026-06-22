@@ -1,10 +1,11 @@
 "use client";
 
 import { BellOutlined, SaveOutlined } from "@ant-design/icons";
-import { App, Button, Card, Col, Form, Input, Row, Space, Spin, Switch, Typography } from "antd";
-import { useEffect, useState } from "react";
+import { App, Button, Card, Col, Form, Input, Row, Select, Space, Spin, Switch, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { buildCityOptions } from "@/lib/cities";
 import { requestJson } from "@/lib/api";
 
 const { Title, Paragraph } = Typography;
@@ -12,7 +13,7 @@ const { Title, Paragraph } = Typography;
 type NotificationForm = {
   daily_plan_push_enabled: boolean;
   daily_plan_push_time: string;
-  city: string;
+  city?: string | null;
 };
 
 export default function NotificationSettingsPage() {
@@ -22,6 +23,8 @@ export default function NotificationSettingsPage() {
   const [form] = Form.useForm<NotificationForm>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const watchedCity = Form.useWatch("city", form);
+  const cityOptions = useMemo(() => buildCityOptions(watchedCity), [watchedCity]);
 
   useEffect(() => {
     async function loadSettings() {
@@ -35,7 +38,7 @@ export default function NotificationSettingsPage() {
         form.setFieldsValue({
           daily_plan_push_enabled: result.daily_plan_push_enabled ?? false,
           daily_plan_push_time: result.daily_plan_push_time ?? "08:00",
-          city: result.city ?? "",
+          city: result.city?.trim() ? result.city.trim() : null,
         });
       } catch {
         message.error("加载通知设置失败");
@@ -44,7 +47,7 @@ export default function NotificationSettingsPage() {
       }
     }
     void loadSettings();
-  }, [accessToken, form]);
+  }, [accessToken, form, message]);
 
   const handleFinish = async (values: NotificationForm) => {
     if (!accessToken) return;
@@ -54,7 +57,10 @@ export default function NotificationSettingsPage() {
         "/me/notification-settings",
         {
           method: "PUT",
-          body: JSON.stringify(values),
+          body: JSON.stringify({
+            ...values,
+            city: values.city?.trim() ? values.city.trim() : null,
+          }),
         },
         accessToken,
       );
@@ -111,7 +117,13 @@ export default function NotificationSettingsPage() {
               </Form.Item>
 
               <Form.Item label="所在城市（用于天气）" name="city">
-                <Input placeholder="如：北京、上海、广州" />
+                <Select
+                  allowClear
+                  showSearch
+                  placeholder="请选择城市"
+                  optionFilterProp="label"
+                  options={cityOptions}
+                />
               </Form.Item>
 
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>

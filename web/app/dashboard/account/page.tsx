@@ -1,8 +1,8 @@
 "use client";
 
 import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Space, Spin, Switch, TimePicker, Typography } from "antd";
-import { useEffect, useState } from "react";
+import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Select, Space, Spin, Switch, TimePicker, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -10,6 +10,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 import { useAuth } from "@/components/auth-provider";
+import { buildCityOptions } from "@/lib/cities";
 import { requestJson } from "@/lib/api";
 import type { UserSettingsResponse } from "@/lib/types";
 
@@ -25,10 +26,6 @@ type SettingsForm = {
   city?: string | null;
 };
 
-function normalizeText(value?: string | null) {
-  return value ?? "";
-}
-
 export default function AccountPage() {
   const { session } = useAuth();
   const { message } = App.useApp();
@@ -37,6 +34,8 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const watchedCity = Form.useWatch("city", form);
+  const cityOptions = useMemo(() => buildCityOptions(watchedCity), [watchedCity]);
 
   useEffect(() => {
     async function loadSettings() {
@@ -55,7 +54,7 @@ export default function AccountPage() {
           daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
           default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
           daily_plan_push_enabled: result.daily_plan_push_enabled,
-          city: normalizeText(result.city),
+          city: result.city?.trim() ? result.city.trim() : null,
         });
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");
@@ -94,7 +93,7 @@ export default function AccountPage() {
         daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
         default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
         daily_plan_push_enabled: result.daily_plan_push_enabled,
-        city: normalizeText(result.city),
+        city: result.city?.trim() ? result.city.trim() : null,
       });
       message.success("设置已保存");
     } catch (caughtError: unknown) {
@@ -176,7 +175,13 @@ export default function AccountPage() {
             </Form.Item>
 
             <Form.Item label="所在城市（用于天气推送）" name="city">
-              <Input placeholder="如：北京、上海、广州" />
+              <Select
+                allowClear
+                showSearch
+                placeholder="请选择城市"
+                optionFilterProp="label"
+                options={cityOptions}
+              />
             </Form.Item>
 
             <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AppstoreOutlined,
   BellOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
@@ -218,7 +217,8 @@ function DashboardShellContent({
   } | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [warmMessage, setWarmMessage] = useState("");
-  const [weatherApiKey, setWeatherApiKey] = useState<string | null>(null);
+  const [userCity, setUserCity] = useState<string | null>(null);
+  const [weatherContextLoaded, setWeatherContextLoaded] = useState(false);
 
   const generateWarmMessage = useCallback((weatherData: typeof weather) => {
     const messages = [
@@ -257,37 +257,32 @@ function DashboardShellContent({
     return messages[randomIndex];
   }, []);
 
-  const fetchWeatherApiKey = useCallback(async () => {
+  const fetchUserWeatherSettings = useCallback(async () => {
     if (!accessToken) {
-      setWarmMessage(generateWarmMessage(null));
+      setUserCity(null);
+      setWeatherContextLoaded(true);
       return;
     }
     try {
-      const response = await requestJson<{ items: Array<{ key: string; is_configured: boolean }> }>(
-        "/admin/system-settings",
-        {},
-        accessToken,
-      );
-      const weatherSetting = response.items.find((item) => item.key === "WEATHER_API_KEY");
-      if (weatherSetting?.is_configured) {
-        setWeatherApiKey("configured");
-      } else {
-        setWarmMessage(generateWarmMessage(null));
-      }
+      const response = await requestJson<{ city?: string | null }>("/me/settings", {}, accessToken);
+      setUserCity(response.city?.trim() ? response.city.trim() : null);
     } catch {
-      setWarmMessage(generateWarmMessage(null));
+      setUserCity(null);
+    } finally {
+      setWeatherContextLoaded(true);
     }
-  }, [accessToken, generateWarmMessage]);
+  }, [accessToken]);
 
-  const fetchWeather = useCallback(async (latitude: number, longitude: number) => {
-    if (!weatherApiKey) {
-      const fallbackMessage = generateWarmMessage(null);
-      setWarmMessage(fallbackMessage);
+  const fetchWeather = useCallback(async (query: { latitude: number; longitude: number } | { city: string }) => {
+    if ("city" in query && !query.city.trim()) {
+      setWarmMessage(generateWarmMessage(null));
       return;
     }
 
-    // 检查本地缓存
-    const cacheKey = `weather_${latitude.toFixed(4)}_${longitude.toFixed(4)}`;
+    const cacheKey =
+      "city" in query
+        ? `weather_city_${query.city.trim().toLowerCase()}`
+        : `weather_${query.latitude.toFixed(4)}_${query.longitude.toFixed(4)}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -306,13 +301,17 @@ function DashboardShellContent({
 
     setWeatherLoading(true);
     try {
+      const requestPath =
+        "city" in query
+          ? `/weather?city=${encodeURIComponent(query.city.trim())}`
+          : `/weather?lat=${query.latitude}&lon=${query.longitude}`;
       const response = await requestJson<{
         city: string;
         temperature: number;
         description: string;
         humidity: number;
         wind_speed: number;
-      }>(`/weather?lat=${latitude}&lon=${longitude}`);
+      }>(requestPath);
       setWeather(response);
       setWarmMessage(generateWarmMessage(response));
 
@@ -323,15 +322,23 @@ function DashboardShellContent({
       }));
     } catch (err) {
       console.error("获取天气失败:", err);
+      if ("latitude" in query && userCity) {
+        await fetchWeather({ city: userCity });
+        return;
+      }
       const fallbackMessage = generateWarmMessage(null);
       setWarmMessage(fallbackMessage);
     } finally {
       setWeatherLoading(false);
     }
-  }, [weatherApiKey, generateWarmMessage]);
+  }, [generateWarmMessage, userCity]);
 
   const getLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (!window.isSecureContext || !navigator.geolocation) {
+      if (userCity) {
+        void fetchWeather({ city: userCity });
+        return;
+      }
       setWarmMessage(generateWarmMessage(null));
       return;
     }
@@ -344,26 +351,30 @@ function DashboardShellContent({
       (position) => {
         clearTimeout(timeoutId);
         const { latitude, longitude } = position.coords;
-        void fetchWeather(latitude, longitude);
+        void fetchWeather({ latitude, longitude });
       },
       (err) => {
         clearTimeout(timeoutId);
-        console.error("获取位置失败:", err);
+        console.warn("获取位置失败，已降级为通用天气提示:", err);
+        if (userCity) {
+          void fetchWeather({ city: userCity });
+          return;
+        }
         setWarmMessage(generateWarmMessage(null));
       },
       { timeout: 8000, maximumAge: 600000 },
     );
-  }, [fetchWeather, generateWarmMessage]);
+  }, [fetchWeather, generateWarmMessage, userCity]);
 
   useEffect(() => {
-    void fetchWeatherApiKey();
-  }, [fetchWeatherApiKey]);
+    void fetchUserWeatherSettings();
+  }, [fetchUserWeatherSettings]);
 
   useEffect(() => {
-    if (weatherApiKey) {
+    if (weatherContextLoaded) {
       getLocation();
     }
-  }, [weatherApiKey, getLocation]);
+  }, [getLocation, weatherContextLoaded]);
 
   return (
     <App>
