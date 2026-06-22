@@ -1,6 +1,7 @@
 import type { AuthSession, UserRole } from "@/lib/types";
 
 const STORAGE_KEY = "schedule-agent.auth";
+const AUTH_UNAUTHORIZED_EVENT = "schedule-agent:auth-unauthorized";
 
 function decodeBase64Url(segment: string): string {
   const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
@@ -41,6 +42,22 @@ export function clearAuthSession() {
   }
   window.localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event("storage"));
+}
+
+export function notifyAuthUnauthorized() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+}
+
+export function onAuthUnauthorized(handler: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+  const listener = () => handler();
+  window.addEventListener(AUTH_UNAUTHORIZED_EVENT, listener);
+  return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, listener);
 }
 
 export function decodeTokenRole(token: string): UserRole {

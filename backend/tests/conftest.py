@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # MUST be first: override DATABASE_URL before any app imports
+# ruff: noqa: E402, I001
 import os
 
 TEST_DB_NAME = f"schedule_agent_test_{os.getpid()}"
@@ -145,7 +146,7 @@ def owner(db_session: Session) -> Any:
 def admin_token(owner: Any, db_session: Session) -> str:
     settings = get_settings()
     auth = AuthService(db_session)
-    _, token = auth.login(
+    _, token, _ = auth.login(
         LoginRequest(username="admin", password=settings.admin_password)
     )
     db_session.commit()
@@ -170,7 +171,7 @@ def member(db_session: Session) -> Any:
 @pytest.fixture()
 def member_token(member: Any, db_session: Session) -> str:
     auth = AuthService(db_session)
-    _, token = auth.login(LoginRequest(username="member1", password="member123"))
+    _, token, _ = auth.login(LoginRequest(username="member1", password="member123"))
     db_session.commit()
     return token
 

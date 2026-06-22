@@ -14,7 +14,15 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite+pysqlite:///./app.db", alias="DATABASE_URL")
     jwt_secret: str = Field(default="change-me", alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
-    access_token_expire_minutes: int = Field(default=60 * 24, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_token_expire_minutes: int = Field(
+        default=60 * 24 * 7,
+        alias="REFRESH_TOKEN_EXPIRE_MINUTES",
+    )
+    auth_cookie_max_age_seconds: int = Field(
+        default=60 * 60 * 24 * 7,
+        alias="AUTH_COOKIE_MAX_AGE_SECONDS",
+    )
     admin_password: str = Field(default="change-me", alias="ADMIN_PASSWORD")
     llm_base_url: str | None = Field(default=None, alias="LLM_BASE_URL")
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")

@@ -2,8 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { clearAuthSession, decodeTokenRole, decodeTokenUserId, readAuthSession, saveAuthSession } from "@/lib/auth";
-import type { AuthSession } from "@/lib/types";
+import { clearAuthSession, decodeTokenRole, decodeTokenUserId, onAuthUnauthorized, readAuthSession, saveAuthSession } from "@/lib/auth";
+import { requestJson } from "@/lib/api";
+import type { AuthMeResponse, AuthSession } from "@/lib/types";
 
 type AuthContextValue = {
   session: AuthSession | null;
@@ -26,14 +27,94 @@ export function AuthProvider({
 
   const syncSession = useCallback(() => {
     setSession(readAuthSession());
-    setLoading(false);
   }, []);
 
   useEffect(() => {
-    syncSession();
+    let cancelled = false;
+
+    const bootstrapSession = async () => {
+      const storedSession = readAuthSession();
+      if (!storedSession) {
+        try {
+          const refreshed = await requestJson<{ access_token: string; token_type: "bearer"; user_id: string }>(
+            "/api/auth/refresh",
+            { method: "POST" },
+          );
+          if (cancelled) {
+            return;
+          }
+
+          const me = await requestJson<AuthMeResponse>("/api/auth/me", {}, refreshed.access_token);
+          if (cancelled) {
+            return;
+          }
+
+          const normalizedSession: AuthSession = {
+            accessToken: refreshed.access_token,
+            tokenType: refreshed.token_type,
+            userId: refreshed.user_id,
+            role: me.role,
+            username: me.username,
+            displayName: me.display_name,
+            email: me.email,
+          };
+          saveAuthSession(normalizedSession);
+          setSession(normalizedSession);
+        } catch {
+          if (!cancelled) {
+            clearAuthSession();
+            setSession(null);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+        return;
+      }
+
+      try {
+        const me = await requestJson<AuthMeResponse>("/api/auth/me", {}, storedSession.accessToken);
+        if (cancelled) {
+          return;
+        }
+
+        const normalizedSession: AuthSession = {
+          ...storedSession,
+          role: me.role,
+          username: me.username,
+          displayName: me.display_name,
+          email: me.email,
+        };
+        saveAuthSession(normalizedSession);
+        setSession(normalizedSession);
+      } catch {
+        if (!cancelled) {
+          clearAuthSession();
+          setSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void bootstrapSession();
+
     const onStorage = () => syncSession();
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const removeUnauthorizedListener = onAuthUnauthorized(() => {
+      clearAuthSession();
+      setSession(null);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+      removeUnauthorizedListener();
+    };
   }, [syncSession]);
 
   const login = useCallback((nextSession: AuthSession) => {
@@ -51,8 +132,16 @@ export function AuthProvider({
   }, []);
 
   const logout = useCallback(() => {
-    clearAuthSession();
-    setSession(null);
+    void (async () => {
+      try {
+        await requestJson<Record<string, never>>("/api/auth/logout", { method: "POST" });
+      } catch {
+        // 退出时即便后端失败，也清理前端态，避免卡在假登录状态。
+      } finally {
+        clearAuthSession();
+        setSession(null);
+      }
+    })();
   }, []);
 
   const value = useMemo<AuthContextValue>(

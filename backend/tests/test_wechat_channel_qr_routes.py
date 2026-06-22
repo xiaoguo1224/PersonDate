@@ -228,7 +228,7 @@ class TestLoginAutoConfirm:
         session.commit()
 
         auth = AuthService(session)
-        _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
+        _, token, _ = auth.login(LoginRequest(username="admin", password=settings.admin_password))
         session.commit()
 
         client = TestClient(app)
@@ -329,7 +329,7 @@ class TestLoginAutoConfirm:
         session.commit()
 
         auth = AuthService(session)
-        _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
+        _, token, _ = auth.login(LoginRequest(username="admin", password=settings.admin_password))
         session.commit()
 
         client = TestClient(app)

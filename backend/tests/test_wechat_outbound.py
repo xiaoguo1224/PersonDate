@@ -357,7 +357,7 @@ def test_admin_send_test_route_returns_send_result(monkeypatch, db_session) -> N
         OwnerInitRequest(display_name="主用户", email="owner@example.com")
     )
     auth = AuthService(db_session)
-    _, token = auth.login(LoginRequest(username="admin", password=settings.admin_password))
+    _, token, _ = auth.login(LoginRequest(username="admin", password=settings.admin_password))
     db_session.commit()
 
     user = db_session.query(User).filter_by(role="owner").first()

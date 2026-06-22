@@ -16,7 +16,6 @@ def _seed_member(db_session):
     from app.schemas.setup import OwnerInitRequest
     from app.services.setup_service import SetupService
 
-    settings = get_settings()
     SetupService(db_session).create_owner(
         OwnerInitRequest(display_name="主用户", email="owner@example.com")
     )
@@ -77,11 +76,12 @@ def test_wechat_inbound_binding_success(monkeypatch, client, db_session) -> None
     )
     monkeypatch.setattr("app.api.routes.wechat.SchedulePlanningGraph", FakeGraph)
 
-    member = _seed_member(db_session)
-    from app.services.auth_service import AuthService
+    from app.services.auth_service import AuthService  # noqa: I001
     from app.schemas.auth import LoginRequest
+
+    _seed_member(db_session)
     auth = AuthService(db_session)
-    _, member_token = auth.login(LoginRequest(username="member1", password="member123"))
+    _, member_token, _ = auth.login(LoginRequest(username="member1", password="member123"))
     db_session.commit()
 
     create_response = client.post(
