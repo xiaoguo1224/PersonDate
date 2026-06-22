@@ -17,6 +17,7 @@ node_modules/
 dist/
 .codex-*.png
 .playwright-mcp/
+.worktrees/
 .mypy_*/.claude/worktrees/
 docker-push.sh
 app.db

@@ -30,9 +30,7 @@ class ReminderWorker:
             return f"提醒：{job.title}即将开始。"
 
         tz_name = "Asia/Shanghai"
-        settings = self.db.scalar(
-            select(UserSettings).where(UserSettings.user_id == job.user_id)
-        )
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == job.user_id))
         if settings:
             tz_name = settings.default_timezone
         try:
@@ -69,10 +67,22 @@ class ReminderWorker:
                 job.status = ReminderStatus.FIRED.value
                 job.fired_at = current_time
                 job.error_message = None
-                logger.info(
-                    "提醒发送成功: job_id=%s, title=%s, user_id=%s, conversation_id=%s",
-                    job.id, job.title, job.user_id, conversation_id,
-                )
+                if log.error_code == "QUEUED":
+                    logger.warning(
+                        "提醒已进入通道队列: job_id=%s, title=%s, user_id=%s, conversation_id=%s",
+                        job.id,
+                        job.title,
+                        job.user_id,
+                        conversation_id,
+                    )
+                else:
+                    logger.info(
+                        "提醒发送成功: job_id=%s, title=%s, user_id=%s, conversation_id=%s",
+                        job.id,
+                        job.title,
+                        job.user_id,
+                        conversation_id,
+                    )
                 continue
 
             job.retry_count += 1
@@ -80,17 +90,26 @@ class ReminderWorker:
             logger.error(
                 "提醒发送失败: job_id=%s, title=%s, user_id=%s, conversation_id=%s, "
                 "error_code=%s, error_message=%s, retry_count=%s/%s",
-                job.id, job.title, job.user_id, conversation_id,
-                log.error_code, log.error_message,
-                job.retry_count, job.max_retries,
+                job.id,
+                job.title,
+                job.user_id,
+                conversation_id,
+                log.error_code,
+                log.error_message,
+                job.retry_count,
+                job.max_retries,
             )
             if job.retry_count >= job.max_retries:
                 job.status = ReminderStatus.FAILED.value
                 logger.error(
                     "提醒已达最大重试次数，标记为失败: job_id=%s, title=%s, user_id=%s, "
                     "error_code=%s, error_message=%s, retry_count=%s",
-                    job.id, job.title, job.user_id,
-                    log.error_code, log.error_message, job.retry_count,
+                    job.id,
+                    job.title,
+                    job.user_id,
+                    log.error_code,
+                    log.error_message,
+                    job.retry_count,
                 )
         self.db.commit()
         return jobs

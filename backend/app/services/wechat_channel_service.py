@@ -195,7 +195,7 @@ class WechatChannelService:
         return self.db.scalar(stmt)
 
     def _get_ilink_client(self) -> ILinkClient:
-        if not hasattr(self, '_ilink_client') or self._ilink_client is None:
+        if not hasattr(self, "_ilink_client") or self._ilink_client is None:
             self._ilink_client = ILinkClient()
         return self._ilink_client
 
@@ -457,7 +457,9 @@ class WechatChannelService:
             success=True,
             ret=0,
             messages=[self._to_inbound_item(message) for message in messages],
-            next_cursor=messages[-1].cursor_token if messages else (get_updates_buf or account.cursor or ""),
+            next_cursor=messages[-1].cursor_token
+            if messages
+            else (get_updates_buf or account.cursor or ""),
             longpolling_timeout_ms=35000,
         )
 
@@ -531,8 +533,7 @@ class WechatChannelService:
         )
         thumb_upload_param = None
         if media_type in (1, 2) and all(
-            value is not None
-            for value in (thumb_rawsize, thumb_rawfilemd5, thumb_filesize)
+            value is not None for value in (thumb_rawsize, thumb_rawfilemd5, thumb_filesize)
         ):
             thumb_rawsize_value = cast(int, thumb_rawsize)
             thumb_rawfilemd5_value = cast(str, thumb_rawfilemd5)
@@ -737,21 +738,38 @@ class WechatChannelService:
 
                 if send_result.success:
                     status = "sent"
-                    error_code = None
-                    error_message = None
+                    if send_result.ret == -2:
+                        error_code = "QUEUED"
+                        error_message = "微信通道已受理，等待确认送达"
+                    else:
+                        error_code = None
+                        error_message = None
                     outbound_retry_count = retry_count + attempt_count - 1
                     account.last_active_time = datetime.now(UTC)
-                    logger.info(
-                        "微信消息发送成功: account_id=%s, conversation_id=%s, user_id=%s, "
-                        "ret=%s, attempt=%s/%s, content_preview=%s",
-                        account.account_id,
-                        conversation_id,
-                        user_id,
-                        send_result.ret,
-                        attempt_count,
-                        self.SEND_TEXT_MAX_ATTEMPTS,
-                        content[:100],
-                    )
+                    if send_result.ret == -2:
+                        logger.warning(
+                            "微信消息已进入通道队列: account_id=%s, conversation_id=%s, "
+                            "user_id=%s, ret=%s, attempt=%s/%s, content_preview=%s",
+                            account.account_id,
+                            conversation_id,
+                            user_id,
+                            send_result.ret,
+                            attempt_count,
+                            self.SEND_TEXT_MAX_ATTEMPTS,
+                            content[:100],
+                        )
+                    else:
+                        logger.info(
+                            "微信消息发送成功: account_id=%s, conversation_id=%s, user_id=%s, "
+                            "ret=%s, attempt=%s/%s, content_preview=%s",
+                            account.account_id,
+                            conversation_id,
+                            user_id,
+                            send_result.ret,
+                            attempt_count,
+                            self.SEND_TEXT_MAX_ATTEMPTS,
+                            content[:100],
+                        )
                     break
 
                 error_code = "SEND_FAILED"
@@ -782,8 +800,7 @@ class WechatChannelService:
                 error_code = "SESSION_EXPIRED"
                 error_message = str(exc)
                 logger.error(
-                    "发送消息会话过期: conversation_id=%s, user_id=%s, "
-                    "account_id=%s, error=%s",
+                    "发送消息会话过期: conversation_id=%s, user_id=%s, account_id=%s, error=%s",
                     conversation_id,
                     user_id,
                     account.account_id,
@@ -1113,9 +1130,7 @@ class WechatChannelService:
         return f"{timestamp:013d}_{secrets.token_hex(8)}"
 
     def _build_typing_ticket(self, account: WechatAccount) -> str:
-        digest = hashlib.sha256(
-            f"{account.account_id}:{account.bot_token}".encode()
-        ).hexdigest()
+        digest = hashlib.sha256(f"{account.account_id}:{account.bot_token}".encode()).hexdigest()
         return f"typing_{digest[:32]}"
 
     def _build_upload_param(
@@ -1143,9 +1158,13 @@ class WechatChannelService:
             "issued_at": now,
             "expires_at": now + 1800,
         }
-        encoded = base64.urlsafe_b64encode(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).decode("ascii").rstrip("=")
+        encoded = (
+            base64.urlsafe_b64encode(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            )
+            .decode("ascii")
+            .rstrip("=")
+        )
         secret = account.bot_token or account.account_id
         signature = hmac.new(
             secret.encode("utf-8"),
@@ -1243,8 +1262,7 @@ class WechatChannelService:
             return False
         lowered = error_message.lower()
         return any(
-            keyword in lowered
-            for keyword in ("timeout", "timed out", "network", "temporary")
+            keyword in lowered for keyword in ("timeout", "timed out", "network", "temporary")
         )
 
     def _is_retryable_send_exception(self, exc: Exception) -> bool:

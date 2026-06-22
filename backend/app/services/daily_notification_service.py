@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.cache import cache_get, cache_set
 from app.core.config import get_settings
 from app.models.enums import ScheduledItemStatus, TaskStatus
-from app.services.system_setting_service import SystemSettingService
 from app.models.schedule import TaskItem
 from app.models.scheduled_item import ScheduledItem
 from app.models.user import User, UserSettings
 from app.services.channel_identity_service import ChannelIdentityService
+from app.services.system_setting_service import SystemSettingService
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,7 @@ class DailyNotificationService:
         if not self._is_system_push_enabled():
             logger.info("系统每日推送已关闭，跳过每日推送扫描")
             return []
-        stmt = (
-            select(User)
-            .join(UserSettings)
-            .where(UserSettings.daily_plan_push_enabled.is_(True))
-        )
+        stmt = select(User).join(UserSettings).where(UserSettings.daily_plan_push_enabled.is_(True))
         users = list(self.db.scalars(stmt))
         current_time_utc = datetime.now(UTC)
         due_users: list[User] = []
@@ -90,16 +86,19 @@ class DailyNotificationService:
         events = self._get_today_events(user.id)
         tasks = self._get_today_tasks(user.id)
 
-        settings = self.db.scalar(
-            select(UserSettings).where(UserSettings.user_id == user.id)
-        )
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user.id))
         city = settings.city if settings else None
         weather = None
         if city:
             try:
-                from app.services.system_setting_service import SystemSettingService
                 ss = SystemSettingService(self.db)
-                weather = self.get_weather(city, provider=ss.get_value("WEATHER_API_PROVIDER"), api_key=ss.get_value("WEATHER_API_KEY"))
+                weather_provider = ss.get_value("WEATHER_API_PROVIDER")
+                weather_api_key = ss.get_value("WEATHER_API_KEY")
+                weather = self.get_weather(
+                    city,
+                    provider=weather_provider,
+                    api_key=weather_api_key,
+                )
             except Exception:
                 logger.exception("获取天气失败: city=%s", city)
 
@@ -130,20 +129,42 @@ class DailyNotificationService:
             user_id=user.id,
         )
         if log.status == "sent":
-            today_str = datetime.now(UTC).astimezone(ZoneInfo(settings.default_timezone or "Asia/Shanghai")).strftime("%Y-%m-%d")
+            push_timezone = ZoneInfo(settings.default_timezone or "Asia/Shanghai")
+            today_str = (
+                datetime.now(UTC).astimezone(push_timezone).strftime("%Y-%m-%d")
+            )
             self._mark_push_today(user.id, today_str)
-            logger.info("推送成功 user_id=%s conversation_id=%s push_date=%s", user.id, identity.conversation_id, today_str)
-            logger.info("推送内容: %s", message.replace('\n', ' | '))
+            if log.error_code == "QUEUED":
+                logger.warning(
+                    "推送已进入通道队列 user_id=%s conversation_id=%s push_date=%s",
+                    user.id,
+                    identity.conversation_id,
+                    today_str,
+                )
+            else:
+                logger.info(
+                    "推送成功 user_id=%s conversation_id=%s push_date=%s",
+                    user.id,
+                    identity.conversation_id,
+                    today_str,
+                )
+            logger.info("推送内容: %s", message.replace("\n", " | "))
         else:
             logger.error(
-                "推送失败: user_id=%s, conversation_id=%s, "
-                "error_code=%s, error_message=%s",
-                user.id, identity.conversation_id,
-                log.error_code, log.error_message,
+                "推送失败: user_id=%s, conversation_id=%s, error_code=%s, error_message=%s",
+                user.id,
+                identity.conversation_id,
+                log.error_code,
+                log.error_message,
             )
         return log.status == "sent"
 
-    def get_weather(self, city: str, provider: str | None = None, api_key: str | None = None) -> dict[str, Any]:
+    def get_weather(
+        self,
+        city: str,
+        provider: str | None = None,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
         """获取城市天气，带 1 小时 Redis 缓存。"""
         cache_key = _weather_cache_key(city)
         cached = cache_get(cache_key)
@@ -229,11 +250,13 @@ class DailyNotificationService:
         )
         results = []
         for item in self.db.scalars(stmt):
-            results.append({
-                "time": item.start_time.astimezone(local_tz).strftime("%H:%M"),
-                "title": item.title,
-                "location": item.location or "",
-            })
+            results.append(
+                {
+                    "time": item.start_time.astimezone(local_tz).strftime("%H:%M"),
+                    "title": item.title,
+                    "location": item.location or "",
+                }
+            )
         return results
 
     def _get_today_tasks(self, user_id: str) -> list[dict[str, str]]:
@@ -258,10 +281,12 @@ class DailyNotificationService:
         )
         results = []
         for task in self.db.scalars(stmt):
-            results.append({
-                "title": task.title,
-                "priority": task.priority,
-            })
+            results.append(
+                {
+                    "title": task.title,
+                    "priority": task.priority,
+                }
+            )
         return results
 
     def _fetch_weather_from_api(self, city: str, provider=None, api_key=None) -> dict[str, Any]:
@@ -330,24 +355,51 @@ class DailyNotificationService:
     @staticmethod
     def _qweather_icon_to_emoji(icon: str) -> str:
         mapping = {
-            "100": "☀️", "101": "\U0001f324", "102": "⛅", "103": "\U0001f325",
-            "104": "☁️", "150": "\U0001f319", "151": "\U0001f319",
-            "300": "\U0001f326", "301": "\U0001f326", "302": "\U0001f327", "303": "\U0001f327",
-            "400": "\U0001f328", "401": "\U0001f328", "402": "\U0001f328",
-            "500": "\U0001f32b", "501": "\U0001f32b", "502": "\U0001f32b",
-            "503": "\U0001f32a", "504": "\U0001f32a",
-            "507": "\U0001f3d4", "508": "\U0001f3d4",
+            "100": "☀️",
+            "101": "\U0001f324",
+            "102": "⛅",
+            "103": "\U0001f325",
+            "104": "☁️",
+            "150": "\U0001f319",
+            "151": "\U0001f319",
+            "300": "\U0001f326",
+            "301": "\U0001f326",
+            "302": "\U0001f327",
+            "303": "\U0001f327",
+            "400": "\U0001f328",
+            "401": "\U0001f328",
+            "402": "\U0001f328",
+            "500": "\U0001f32b",
+            "501": "\U0001f32b",
+            "502": "\U0001f32b",
+            "503": "\U0001f32a",
+            "504": "\U0001f32a",
+            "507": "\U0001f3d4",
+            "508": "\U0001f3d4",
         }
         return mapping.get(icon, "\U0001f324")
 
     @staticmethod
     def _owm_icon_to_emoji(icon: str) -> str:
         mapping = {
-            "01d": "☀️", "01n": "\U0001f319", "02d": "\U0001f324", "02n": "\U0001f319",
-            "03d": "⛅", "03n": "☁️", "04d": "☁️", "04n": "☁️",
-            "09d": "\U0001f327", "09n": "\U0001f327", "10d": "\U0001f326", "10n": "\U0001f327",
-            "11d": "⛈", "11n": "⛈", "13d": "\U0001f328", "13n": "\U0001f328",
-            "50d": "\U0001f32b", "50n": "\U0001f32b",
+            "01d": "☀️",
+            "01n": "\U0001f319",
+            "02d": "\U0001f324",
+            "02n": "\U0001f319",
+            "03d": "⛅",
+            "03n": "☁️",
+            "04d": "☁️",
+            "04n": "☁️",
+            "09d": "\U0001f327",
+            "09n": "\U0001f327",
+            "10d": "\U0001f326",
+            "10n": "\U0001f327",
+            "11d": "⛈",
+            "11n": "⛈",
+            "13d": "\U0001f328",
+            "13n": "\U0001f328",
+            "50d": "\U0001f32b",
+            "50n": "\U0001f32b",
         }
         return mapping.get(icon, "\U0001f324")
 
@@ -382,9 +434,15 @@ class DailyNotificationService:
     @staticmethod
     def _amap_icon_to_emoji(weather: str) -> str:
         mapping = {
-            "晴": "☀️", "多云": "⛅", "阴": "☁️",
-            "小雨": "🌧", "中雨": "🌧", "大雨": "🌧",
-            "雷阵雨": "⛈", "雾": "🌫", "霾": "🌫",
+            "晴": "☀️",
+            "多云": "⛅",
+            "阴": "☁️",
+            "小雨": "🌧",
+            "中雨": "🌧",
+            "大雨": "🌧",
+            "雷阵雨": "⛈",
+            "雾": "🌫",
+            "霾": "🌫",
         }
         for key, emoji in mapping.items():
             if key in weather:
