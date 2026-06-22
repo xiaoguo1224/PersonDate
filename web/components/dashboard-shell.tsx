@@ -264,7 +264,7 @@ function DashboardShellContent({
     }
     try {
       const response = await requestJson<{ items: Array<{ key: string; is_configured: boolean }> }>(
-        "/api/admin/system-settings",
+        "/admin/system-settings",
         {},
         accessToken,
       );
@@ -312,7 +312,7 @@ function DashboardShellContent({
         description: string;
         humidity: number;
         wind_speed: number;
-      }>(`/api/weather?lat=${latitude}&lon=${longitude}`);
+      }>(`/weather?lat=${latitude}&lon=${longitude}`);
       setWeather(response);
       setWarmMessage(generateWarmMessage(response));
 

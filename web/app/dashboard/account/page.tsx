@@ -47,7 +47,7 @@ export default function AccountPage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await requestJson<UserSettingsResponse>("/api/me/settings", {}, accessToken);
+        const result = await requestJson<UserSettingsResponse>("/me/settings", {}, accessToken);
         form.setFieldsValue({
           default_timezone: result.default_timezone,
           workday_start_time: result.workday_start_time ? dayjs(result.workday_start_time, ["HH:mm:ss", "HH:mm"]) : null,
@@ -80,7 +80,7 @@ export default function AccountPage() {
         daily_plan_push_time: values.daily_plan_push_time?.format("HH:mm") ?? null,
       };
       const result = await requestJson<UserSettingsResponse>(
-        "/api/me/settings",
+        "/me/settings",
         {
           method: "PATCH",
           body: JSON.stringify(body),
@@ -190,7 +190,7 @@ export default function AccountPage() {
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
           <Text strong>说明</Text>
           <Text className="muted-text">
-            当前表单直接调用 `/api/me/settings`，保存后会同步到后端 `user_settings`。
+            当前表单直接调用 `/me/settings`，保存后会同步到后端 `user_settings`。
           </Text>
         </Space>
       </Card>

@@ -37,14 +37,14 @@ export function AuthProvider({
       if (!storedSession) {
         try {
           const refreshed = await requestJson<{ access_token: string; token_type: "bearer"; user_id: string }>(
-            "/api/auth/refresh",
+            "/auth/refresh",
             { method: "POST" },
           );
           if (cancelled) {
             return;
           }
 
-          const me = await requestJson<AuthMeResponse>("/api/auth/me", {}, refreshed.access_token);
+          const me = await requestJson<AuthMeResponse>("/auth/me", {}, refreshed.access_token);
           if (cancelled) {
             return;
           }
@@ -74,7 +74,7 @@ export function AuthProvider({
       }
 
       try {
-        const me = await requestJson<AuthMeResponse>("/api/auth/me", {}, storedSession.accessToken);
+        const me = await requestJson<AuthMeResponse>("/auth/me", {}, storedSession.accessToken);
         if (cancelled) {
           return;
         }
@@ -134,7 +134,7 @@ export function AuthProvider({
   const logout = useCallback(() => {
     void (async () => {
       try {
-        await requestJson<Record<string, never>>("/api/auth/logout", { method: "POST" });
+        await requestJson<Record<string, never>>("/auth/logout", { method: "POST" });
       } catch {
         // 退出时即便后端失败，也清理前端态，避免卡在假登录状态。
       } finally {

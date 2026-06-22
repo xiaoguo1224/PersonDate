@@ -55,8 +55,8 @@ export default function MessageLogsPage() {
           searchParams.set("direction", filters.direction);
         }
         const path = searchParams.toString()
-          ? `/api/admin/message-logs?${searchParams.toString()}`
-          : "/api/admin/message-logs";
+          ? `/admin/message-logs?${searchParams.toString()}`
+          : "/admin/message-logs";
         const result = await requestJson<ChannelMessageLogListResponse>(path, {}, accessToken);
         setItems(result.items);
       } catch (caughtError: unknown) {

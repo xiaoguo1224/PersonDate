@@ -586,7 +586,7 @@ export default function CalendarPage() {
   const fetchDayConflicts = useCallback(() => {
     if (!accessToken) return;
     requestJson<{ data?: { items?: { related_item_ids?: Record<string, string> }[] }; items?: { related_item_ids?: Record<string, string> }[] }>(
-      "/api/conflicts?status=open",
+      "/conflicts?status=open",
       {},
       accessToken,
     ).then((result) => {

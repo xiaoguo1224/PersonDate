@@ -35,7 +35,7 @@ export function DashboardPreferencesProvider({
     }
 
     setLoading(true);
-    requestJson<UserSettingsResponse>("/api/me/settings", {}, accessToken)
+    requestJson<UserSettingsResponse>("/me/settings", {}, accessToken)
       .then((result) => {
         if (alive) {
           setTimezone(result.default_timezone || "Asia/Shanghai");

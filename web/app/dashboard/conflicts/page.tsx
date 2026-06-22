@@ -112,7 +112,7 @@ export default function ConflictsPage() {
     if (searchKeyword) params.set("keyword", searchKeyword);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
-    requestJson<{ items: ConflictItem[]; total: number }>(`/api/conflicts?${params}`, {}, accessToken)
+    requestJson<{ items: ConflictItem[]; total: number }>(`/conflicts?${params}`, {}, accessToken)
       .then((result) => {
         setConflicts(result.items);
         setTotal(result.total);
@@ -133,7 +133,7 @@ export default function ConflictsPage() {
   const handleIgnore = async (id: string) => {
     if (!accessToken) return;
     try {
-      await requestJson(`/api/conflicts/${id}/ignore`, { method: "POST" }, accessToken);
+      await requestJson(`/conflicts/${id}/ignore`, { method: "POST" }, accessToken);
       message.success("冲突已忽略");
       fetchConflicts(page);
     } catch (err) {

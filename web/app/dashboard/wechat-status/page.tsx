@@ -32,7 +32,7 @@ export default function WechatStatusPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await requestJson<WechatStatusResponse>("/api/admin/wechat/status", {}, accessToken);
+      const result = await requestJson<WechatStatusResponse>("/admin/wechat/status", {}, accessToken);
       setData(result);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "加载失败");

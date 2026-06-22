@@ -56,8 +56,8 @@ export default function WechatOutboundQueuePage() {
           searchParams.set("status", filters.status);
         }
         const path = searchParams.toString()
-          ? `/api/admin/wechat/outbound-queue?${searchParams.toString()}`
-          : "/api/admin/wechat/outbound-queue";
+          ? `/admin/wechat/outbound-queue?${searchParams.toString()}`
+          : "/admin/wechat/outbound-queue";
         const result = await requestJson<WechatOutboundQueueListResponse>(path, {}, accessToken);
         setItems(result.items);
       } catch (caughtError: unknown) {

@@ -31,7 +31,7 @@ export default function NotificationSettingsPage() {
       }
       setLoading(true);
       try {
-        const result = await requestJson<NotificationForm>("/api/me/notification-settings", {}, accessToken);
+        const result = await requestJson<NotificationForm>("/me/notification-settings", {}, accessToken);
         form.setFieldsValue({
           daily_plan_push_enabled: result.daily_plan_push_enabled ?? false,
           daily_plan_push_time: result.daily_plan_push_time ?? "08:00",
@@ -51,7 +51,7 @@ export default function NotificationSettingsPage() {
     setSaving(true);
     try {
       await requestJson(
-        "/api/me/notification-settings",
+        "/me/notification-settings",
         {
           method: "PUT",
           body: JSON.stringify(values),

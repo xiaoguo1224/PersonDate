@@ -34,13 +34,13 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       const auth = await requestJson<{ access_token: string; token_type: "bearer"; user_id: string }>(
-        "/api/auth/register-with-invite",
+        "/auth/register-with-invite",
         {
           method: "POST",
           body: JSON.stringify(values),
         },
       );
-      const me = await requestJson<AuthMeResponse>("/api/auth/me", {}, auth.access_token);
+      const me = await requestJson<AuthMeResponse>("/auth/me", {}, auth.access_token);
       const nextSession: AuthSession = {
         accessToken: auth.access_token,
         tokenType: auth.token_type,

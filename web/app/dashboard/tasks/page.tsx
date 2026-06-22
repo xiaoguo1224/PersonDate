@@ -97,7 +97,7 @@ export default function TasksPage() {
     if (kw) params.set("keyword", kw);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
-    requestJson<TaskListResponse>(`/api/tasks?${params}`, {}, accessToken)
+    requestJson<TaskListResponse>(`/tasks?${params}`, {}, accessToken)
       .then((result) => {
         setTasks(result.items);
         setTotal(result.total);
@@ -118,7 +118,7 @@ export default function TasksPage() {
   const handleComplete = async (taskId: string) => {
     if (!accessToken) return;
     try {
-      await requestJson(`/api/tasks/${taskId}/complete`, { method: "PATCH" }, accessToken);
+      await requestJson(`/tasks/${taskId}/complete`, { method: "PATCH" }, accessToken);
       message.success("任务已完成");
       fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, page);
     } catch (caughtError: unknown) {
@@ -136,7 +136,7 @@ export default function TasksPage() {
       cancelText: "取消",
       onOk: async () => {
         try {
-          await requestJson(`/api/tasks/${taskId}`, { method: "DELETE" }, accessToken);
+          await requestJson(`/tasks/${taskId}`, { method: "DELETE" }, accessToken);
           message.success("任务已删除");
           fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, page);
         } catch (caughtError: unknown) {
@@ -207,13 +207,13 @@ export default function TasksPage() {
       };
 
       if (formMode === "create") {
-        await requestJson("/api/tasks", {
+        await requestJson("/tasks", {
           method: "POST",
           body: JSON.stringify(payload),
         }, accessToken);
         message.success("任务已创建");
       } else if (selectedTask) {
-        await requestJson(`/api/tasks/${selectedTask.id}`, {
+        await requestJson(`/tasks/${selectedTask.id}`, {
           method: "PATCH",
           body: JSON.stringify(payload),
         }, accessToken);

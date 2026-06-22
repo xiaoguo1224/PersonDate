@@ -63,7 +63,7 @@ export default function RemindersPage() {
     params.set("sort_order", sortOrder);
     params.set("page", String(currentPage));
     params.set("page_size", String(currentPageSize));
-    requestJson<ReminderListResponse>(`/api/reminders?${params}`, {}, accessToken)
+    requestJson<ReminderListResponse>(`/reminders?${params}`, {}, accessToken)
       .then((result) => {
         setReminders(result.items);
         setTotal(result.total);
@@ -85,7 +85,7 @@ export default function RemindersPage() {
   useEffect(() => {
     if (!accessToken) return;
     requestJson<UserSettingsResponse>(
-      "/api/me/settings",
+      "/me/settings",
       {},
       accessToken,
     ).then((result) => {
@@ -98,7 +98,7 @@ export default function RemindersPage() {
     if (!accessToken) return;
     setSavingDefault(true);
     try {
-      await requestJson("/api/me/settings", {
+      await requestJson("/me/settings", {
         method: "PATCH",
         body: JSON.stringify({ default_remind_before_minutes: defaultRemindBefore }),
       }, accessToken);
@@ -120,7 +120,7 @@ export default function RemindersPage() {
       cancelText: "保持开启",
       onOk: async () => {
         try {
-          await requestJson(`/api/reminders/${reminder.id}/cancel`, { method: "PATCH" }, accessToken);
+          await requestJson(`/reminders/${reminder.id}/cancel`, { method: "PATCH" }, accessToken);
           message.success("提醒已取消");
           fetchReminders(page);
         } catch (err) {
@@ -149,7 +149,7 @@ export default function RemindersPage() {
           // 默认设置为1小时后
           const newTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
           try {
-            await requestJson(`/api/reminders/${reminder.id}/reactivate`, {
+            await requestJson(`/reminders/${reminder.id}/reactivate`, {
               method: "PATCH",
               body: JSON.stringify({ trigger_time: newTime }),
             }, accessToken);
@@ -163,7 +163,7 @@ export default function RemindersPage() {
     } else {
       // 未过期的提醒直接激活
       try {
-        await requestJson(`/api/reminders/${reminder.id}/reactivate`, { method: "PATCH" }, accessToken);
+        await requestJson(`/reminders/${reminder.id}/reactivate`, { method: "PATCH" }, accessToken);
         message.success("提醒已重新激活");
         fetchReminders(page);
       } catch (err) {
@@ -181,7 +181,7 @@ export default function RemindersPage() {
     if (!accessToken || !adjustTarget) return;
     setAdjusting(true);
     try {
-      await requestJson(`/api/reminders/${adjustTarget.id}/adjust`, {
+      await requestJson(`/reminders/${adjustTarget.id}/adjust`, {
         method: "PATCH",
         body: JSON.stringify({ remind_before_minutes: adjustValue }),
       }, accessToken);

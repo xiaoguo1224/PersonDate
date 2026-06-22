@@ -48,7 +48,7 @@ export default function SystemSettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await requestJson<SystemSettingsResponse>("/api/admin/system-settings", {}, accessToken);
+        const result = await requestJson<SystemSettingsResponse>("/admin/system-settings", {}, accessToken);
         setItems(result.items);
         form.setFieldsValue({
           DEFAULT_TIMEZONE: String(getSettingValue(result.items, "DEFAULT_TIMEZONE")?.value ?? "Asia/Shanghai"),
@@ -88,7 +88,7 @@ export default function SystemSettingsPage() {
         delete payload.WEATHER_API_KEY;
       }
       const result = await requestJson<SystemSettingsResponse>(
-        "/api/admin/system-settings",
+        "/admin/system-settings",
         {
           method: "PATCH",
           body: JSON.stringify(payload),

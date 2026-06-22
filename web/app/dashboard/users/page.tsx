@@ -88,7 +88,7 @@ export default function UsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await requestJson<UserListResponse>("/api/admin/users", {}, accessToken);
+      const result = await requestJson<UserListResponse>("/admin/users", {}, accessToken);
       setUsers(result.items);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "未知错误");
@@ -125,7 +125,7 @@ export default function UsersPage() {
       setBindingError(null);
       try {
         const result = await requestJson<ChannelIdentityListResponse>(
-          `/api/admin/users/${user.id}/channel-identities`,
+          `/admin/users/${user.id}/channel-identities`,
           {},
           accessToken,
         );
@@ -148,7 +148,7 @@ export default function UsersPage() {
       try {
         const action = user.status === "active" ? "disable" : "enable";
         await requestJson(
-          `/api/admin/users/${user.id}/${action}`,
+          `/admin/users/${user.id}/${action}`,
           {
             method: "PATCH",
           },

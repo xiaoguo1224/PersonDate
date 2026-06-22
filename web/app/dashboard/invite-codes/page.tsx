@@ -74,7 +74,7 @@ export default function InviteCodesPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await requestJson<InviteCodeListResponse>("/api/admin/invite-codes", {}, accessToken);
+      const result = await requestJson<InviteCodeListResponse>("/admin/invite-codes", {}, accessToken);
       setCodes(result.items);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "未知错误");
@@ -100,7 +100,7 @@ export default function InviteCodesPage() {
     setSubmitting(true);
     try {
       await requestJson(
-        "/api/admin/invite-codes",
+        "/admin/invite-codes",
         {
           method: "POST",
           body: JSON.stringify({
@@ -126,7 +126,7 @@ export default function InviteCodesPage() {
     }
     try {
       await requestJson(
-        `/api/admin/invite-codes/${inviteCodeId}/disable`,
+        `/admin/invite-codes/${inviteCodeId}/disable`,
         {
           method: "PATCH",
         },

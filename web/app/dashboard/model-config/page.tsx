@@ -39,7 +39,7 @@ export default function ModelConfigPage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await requestJson<SystemSettingsResponse>("/api/admin/system-settings", {}, accessToken);
+        const result = await requestJson<SystemSettingsResponse>("/admin/system-settings", {}, accessToken);
         setItems(result.items);
         form.setFieldsValue({
           LLM_BASE_URL: String(getSettingValue(result.items, "LLM_BASE_URL")?.value ?? ""),
@@ -73,7 +73,7 @@ export default function ModelConfigPage() {
         payload.LLM_API_KEY = values.LLM_API_KEY.trim();
       }
       const result = await requestJson<SystemSettingsResponse>(
-        "/api/admin/system-settings",
+        "/admin/system-settings",
         {
           method: "PATCH",
           body: JSON.stringify(payload),
@@ -136,7 +136,7 @@ export default function ModelConfigPage() {
               onFinish={(values) => void handleFinish(values)}
             >
               <Form.Item label="LLM Base URL" name="LLM_BASE_URL">
-                <Input placeholder="https://api.example.com/v1" />
+                <Input placeholder="https://example.com/v1" />
               </Form.Item>
 
               <Form.Item label="LLM Model" name="LLM_MODEL">

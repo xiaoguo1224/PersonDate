@@ -114,7 +114,7 @@ export async function loadScheduledItems(
   if (params.keyword) query.set("keyword", params.keyword);
   if (params.status) query.set("status", params.status);
   const resp = await requestJson<{ items: ScheduledItem[] }>(
-    `/api/scheduled-items?${query.toString()}`,
+    `/scheduled-items?${query.toString()}`,
     {},
     accessToken,
   );
@@ -125,7 +125,7 @@ export async function createScheduledItem(
   data: ScheduledItemCreatePayload,
   accessToken?: string,
 ): Promise<ScheduledItemResult> {
-  return requestJson<ScheduledItemResult>("/api/scheduled-items", {
+  return requestJson<ScheduledItemResult>("/scheduled-items", {
     method: "POST",
     body: JSON.stringify(data),
   }, accessToken);
@@ -137,23 +137,23 @@ export async function updateScheduledItem(
   accessToken?: string,
 ): Promise<ScheduledItemResult> {
   return requestJson<ScheduledItemResult>(
-    `/api/scheduled-items/${id}`,
+    `/scheduled-items/${id}`,
     { method: "PATCH", body: JSON.stringify(data) },
     accessToken,
   );
 }
 
 export async function loadScheduledItem(id: string, accessToken?: string): Promise<ScheduledItem> {
-  return requestJson<ScheduledItem>(`/api/scheduled-items/${id}`, {}, accessToken);
+  return requestJson<ScheduledItem>(`/scheduled-items/${id}`, {}, accessToken);
 }
 
 export async function deleteScheduledItem(id: string, accessToken?: string): Promise<void> {
-  await requestJson(`/api/scheduled-items/${id}`, { method: "DELETE" }, accessToken);
+  await requestJson(`/scheduled-items/${id}`, { method: "DELETE" }, accessToken);
 }
 
 export async function completeScheduledItem(id: string, accessToken?: string): Promise<ScheduledItem> {
   return requestJson<ScheduledItem>(
-    `/api/scheduled-items/${id}/complete`,
+    `/scheduled-items/${id}/complete`,
     { method: "PATCH" },
     accessToken,
   );
@@ -165,7 +165,7 @@ export async function generateDayDrafts(
   options?: { include_pending_tasks?: boolean; auto_detect_conflicts?: boolean }
 ): Promise<ScheduledItem[]> {
   const resp = await requestJson<{ items: ScheduledItem[] }>(
-    `/api/scheduled-items/generate/${planDate}`,
+    `/scheduled-items/generate/${planDate}`,
     { method: "POST", body: JSON.stringify(options || {}) },
     accessToken,
   );
@@ -173,7 +173,7 @@ export async function generateDayDrafts(
 }
 
 export async function confirmDayDrafts(planDate: string, accessToken?: string): Promise<void> {
-  await requestJson("/api/scheduled-items/confirm", {
+  await requestJson("/scheduled-items/confirm", {
     method: "POST",
     body: JSON.stringify({ plan_date: planDate }),
   }, accessToken);
@@ -221,7 +221,7 @@ export function toIsoStringInTimeZone(value: Dayjs, timeZone?: string): string {
 export async function loadTasks(status?: string, accessToken?: string): Promise<TaskItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: TaskItem[] }>(
-    `/api/tasks${query}`,
+    `/tasks${query}`,
     {},
     accessToken,
   );
@@ -229,7 +229,7 @@ export async function loadTasks(status?: string, accessToken?: string): Promise<
 }
 
 export async function createTask(data: TaskCreatePayload, accessToken?: string): Promise<TaskItem> {
-  return requestJson<TaskItem>("/api/tasks", {
+  return requestJson<TaskItem>("/tasks", {
     method: "POST",
     body: JSON.stringify(data),
   }, accessToken);
@@ -240,18 +240,18 @@ export async function updateTask(
   data: Partial<TaskItem>,
   accessToken?: string,
 ): Promise<TaskItem> {
-  return requestJson<TaskItem>(`/api/tasks/${id}`, {
+  return requestJson<TaskItem>(`/tasks/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   }, accessToken);
 }
 
 export async function deleteTask(id: string, accessToken?: string): Promise<void> {
-  await requestJson(`/api/tasks/${id}`, { method: "DELETE" }, accessToken);
+  await requestJson(`/tasks/${id}`, { method: "DELETE" }, accessToken);
 }
 
 export async function completeTask(id: string, accessToken?: string): Promise<TaskItem> {
-  return requestJson<TaskItem>(`/api/tasks/${id}/complete`, {
+  return requestJson<TaskItem>(`/tasks/${id}/complete`, {
     method: "PATCH",
   }, accessToken);
 }
@@ -261,7 +261,7 @@ export async function loadTaskScheduledItems(
   accessToken?: string,
 ): Promise<ScheduledItem[]> {
   const resp = await requestJson<{ items: ScheduledItem[] }>(
-    `/api/tasks/${taskId}/scheduled-items`,
+    `/tasks/${taskId}/scheduled-items`,
     {},
     accessToken,
   );
@@ -273,7 +273,7 @@ export async function regenerateTaskScheduledItems(
   accessToken?: string,
 ): Promise<ScheduledItem[]> {
   const resp = await requestJson<{ items: ScheduledItem[] }>(
-    `/api/tasks/${taskId}/scheduled-items/regenerate`,
+    `/tasks/${taskId}/scheduled-items/regenerate`,
     { method: "POST" },
     accessToken,
   );
@@ -301,7 +301,7 @@ export async function loadConflicts(
 ): Promise<ConflictItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: ConflictItem[] }>(
-    `/api/conflicts${query}`,
+    `/conflicts${query}`,
     {},
     accessToken,
   );
@@ -309,11 +309,11 @@ export async function loadConflicts(
 }
 
 export async function ignoreConflict(id: string): Promise<void> {
-  await requestJson(`/api/conflicts/${id}/ignore`, { method: "POST" });
+  await requestJson(`/conflicts/${id}/ignore`, { method: "POST" });
 }
 
 export async function resolveConflict(id: string): Promise<void> {
-  await requestJson(`/api/conflicts/${id}/resolve`, { method: "POST" });
+  await requestJson(`/conflicts/${id}/resolve`, { method: "POST" });
 }
 
 // ── 提醒 API ─────────────────────────────────────────────
@@ -337,7 +337,7 @@ export type ReminderItem = {
 export async function loadReminders(status?: string, accessToken?: string): Promise<ReminderItem[]> {
   const query = status ? `?status=${status}` : "";
   const resp = await requestJson<{ items: ReminderItem[] }>(
-    `/api/reminders${query}`,
+    `/reminders${query}`,
     {},
     accessToken,
   );
@@ -345,7 +345,7 @@ export async function loadReminders(status?: string, accessToken?: string): Prom
 }
 
 export async function cancelReminder(id: string, accessToken?: string): Promise<void> {
-  await requestJson(`/api/reminders/${id}/cancel`, { method: "PATCH" }, accessToken);
+  await requestJson(`/reminders/${id}/cancel`, { method: "PATCH" }, accessToken);
 }
 
 // ── Agent 消息 ──────────────────────────────────────────
@@ -366,7 +366,7 @@ export async function sendAgentMessage(
   message: string,
 ): Promise<AgentMessageResponse> {
   return requestJson<AgentMessageResponse>(
-    "/api/me/agent/message",
+    "/me/agent/message",
     {
       method: "POST",
       body: JSON.stringify({ message }),

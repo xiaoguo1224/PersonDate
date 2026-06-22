@@ -21,7 +21,7 @@ export default function AgentLogsPage() {
   const [selectedItem, setSelectedItem] = useState<AgentLogItem | null>(null);
 
   const endpoint = useMemo(() => {
-    return session?.role === "owner" ? "/api/admin/agent-logs" : "/api/my-agent-logs";
+    return session?.role === "owner" ? "/admin/agent-logs" : "/my-agent-logs";
   }, [session?.role]);
 
   const loadLogs = useCallback(async () => {

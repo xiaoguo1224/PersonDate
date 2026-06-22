@@ -57,7 +57,7 @@ export default function WechatBindingPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await requestJson<ChannelIdentityListResponse>("/api/me/channel-identities", {}, accessToken);
+      const result = await requestJson<ChannelIdentityListResponse>("/me/channel-identities", {}, accessToken);
       setIdentities(result.items);
     } catch (caughtError: unknown) {
       setError(caughtError instanceof Error ? caughtError.message : "加载失败");
@@ -69,7 +69,7 @@ export default function WechatBindingPage() {
   const loadAccounts = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const result = await requestJson<WechatAccountListResponse>("/api/me/wechat-accounts", {}, accessToken);
+      const result = await requestJson<WechatAccountListResponse>("/me/wechat-accounts", {}, accessToken);
       setAccounts(result.items);
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "加载账号失败");
@@ -81,7 +81,7 @@ export default function WechatBindingPage() {
       if (!accessToken) return;
       try {
         const result = await requestJson<WechatLoginSessionItem>(
-          `/api/me/wechat-login-sessions/${loginSessionId}`,
+          `/me/wechat-login-sessions/${loginSessionId}`,
           {},
           accessToken,
         );
@@ -133,7 +133,7 @@ export default function WechatBindingPage() {
     setGenerating(true);
     try {
       const result = await requestJson<WechatLoginSessionCreateResponse>(
-        "/api/me/wechat-login-sessions",
+        "/me/wechat-login-sessions",
         { method: "POST" },
         accessToken,
       );
@@ -158,7 +158,7 @@ export default function WechatBindingPage() {
   const handleUnbind = async (identityId: string) => {
     if (!accessToken) return;
     try {
-      await requestJson(`/api/me/channel-identities/${identityId}`, { method: "DELETE" }, accessToken);
+      await requestJson(`/me/channel-identities/${identityId}`, { method: "DELETE" }, accessToken);
       message.success("已解绑微信");
       await loadIdentities();
     } catch (caughtError: unknown) {
