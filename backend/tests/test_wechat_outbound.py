@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -102,6 +102,51 @@ def test_wechat_channel_service_send_text_records_outbound_log(db_session) -> No
     assert stored_log.direction == "outbound"
     assert stored_log.conversation_id == "wx_user_001"
     assert stored_log.content == "提醒：15:00 开会"
+
+
+def test_wechat_channel_service_send_text_marks_queued_send_as_warning(
+    db_session, caplog
+) -> None:
+    user, account, identity = _make_owner_account_and_identity(db_session)
+
+    db_session.add(
+        ChannelMessageLog(
+            user_id=user.id,
+            channel="wechat",
+            message_id="wx_in_005",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="明天下午 7 点开会",
+            context_token="ctx_005",
+            raw_payload={"context_token": "ctx_005"},
+            status="received",
+        )
+    )
+    db_session.commit()
+
+    mock_client = _mock_ilink_client()
+    mock_client.send_message.return_value = SendResult(success=True, ret=-2, err_msg="queued")
+
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.WARNING):
+        log = service.send_text(conversation_id="wx_user_001", content="提醒：19:00 开会")
+    db_session.commit()
+
+    assert log.status == "sent"
+    assert log.error_code == "QUEUED"
+    assert "等待确认送达" in (log.error_message or "")
+    assert "微信消息已进入通道队列" in caplog.text
+
+    stored_log = db_session.scalar(
+        db_session.query(ChannelMessageLog).filter_by(id=log.id).statement  # type: ignore[attr-defined]
+    )
+    assert stored_log is not None
+    assert stored_log.status == "sent"
+    assert stored_log.error_code == "QUEUED"
 
 
 def test_wechat_channel_service_send_text_records_failed_outbound_log(db_session) -> None:
@@ -238,18 +283,14 @@ def test_wechat_channel_dispatch_updates_outbound_and_message_logs(db_session) -
     assert processed == 1
     assert mock_client.send_message.call_count == 1
     outbound_row = db_session.scalar(
-        db_session.query(WechatChannelOutboundMessage)
-        .filter_by(message_id="wx_out_001")
-        .statement  # type: ignore[attr-defined]
+        db_session.query(WechatChannelOutboundMessage).filter_by(message_id="wx_out_001").statement  # type: ignore[attr-defined]
     )
     assert outbound_row is not None
     assert outbound_row.status == "sent"
     assert outbound_row.sent_at is not None
 
     outbound_log = db_session.scalar(
-        db_session.query(ChannelMessageLog)
-        .filter_by(message_id="wx_out_001")
-        .statement  # type: ignore[attr-defined]
+        db_session.query(ChannelMessageLog).filter_by(message_id="wx_out_001").statement  # type: ignore[attr-defined]
     )
     assert outbound_log is not None
     assert outbound_log.status == "sent"
@@ -298,7 +339,6 @@ def test_wechat_channel_service_send_text_retries_transient_errors(db_session) -
 
 def test_admin_send_test_route_returns_send_result(monkeypatch, db_session) -> None:
     from app.api.deps import get_db
-
     from app.schemas.setup import OwnerInitRequest
     from app.services.setup_service import SetupService
 
