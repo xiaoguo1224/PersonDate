@@ -4,6 +4,7 @@ import hashlib
 import logging
 
 from app.core.cache import cache_delete, cache_delete_pattern
+from app.core.weather_location import normalize_city_query
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,9 @@ def invalidate_system_settings() -> None:
 
 def invalidate_weather(city: str | None = None) -> None:
     if city:
-        city_hash = hashlib.md5(city.encode()).hexdigest()[:12]
+        city_hash = hashlib.md5(normalize_city_query(city).lower().encode("utf-8")).hexdigest()[:12]
         logger.info("失效天气缓存 city=%s", city)
         cache_delete(f"schedule:weather:{city_hash}")
     else:
         logger.info("失效全部天气缓存")
         cache_delete_pattern("schedule:weather:*")
-

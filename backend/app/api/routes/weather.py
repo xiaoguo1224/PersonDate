@@ -1,4 +1,3 @@
-import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -11,6 +10,7 @@ from app.api.deps import get_db
 from app.models.system import SystemSetting
 from app.schemas.common import ApiResponse
 from app.services.system_setting_service import SystemSettingService
+from app.core.weather_location import build_weather_cache_key, normalize_city_query
 
 router = APIRouter(tags=["weather"])
 
@@ -166,19 +166,6 @@ async def _fetch_amap_by_city(city: str, api_key: str) -> dict[str, Any]:
     }
 
 
-def _normalize_city(city: str) -> str:
-    return city.strip()
-
-
-def _weather_cache_key(provider: str, *, lat: float | None = None, lon: float | None = None, city: str | None = None) -> str:
-    if city:
-        city_hash = hashlib.md5(city.lower().encode("utf-8")).hexdigest()[:12]
-        return f"{provider}_city_{city_hash}"
-    if lat is not None and lon is not None:
-        return f"{provider}_{lat:.4f}_{lon:.4f}"
-    raise ValueError("天气缓存键缺少定位信息")
-
-
 @router.get("/weather")
 async def get_weather(
     lat: float | None = None,
@@ -192,11 +179,13 @@ async def get_weather(
     if not api_key:
         raise HTTPException(status_code=400, detail="天气 API Key 未配置")
 
-    normalized_city = _normalize_city(city) if city is not None and city.strip() else None
+    normalized_city = normalize_city_query(city) if city is not None and city.strip() else None
+    if normalized_city == "":
+        normalized_city = None
     if normalized_city is None and (lat is None or lon is None):
         raise HTTPException(status_code=400, detail="请提供城市或经纬度")
 
-    cache_key = _weather_cache_key(provider, lat=lat, lon=lon, city=normalized_city)
+    cache_key = build_weather_cache_key(provider, lat=lat, lon=lon, city=normalized_city)
     now = datetime.now(UTC)
 
     # 检查缓存是否有效

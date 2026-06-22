@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get, cache_set
 from app.core.config import get_settings
+from app.core.weather_location import normalize_city_query
 from app.models.enums import ScheduledItemStatus, TaskStatus
 from app.models.schedule import TaskItem
 from app.models.scheduled_item import ScheduledItem
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 def _weather_cache_key(city: str) -> str:
     import hashlib
 
-    city_hash = hashlib.md5(city.encode()).hexdigest()[:12]
+    city_hash = hashlib.md5(normalize_city_query(city).lower().encode("utf-8")).hexdigest()[:12]
     return f"schedule:weather:{city_hash}"
 
 
@@ -87,7 +88,7 @@ class DailyNotificationService:
         tasks = self._get_today_tasks(user.id)
 
         settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user.id))
-        city = settings.city if settings else None
+        city = normalize_city_query(settings.city) if settings and settings.city else None
         weather = None
         if city:
             try:
@@ -166,6 +167,7 @@ class DailyNotificationService:
         api_key: str | None = None,
     ) -> dict[str, Any]:
         """获取城市天气，带 1 小时 Redis 缓存。"""
+        city = normalize_city_query(city)
         cache_key = _weather_cache_key(city)
         cached = cache_get(cache_key)
         if cached is not None:
