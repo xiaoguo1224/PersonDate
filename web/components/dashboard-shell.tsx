@@ -31,6 +31,7 @@ import { useAuth } from "@/components/auth-provider";
 import { DashboardPreferencesProvider, useDashboardTimezone } from "@/components/dashboard-preferences";
 import { useTheme } from "@/components/theme-provider";
 import { requestJson } from "@/lib/api";
+import { normalizeWeatherCityQuery } from "@/lib/china-area";
 import type { UserRole } from "@/lib/types";
 import type { ThemeName } from "@/components/theme-provider";
 
@@ -278,10 +279,15 @@ function DashboardShellContent({
       setWarmMessage(generateWarmMessage(null));
       return;
     }
+    const normalizedCity = "city" in query ? normalizeWeatherCityQuery(query.city) : "";
+    if ("city" in query && !normalizedCity) {
+      setWarmMessage(generateWarmMessage(null));
+      return;
+    }
 
     const cacheKey =
       "city" in query
-        ? `weather_city_${query.city.trim().toLowerCase()}`
+        ? `weather_city_${normalizedCity.toLowerCase()}`
         : `weather_${query.latitude.toFixed(4)}_${query.longitude.toFixed(4)}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -303,7 +309,7 @@ function DashboardShellContent({
     try {
       const requestPath =
         "city" in query
-          ? `/weather?city=${encodeURIComponent(query.city.trim())}`
+          ? `/weather?city=${encodeURIComponent(normalizedCity)}`
           : `/weather?lat=${query.latitude}&lon=${query.longitude}`;
       const response = await requestJson<{
         city: string;

@@ -1,8 +1,8 @@
 "use client";
 
 import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Form, Input, InputNumber, Row, Select, Space, Spin, Switch, TimePicker, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Alert, App, Button, Card, Cascader, Form, Input, InputNumber, Row, Space, Spin, Switch, TimePicker, Typography } from "antd";
+import { useEffect, useState } from "react";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -10,8 +10,8 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 import { useAuth } from "@/components/auth-provider";
-import { buildCityOptions } from "@/lib/cities";
 import { requestJson } from "@/lib/api";
+import { chinaAreaOptions, cityPathToText, resolveCityPath } from "@/lib/china-area";
 import type { UserSettingsResponse } from "@/lib/types";
 
 const { Title, Paragraph, Text } = Typography;
@@ -23,7 +23,7 @@ type SettingsForm = {
   daily_plan_push_time?: dayjs.Dayjs | null;
   default_remind_before_minutes?: number | null;
   daily_plan_push_enabled: boolean;
-  city?: string | null;
+  cityPath?: string[];
 };
 
 export default function AccountPage() {
@@ -34,8 +34,7 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const watchedCity = Form.useWatch("city", form);
-  const cityOptions = useMemo(() => buildCityOptions(watchedCity), [watchedCity]);
+  const [savedCity, setSavedCity] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -54,8 +53,9 @@ export default function AccountPage() {
           daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
           default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
           daily_plan_push_enabled: result.daily_plan_push_enabled,
-          city: result.city?.trim() ? result.city.trim() : null,
+          cityPath: resolveCityPath(result.city) ?? undefined,
         });
+        setSavedCity(result.city?.trim() ? result.city.trim() : null);
       } catch (caughtError: unknown) {
         setError(caughtError instanceof Error ? caughtError.message : "加载失败");
       } finally {
@@ -72,11 +72,13 @@ export default function AccountPage() {
     }
     setSaving(true);
     try {
+      const { cityPath, ...restValues } = values;
       const body = {
-        ...values,
-        workday_start_time: values.workday_start_time?.format("HH:mm") ?? null,
-        workday_end_time: values.workday_end_time?.format("HH:mm") ?? null,
-        daily_plan_push_time: values.daily_plan_push_time?.format("HH:mm") ?? null,
+        ...restValues,
+        workday_start_time: restValues.workday_start_time?.format("HH:mm") ?? null,
+        workday_end_time: restValues.workday_end_time?.format("HH:mm") ?? null,
+        daily_plan_push_time: restValues.daily_plan_push_time?.format("HH:mm") ?? null,
+        city: cityPathToText(cityPath),
       };
       const result = await requestJson<UserSettingsResponse>(
         "/me/settings",
@@ -93,8 +95,9 @@ export default function AccountPage() {
         daily_plan_push_time: result.daily_plan_push_time ? dayjs(result.daily_plan_push_time, ["HH:mm:ss", "HH:mm"]) : null,
         default_remind_before_minutes: result.default_remind_before_minutes ?? 0,
         daily_plan_push_enabled: result.daily_plan_push_enabled,
-        city: result.city?.trim() ? result.city.trim() : null,
+        cityPath: resolveCityPath(result.city) ?? undefined,
       });
+      setSavedCity(result.city?.trim() ? result.city.trim() : null);
       message.success("设置已保存");
     } catch (caughtError: unknown) {
       message.error(caughtError instanceof Error ? caughtError.message : "保存失败");
@@ -174,15 +177,17 @@ export default function AccountPage() {
               <Switch />
             </Form.Item>
 
-            <Form.Item label="所在城市（用于天气推送）" name="city">
-              <Select
+            <Form.Item label="所在地区（用于天气推送）" name="cityPath">
+              <Cascader
                 allowClear
                 showSearch
-                placeholder="请选择城市"
-                optionFilterProp="label"
-                options={cityOptions}
+                placeholder="请选择省 / 市 / 区"
+                options={chinaAreaOptions}
               />
             </Form.Item>
+            <Text className="muted-text" style={{ display: "block", marginBottom: 16 }}>
+              当前保存：{savedCity || "未设置"}
+            </Text>
 
             <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
               保存设置

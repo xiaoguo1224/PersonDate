@@ -1,18 +1,22 @@
 "use client";
 
 import { BellOutlined, SaveOutlined } from "@ant-design/icons";
-import { App, Button, Card, Col, Form, Input, Row, Select, Space, Spin, Switch, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { App, Button, Card, Cascader, Col, Form, Input, Row, Space, Spin, Switch, Typography } from "antd";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
-import { buildCityOptions } from "@/lib/cities";
 import { requestJson } from "@/lib/api";
+import { chinaAreaOptions, cityPathToText, resolveCityPath } from "@/lib/china-area";
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 type NotificationForm = {
   daily_plan_push_enabled: boolean;
   daily_plan_push_time: string;
+  cityPath?: string[];
+};
+
+type NotificationSettingsResponse = NotificationForm & {
   city?: string | null;
 };
 
@@ -23,8 +27,7 @@ export default function NotificationSettingsPage() {
   const [form] = Form.useForm<NotificationForm>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const watchedCity = Form.useWatch("city", form);
-  const cityOptions = useMemo(() => buildCityOptions(watchedCity), [watchedCity]);
+  const [savedCity, setSavedCity] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -34,12 +37,13 @@ export default function NotificationSettingsPage() {
       }
       setLoading(true);
       try {
-        const result = await requestJson<NotificationForm>("/me/notification-settings", {}, accessToken);
+        const result = await requestJson<NotificationSettingsResponse>("/me/notification-settings", {}, accessToken);
         form.setFieldsValue({
           daily_plan_push_enabled: result.daily_plan_push_enabled ?? false,
           daily_plan_push_time: result.daily_plan_push_time ?? "08:00",
-          city: result.city?.trim() ? result.city.trim() : null,
+          cityPath: resolveCityPath(result.city) ?? undefined,
         });
+        setSavedCity(result.city?.trim() ? result.city.trim() : null);
       } catch {
         message.error("加载通知设置失败");
       } finally {
@@ -53,17 +57,19 @@ export default function NotificationSettingsPage() {
     if (!accessToken) return;
     setSaving(true);
     try {
+      const { cityPath, ...restValues } = values;
       await requestJson(
         "/me/notification-settings",
         {
           method: "PUT",
           body: JSON.stringify({
-            ...values,
-            city: values.city?.trim() ? values.city.trim() : null,
+            ...restValues,
+            city: cityPathToText(cityPath),
           }),
         },
         accessToken,
       );
+      setSavedCity(cityPathToText(cityPath));
       message.success("通知设置已保存");
     } catch {
       message.error("保存失败");
@@ -116,15 +122,17 @@ export default function NotificationSettingsPage() {
                 <Input placeholder="08:00" />
               </Form.Item>
 
-              <Form.Item label="所在城市（用于天气）" name="city">
-                <Select
+              <Form.Item label="所在地区（用于天气）" name="cityPath">
+                <Cascader
                   allowClear
                   showSearch
-                  placeholder="请选择城市"
-                  optionFilterProp="label"
-                  options={cityOptions}
+                  placeholder="请选择省 / 市 / 区"
+                  options={chinaAreaOptions}
                 />
               </Form.Item>
+              <Text className="muted-text" style={{ display: "block", marginBottom: 16 }}>
+                当前保存：{savedCity || "未设置"}
+              </Text>
 
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
                 保存设置
