@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -7,16 +8,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.core.weather_location import build_weather_cache_key, normalize_city_query
 from app.models.system import SystemSetting
 from app.schemas.common import ApiResponse
 from app.services.system_setting_service import SystemSettingService
-from app.core.weather_location import build_weather_cache_key, normalize_city_query
 
 router = APIRouter(tags=["weather"])
 
 # 天气数据缓存，格式：{cache_key: {"data": {...}, "expires_at": datetime}}
 _weather_cache: dict[str, dict[str, Any]] = {}
 CACHE_DURATION = timedelta(hours=12)  # 缓存12小时
+_WEATHER_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 def _get_setting_value(db: Session, key: str) -> str | None:
@@ -27,6 +29,32 @@ def _get_setting_value(db: Session, key: str) -> str | None:
     if not service._is_configured(setting):
         return None
     return service._decode_value(setting)
+
+
+def _parse_weather_number(value: Any, default: int = 0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return round(value)
+
+    text = str(value).strip()
+    if not text:
+        return default
+
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return round(float(text))
+        except ValueError:
+            match = _WEATHER_NUMBER_RE.search(text)
+            if match:
+                return round(float(match.group(0)))
+            return default
 
 
 async def _fetch_openweathermap(lat: float, lon: float, api_key: str) -> dict[str, Any]:
@@ -115,10 +143,10 @@ async def _fetch_amap(lat: float, lon: float, api_key: str) -> dict[str, Any]:
 
     return {
         "city": city or live.get("city", "未知"),
-        "temperature": int(live.get("temperature", 0)),
+        "temperature": _parse_weather_number(live.get("temperature", 0)),
         "description": live.get("weather", "未知"),
-        "humidity": int(live.get("humidity", 0)),
-        "wind_speed": int(live.get("windpower", 0)),
+        "humidity": _parse_weather_number(live.get("humidity", 0)),
+        "wind_speed": _parse_weather_number(live.get("windpower", 0)),
     }
 
 
@@ -159,10 +187,10 @@ async def _fetch_amap_by_city(city: str, api_key: str) -> dict[str, Any]:
 
     return {
         "city": resolved_city or live.get("city", "未知"),
-        "temperature": int(live.get("temperature", 0)),
+        "temperature": _parse_weather_number(live.get("temperature", 0)),
         "description": live.get("weather", "未知"),
-        "humidity": int(live.get("humidity", 0)),
-        "wind_speed": int(live.get("windpower", 0)),
+        "humidity": _parse_weather_number(live.get("humidity", 0)),
+        "wind_speed": _parse_weather_number(live.get("windpower", 0)),
     }
 
 
