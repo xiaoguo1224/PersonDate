@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Spin, Switch, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Form, Grid, Input, InputNumber, Row, Select, Space, Spin, Switch, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -23,6 +23,8 @@ export default function SystemSettingsPage() {
   const { session } = useAuth();
   const { message } = App.useApp();
   const accessToken = session?.accessToken;
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [form] = Form.useForm<SystemSettingsForm>();
   const [items, setItems] = useState<SystemSettingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +216,7 @@ export default function SystemSettingsPage() {
                 />
               </Form.Item>
 
-              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving} block={isMobile}>
                 保存系统设置
               </Button>
             </Form>

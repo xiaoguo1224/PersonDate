@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SaveOutlined } from "@ant-design/icons";
-import { App, Button, Card, Cascader, Col, Form, Input, Row, Space, Spin, Switch, Typography } from "antd";
+import { App, Button, Card, Cascader, Col, Form, Grid, Input, Row, Space, Spin, Switch, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -24,6 +24,8 @@ export default function NotificationSettingsPage() {
   const { session } = useAuth();
   const { message } = App.useApp();
   const accessToken = session?.accessToken;
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [form] = Form.useForm<NotificationForm>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -134,7 +136,7 @@ export default function NotificationSettingsPage() {
                 当前保存：{savedCity || "未设置"}
               </Text>
 
-              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving} block={isMobile}>
                 保存设置
               </Button>
             </Form>

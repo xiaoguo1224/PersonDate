@@ -1,7 +1,7 @@
 "use client";
 
 import { SaveOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Cascader, Form, Input, InputNumber, Row, Space, Spin, Switch, TimePicker, Typography } from "antd";
+import { Alert, App, Button, Card, Cascader, Col, Form, Grid, Input, InputNumber, Row, Space, Spin, Switch, TimePicker, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import dayjs from "dayjs";
@@ -30,6 +30,8 @@ export default function AccountPage() {
   const { session } = useAuth();
   const { message } = App.useApp();
   const accessToken = session?.accessToken;
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [form] = Form.useForm<SettingsForm>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -132,7 +134,8 @@ export default function AccountPage() {
       {error ? <Alert type="error" showIcon message="加载设置失败" description={error} /> : null}
 
       <Row gutter={[16, 16]}>
-        <Card className="section-card" variant="borderless" style={{ width: "100%" }}>
+        <Col xs={24} xl={16}>
+          <Card className="section-card" variant="borderless">
           <Form
             form={form}
             layout="vertical"
@@ -183,17 +186,28 @@ export default function AccountPage() {
                 showSearch
                 placeholder="请选择省 / 市 / 区"
                 options={chinaAreaOptions}
+                style={{ width: "100%" }}
               />
             </Form.Item>
             <Text className="muted-text" style={{ display: "block", marginBottom: 16 }}>
               当前保存：{savedCity || "未设置"}
             </Text>
 
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
+            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving} block={isMobile}>
               保存设置
             </Button>
           </Form>
-        </Card>
+          </Card>
+        </Col>
+        <Col xs={24} xl={8}>
+          <Card className="section-card" variant="borderless" title="设置说明">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Text className="muted-text">默认时区会影响时间展示、提醒计算和 Agent 输出。</Text>
+              <Text className="muted-text">工作时间段用于后续排期和可用时间计算。</Text>
+              <Text className="muted-text">地区信息会同步到天气推送和今日摘要。</Text>
+            </Space>
+          </Card>
+        </Col>
       </Row>
 
       <Card className="section-card" variant="borderless">
