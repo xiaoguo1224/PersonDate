@@ -1,11 +1,13 @@
 "use client";
 
 import { EyeOutlined, FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Modal, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Grid, Modal, Space, Spin, Table, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
+import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { AgentLogItem, AgentLogListResponse } from "@/lib/types";
 
@@ -15,6 +17,8 @@ export default function AgentLogsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [items, setItems] = useState<AgentLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +97,48 @@ export default function AgentLogsPage() {
     },
   ];
 
+  const mobileItems = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {items.map((item) => (
+        <ResponsiveListCard
+          key={item.id}
+          compact
+          accent={item.success ? "#22c55e" : "#ef4444"}
+          title={item.intent || "未识别意图"}
+          meta={`${formatDateTime(item.created_at, timezone)} · ${item.channel}${item.conversation_id ? ` · ${item.conversation_id}` : ""}`}
+          tags={[
+            item.success ? "成功" : "失败",
+            item.intent || "unknown",
+          ]}
+          description={
+            <Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+              {item.input_text}
+            </Paragraph>
+          }
+          details={
+            <Space direction="vertical" size={6} style={{ width: "100%" }}>
+              {item.final_response ? (
+                <Text className="muted-text responsive-list-card__description-text">
+                  回复：{item.final_response}
+                </Text>
+              ) : null}
+              {item.error_message ? (
+                <Text type="danger" className="muted-text responsive-list-card__description-text">
+                  错误：{item.error_message}
+                </Text>
+              ) : null}
+            </Space>
+          }
+          actions={[
+            <Button key="detail" size="middle" icon={<EyeOutlined />} onClick={() => setSelectedItem(item)}>
+              详情
+            </Button>,
+          ]}
+        />
+      ))}
+    </Space>
+  );
+
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" variant="borderless">
@@ -119,14 +165,18 @@ export default function AgentLogsPage() {
         </div>
       ) : (
         <Card className="section-card" variant="borderless">
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={items}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
-            scroll={{ x: 900 }}
-            locale={{ emptyText: "暂无 Agent 日志" }}
-          />
+          {isMobile ? (
+            items.length ? mobileItems : <div className="dashboard-empty"><Typography.Text className="muted-text">暂无 Agent 日志</Typography.Text></div>
+          ) : (
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={items}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              scroll={{ x: 900 }}
+              locale={{ emptyText: "暂无 Agent 日志" }}
+            />
+          )}
         </Card>
       )}
 

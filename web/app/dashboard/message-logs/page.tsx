@@ -1,11 +1,13 @@
 "use client";
 
 import { EyeOutlined, ReloadOutlined, SwapOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Empty, Form, Grid, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveFilterRail } from "@/components/responsive-filter-rail";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { ChannelMessageLogItem, ChannelMessageLogListResponse } from "@/lib/types";
@@ -31,6 +33,8 @@ export default function MessageLogsPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const isOwner = session?.role === "owner";
   const [form] = Form.useForm<MessageLogFilters>();
   const [items, setItems] = useState<ChannelMessageLogItem[]>([]);
@@ -131,6 +135,46 @@ export default function MessageLogsPage() {
     },
   ];
 
+  const mobileCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {items.map((item) => (
+        <ResponsiveListCard
+          key={item.id}
+          compact
+          accent={item.direction === "inbound" ? "#3b82f6" : "#f59e0b"}
+          title={`${item.direction === "inbound" ? "入站" : "出站"} · ${item.status}`}
+          meta={`${formatDateTime(item.created_at, timezone)} · ${item.conversation_id}`}
+          tags={[
+            item.content_type,
+            item.status,
+          ]}
+          description={
+            <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+              {item.content || "暂无内容"}
+            </Typography.Paragraph>
+          }
+          details={
+            <Space direction="vertical" size={6} style={{ width: "100%" }}>
+              {item.error_message ? (
+                <Text type="danger" className="muted-text responsive-list-card__description-text">
+                  错误：{item.error_message}
+                </Text>
+              ) : null}
+              <Text className="muted-text responsive-list-card__description-text">
+                重试：{item.retry_count}
+              </Text>
+            </Space>
+          }
+          actions={[
+            <Button key="detail" size="middle" icon={<EyeOutlined />} onClick={() => setSelectedItem(item)}>
+              详情
+            </Button>,
+          ]}
+        />
+      ))}
+    </Space>
+  );
+
   if (!isOwner) {
     return <Alert type="error" showIcon message="无权限访问" description="全局消息日志仅 owner 可访问。" />;
   }
@@ -154,28 +198,32 @@ export default function MessageLogsPage() {
       </Card>
 
       <Card className="section-card" variant="borderless">
-        <Form form={form} layout="inline" onFinish={handleSearch}>
-          <Form.Item name="conversation_id" label="会话 ID">
-            <Input placeholder="输入 conversation_id" allowClear style={{ width: 240 }} />
-          </Form.Item>
-          <Form.Item name="direction" label="方向" initialValue="all">
-            <Select
-              style={{ width: 150 }}
-              options={[
-                { value: "all", label: "全部" },
-                { value: "inbound", label: "入站" },
-                { value: "outbound", label: "出站" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                查询
-              </Button>
-              <Button onClick={() => void handleReset()}>重置</Button>
-            </Space>
-          </Form.Item>
+        <Form form={form} layout={isMobile ? "vertical" : "inline"} onFinish={handleSearch}>
+          <ResponsiveFilterRail compact={isMobile}>
+            <Form.Item name="conversation_id" label="会话 ID" style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Input placeholder="输入 conversation_id" allowClear style={{ width: isMobile ? "100%" : 240 }} />
+            </Form.Item>
+            <Form.Item name="direction" label="方向" initialValue="all" style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Select
+                style={{ width: isMobile ? "100%" : 150 }}
+                options={[
+                  { value: "all", label: "全部" },
+                  { value: "inbound", label: "入站" },
+                  { value: "outbound", label: "出站" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
+                <Button type="primary" htmlType="submit" block={isMobile}>
+                  查询
+                </Button>
+                <Button onClick={() => void handleReset()} block={isMobile}>
+                  重置
+                </Button>
+              </Space>
+            </Form.Item>
+          </ResponsiveFilterRail>
         </Form>
       </Card>
 
@@ -187,14 +235,18 @@ export default function MessageLogsPage() {
         </div>
       ) : (
         <Card className="section-card" variant="borderless">
-          <Table
-            rowKey="id"
-            dataSource={items}
-            columns={columns}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
-            scroll={{ x: 1000 }}
-            locale={{ emptyText: "暂无消息日志" }}
-          />
+          {isMobile ? (
+            items.length ? mobileCards : <div className="dashboard-empty"><Empty description="暂无消息日志" /></div>
+          ) : (
+            <Table
+              rowKey="id"
+              dataSource={items}
+              columns={columns}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              scroll={{ x: 1000 }}
+              locale={{ emptyText: "暂无消息日志" }}
+            />
+          )}
         </Card>
       )}
 

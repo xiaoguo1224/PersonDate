@@ -1,11 +1,13 @@
 "use client";
 
 import { EyeOutlined, ReloadOutlined, InboxOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Empty, Form, Grid, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveFilterRail } from "@/components/responsive-filter-rail";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { WechatOutboundQueueItem, WechatOutboundQueueListResponse } from "@/lib/types";
@@ -29,6 +31,8 @@ export default function WechatOutboundQueuePage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const isOwner = session?.role === "owner";
   const [form] = Form.useForm<OutboundQueueFilters>();
   const [items, setItems] = useState<WechatOutboundQueueItem[]>([]);
@@ -144,6 +148,46 @@ export default function WechatOutboundQueuePage() {
     },
   ];
 
+  const mobileCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {items.map((item) => (
+        <ResponsiveListCard
+          key={item.id}
+          compact
+          accent={getStatusColor(item.status) === "red" ? "#ef4444" : getStatusColor(item.status) === "blue" ? "#3b82f6" : "#10b981"}
+          title={item.status}
+          meta={`${formatDateTime(item.created_at, timezone)} · ${item.account_id}`}
+          tags={[
+            `会话 ${item.conversation_id}`,
+            `重试 ${item.retry_count}`,
+          ]}
+          description={
+            <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+              {item.content}
+            </Typography.Paragraph>
+          }
+          details={
+            <Space direction="vertical" size={6} style={{ width: "100%" }}>
+              {item.error_message ? (
+                <Text type="danger" className="muted-text responsive-list-card__description-text">
+                  错误：{item.error_message}
+                </Text>
+              ) : null}
+              <Text className="muted-text responsive-list-card__description-text">
+                message_id：{item.message_id}
+              </Text>
+            </Space>
+          }
+          actions={[
+            <Button key="detail" size="middle" icon={<EyeOutlined />} onClick={() => setSelectedItem(item)}>
+              详情
+            </Button>,
+          ]}
+        />
+      ))}
+    </Space>
+  );
+
   if (!isOwner) {
     return <Alert type="error" showIcon message="无权限访问" description="微信出站队列仅 owner 可访问。" />;
   }
@@ -167,32 +211,36 @@ export default function WechatOutboundQueuePage() {
       </Card>
 
       <Card className="section-card" variant="borderless">
-        <Form form={form} layout="inline" onFinish={handleSearch}>
-          <Form.Item name="account_id" label="账号 ID">
-            <Input placeholder="输入 account_id" allowClear style={{ width: 240 }} />
-          </Form.Item>
-          <Form.Item name="conversation_id" label="会话 ID">
-            <Input placeholder="输入 conversation_id" allowClear style={{ width: 240 }} />
-          </Form.Item>
-          <Form.Item name="status" label="状态" initialValue="all">
-            <Select
-              style={{ width: 150 }}
-              options={[
-                { value: "all", label: "全部" },
-                { value: "queued", label: "排队中" },
-                { value: "sent", label: "已发送" },
-                { value: "failed", label: "失败" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                查询
-              </Button>
-              <Button onClick={() => void handleReset()}>重置</Button>
-            </Space>
-          </Form.Item>
+        <Form form={form} layout={isMobile ? "vertical" : "inline"} onFinish={handleSearch}>
+          <ResponsiveFilterRail compact={isMobile}>
+            <Form.Item name="account_id" label="账号 ID" style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Input placeholder="输入 account_id" allowClear style={{ width: isMobile ? "100%" : 240 }} />
+            </Form.Item>
+            <Form.Item name="conversation_id" label="会话 ID" style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Input placeholder="输入 conversation_id" allowClear style={{ width: isMobile ? "100%" : 240 }} />
+            </Form.Item>
+            <Form.Item name="status" label="状态" initialValue="all" style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Select
+                style={{ width: isMobile ? "100%" : 150 }}
+                options={[
+                  { value: "all", label: "全部" },
+                  { value: "queued", label: "排队中" },
+                  { value: "sent", label: "已发送" },
+                  { value: "failed", label: "失败" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item style={{ flex: isMobile ? "1 1 100%" : undefined }}>
+              <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
+                <Button type="primary" htmlType="submit" block={isMobile}>
+                  查询
+                </Button>
+                <Button onClick={() => void handleReset()} block={isMobile}>
+                  重置
+                </Button>
+              </Space>
+            </Form.Item>
+          </ResponsiveFilterRail>
         </Form>
       </Card>
 
@@ -204,14 +252,18 @@ export default function WechatOutboundQueuePage() {
         </div>
       ) : (
         <Card className="section-card" variant="borderless">
-          <Table
-            rowKey="id"
-            dataSource={items}
-            columns={columns}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
-            scroll={{ x: 1200 }}
-            locale={{ emptyText: "暂无出站队列" }}
-          />
+          {isMobile ? (
+            items.length ? mobileCards : <div className="dashboard-empty"><Empty description="暂无出站队列" /></div>
+          ) : (
+            <Table
+              rowKey="id"
+              dataSource={items}
+              columns={columns}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              scroll={{ x: 1200 }}
+              locale={{ emptyText: "暂无出站队列" }}
+            />
+          )}
         </Card>
       )}
 

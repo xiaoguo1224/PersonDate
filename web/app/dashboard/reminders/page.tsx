@@ -1,12 +1,14 @@
 "use client";
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Col, DatePicker, Empty, Grid, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
 import { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveFilterRail } from "@/components/responsive-filter-rail";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatClock, formatDateTime, getDateKey, type ReminderItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type { UserSettingsResponse } from "@/lib/types";
@@ -32,6 +34,8 @@ export default function RemindersPage() {
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const { modal, message } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +215,68 @@ export default function RemindersPage() {
     return { total: reminders.length, pending, fired, failed };
   }, [reminders]);
 
+  const mobileCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {filteredReminders.map((reminder) => (
+        <ResponsiveListCard
+          key={reminder.id}
+          compact
+          accent={getStatusColor(reminder.status) === "green" ? "#22c55e" : getStatusColor(reminder.status) === "red" ? "#ef4444" : "#f59e0b"}
+          title={reminder.title}
+          meta={`${formatDateTime(reminder.trigger_time, timezone)} · ${reminder.status}`}
+          tags={[
+            reminder.target_type,
+            `重试 ${reminder.retry_count}/${reminder.max_retries}`,
+          ]}
+          description={
+            <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+              {reminder.original_time ? `原定时间：${formatDateTime(reminder.original_time, timezone)} · ` : ""}
+              提前提醒 {reminder.remind_before_minutes ?? 0} 分钟
+            </Typography.Paragraph>
+          }
+          details={
+            <Space direction="vertical" size={6} style={{ width: "100%" }}>
+              {reminder.fired_at ? (
+                <Text className="muted-text responsive-list-card__description-text">
+                  触发于：{formatDateTime(reminder.fired_at, timezone)}
+                </Text>
+              ) : null}
+              {reminder.conversation_id ? (
+                <Text className="muted-text responsive-list-card__description-text">
+                  会话：{reminder.conversation_id}
+                </Text>
+              ) : (
+                <Text className="muted-text responsive-list-card__description-text">会话：无</Text>
+              )}
+              {reminder.error_message ? (
+                <Text type="danger" className="muted-text responsive-list-card__description-text">
+                  错误：{reminder.error_message}
+                </Text>
+              ) : null}
+            </Space>
+          }
+          actions={[
+            reminder.status === "pending" ? (
+              <Button key="adjust" size="middle" onClick={() => handleAdjustOpen(reminder)}>
+                调整提醒时间
+              </Button>
+            ) : null,
+            reminder.status === "pending" ? (
+              <Button key="cancel" danger size="middle" onClick={() => void handleCancel(reminder)}>
+                取消提醒
+              </Button>
+            ) : null,
+            reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
+              <Button key="reactivate" type="primary" size="middle" onClick={() => void handleReactivate(reminder)}>
+                重新激活
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[]}
+        />
+      ))}
+    </Space>
+  );
+
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" variant="borderless">
@@ -278,19 +344,19 @@ export default function RemindersPage() {
               { key: "failed", label: "提醒错误" },
             ]}
           />
-          <Space wrap>
+          <ResponsiveFilterRail compact={isMobile}>
             <DatePicker
               placeholder="按日期筛选"
               allowClear
               value={filterDate}
               onChange={(value) => setFilterDate(value)}
-              style={{ minWidth: 180 }}
+              style={{ width: isMobile ? "100%" : 180 }}
             />
             <Input.Search
               placeholder="搜索提醒标题"
               allowClear
               enterButton={<SearchOutlined />}
-              style={{ width: 300 }}
+              style={{ width: isMobile ? "100%" : 300 }}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onSearch={(value) => {
@@ -300,7 +366,7 @@ export default function RemindersPage() {
             />
             <Select
               value={sortOrder}
-              style={{ width: 180 }}
+              style={{ width: isMobile ? "100%" : 180 }}
               options={[
                 { value: "trigger_time_asc", label: "触发时间升序" },
                 { value: "trigger_time_desc", label: "触发时间降序" },
@@ -310,12 +376,12 @@ export default function RemindersPage() {
                 setPage(1);
               }}
             />
-            {filterDate && (
+            {filterDate ? (
               <Tag closable onClose={() => setFilterDate(null)} style={{ cursor: "pointer" }}>
                 日期：{filterDate.format("YYYY-MM-DD")}
               </Tag>
-            )}
-          </Space>
+            ) : null}
+          </ResponsiveFilterRail>
         </Space>
       </Card>
 
@@ -328,75 +394,79 @@ export default function RemindersPage() {
           <Spin size="large" />
         </div>
       ) : filteredReminders.length ? (
-        <Row gutter={[16, 16]}>
-          {filteredReminders.map((reminder) => (
-            <Col xs={24} lg={12} key={reminder.id}>
-              <Card className="section-card" variant="borderless">
-                <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                  <Space wrap>
-                    <Text strong>{reminder.title}</Text>
-                    <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
-                    <Tag color="cyan">{reminder.target_type}</Tag>
-                  </Space>
-                  {reminder.original_time ? (
-                    <Text className="muted-text">
-                      原定时间：{formatDateTime(reminder.original_time, timezone)}
-                      {" "}({formatClock(reminder.original_time, timezone)})
-                    </Text>
-                  ) : null}
-                  <Text className="muted-text">
-                    触发时间：{formatDateTime(reminder.trigger_time, timezone)}
-                    {" "}({formatClock(reminder.trigger_time, timezone)})
-                  </Text>
-                  <Text className="muted-text">
-                    提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
-                  </Text>
-                  {reminder.fired_at ? (
-                    <Text className="muted-text">
-                      触发于：{formatDateTime(reminder.fired_at, timezone)}
-                    </Text>
-                  ) : null}
-                  {reminder.error_message ? (
-                    <Text type="danger" className="muted-text">
-                      错误：{reminder.error_message}
-                    </Text>
-                  ) : null}
-                  <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
-                  <Space wrap>
-                    <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
-                    <Tag>目标 {reminder.target_id}</Tag>
-                    {reminder.status === "pending" ? (
-                      <>
-                        <Button
-                          size="small"
-                          onClick={() => handleAdjustOpen(reminder)}
-                        >
-                          调整提醒时间
-                        </Button>
-                        <Button
-                          danger
-                          size="small"
-                          onClick={() => void handleCancel(reminder)}
-                        >
-                          取消提醒
-                        </Button>
-                      </>
+        isMobile ? (
+          mobileCards
+        ) : (
+          <Row gutter={[16, 16]}>
+            {filteredReminders.map((reminder) => (
+              <Col xs={24} lg={12} key={reminder.id}>
+                <Card className="section-card" variant="borderless">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Space wrap>
+                      <Text strong>{reminder.title}</Text>
+                      <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
+                      <Tag color="cyan">{reminder.target_type}</Tag>
+                    </Space>
+                    {reminder.original_time ? (
+                      <Text className="muted-text">
+                        原定时间：{formatDateTime(reminder.original_time, timezone)}
+                        {" "}({formatClock(reminder.original_time, timezone)})
+                      </Text>
                     ) : null}
-                    {reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => void handleReactivate(reminder)}
-                      >
-                        重新激活
-                      </Button>
+                    <Text className="muted-text">
+                      触发时间：{formatDateTime(reminder.trigger_time, timezone)}
+                      {" "}({formatClock(reminder.trigger_time, timezone)})
+                    </Text>
+                    <Text className="muted-text">
+                      提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
+                    </Text>
+                    {reminder.fired_at ? (
+                      <Text className="muted-text">
+                        触发于：{formatDateTime(reminder.fired_at, timezone)}
+                      </Text>
                     ) : null}
+                    {reminder.error_message ? (
+                      <Text type="danger" className="muted-text">
+                        错误：{reminder.error_message}
+                      </Text>
+                    ) : null}
+                    <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
+                    <Space wrap>
+                      <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
+                      <Tag>目标 {reminder.target_id}</Tag>
+                      {reminder.status === "pending" ? (
+                        <>
+                          <Button
+                            size="small"
+                            onClick={() => handleAdjustOpen(reminder)}
+                          >
+                            调整提醒时间
+                          </Button>
+                          <Button
+                            danger
+                            size="small"
+                            onClick={() => void handleCancel(reminder)}
+                          >
+                            取消提醒
+                          </Button>
+                        </>
+                      ) : null}
+                      {reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => void handleReactivate(reminder)}
+                        >
+                          重新激活
+                        </Button>
+                      ) : null}
+                    </Space>
                   </Space>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )
       ) : (
         <div className="dashboard-empty">
           <Empty description={filterDate ? `${filterDate.format("YYYY-MM-DD")} 无提醒` : "当前没有提醒任务"} />

@@ -1,12 +1,15 @@
 "use client";
 
 import { App, Button, Card, DatePicker, Empty, Form, Input, List, Modal, Pagination, Segmented, Space, Spin, Tag, Typography } from "antd";
+import { Grid } from "antd";
 import { CloseOutlined, SearchOutlined, SwapOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveFilterRail } from "@/components/responsive-filter-rail";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime, loadScheduledItem, updateScheduledItem, type ConflictItem, type ScheduledItem } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -80,6 +83,8 @@ export default function ConflictsPage() {
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
   const { message } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
@@ -89,7 +94,6 @@ export default function ConflictsPage() {
   const [total, setTotal] = useState(0);
 
   const [selectModalOpen, setSelectModalOpen] = useState(false);
-  const [selectConflict, setSelectConflict] = useState<ConflictItem | null>(null);
   const [conflictItemA, setConflictItemA] = useState<ScheduledItem | null>(null);
   const [conflictItemB, setConflictItemB] = useState<ScheduledItem | null>(null);
   const [selectLoading, setSelectLoading] = useState(false);
@@ -145,7 +149,6 @@ export default function ConflictsPage() {
     if (!accessToken) return;
     const ids = conflict.related_item_ids;
     if (!ids?.current || !ids?.other) return;
-    setSelectConflict(conflict);
     setSelectLoading(true);
     setSelectModalOpen(true);
     try {
@@ -215,6 +218,52 @@ export default function ConflictsPage() {
     { label: "全部", value: "all" as StatusFilter },
   ];
 
+  const mobileCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {filteredConflicts.map((conflict) => (
+        <ResponsiveListCard
+          key={conflict.id}
+          compact
+          accent={getSeverityColor(conflict.severity) === "red" ? "#ef4444" : getSeverityColor(conflict.severity) === "gold" ? "#f59e0b" : "#3b82f6"}
+          title={conflict.title}
+          meta={`${formatDateTime(conflict.detected_at, timezone)} · ${conflict.severity} · ${conflict.status}`}
+          tags={[
+            conflict.severity,
+            conflict.status,
+          ]}
+          description={
+            conflict.suggestion ? (
+              <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+                建议：{conflict.suggestion}
+              </Typography.Paragraph>
+            ) : (
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                该冲突尚未给出建议。
+              </Typography.Text>
+            )
+          }
+          details={
+            <Space direction="vertical" size={6} style={{ width: "100%" }}>
+              <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
+            </Space>
+          }
+          actions={[
+            conflict.status === "open" ? (
+              <Button key="resolve" type="primary" icon={<ClockCircleOutlined />} onClick={() => void handleOpenEditModal(conflict)}>
+                解决冲突
+              </Button>
+            ) : null,
+            conflict.status === "open" ? (
+              <Button key="ignore" icon={<CloseOutlined />} onClick={() => void handleIgnore(conflict.id)}>
+                忽略
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[]}
+        />
+      ))}
+    </Space>
+  );
+
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
       <Card className="section-card dashboard-hero" variant="borderless">
@@ -235,7 +284,7 @@ export default function ConflictsPage() {
 
       <Card className="section-card" variant="borderless">
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Space wrap>
+          <ResponsiveFilterRail compact={isMobile}>
             <Segmented<StatusFilter>
               options={statusOptions}
               value={statusFilter}
@@ -245,10 +294,10 @@ export default function ConflictsPage() {
               placeholder="搜索冲突标题或描述"
               allowClear
               enterButton={<SearchOutlined />}
-              style={{ width: 300 }}
+              style={{ width: isMobile ? "100%" : 300 }}
               onSearch={(value) => setSearchKeyword(value)}
             />
-          </Space>
+          </ResponsiveFilterRail>
         </Space>
       </Card>
 
@@ -258,46 +307,50 @@ export default function ConflictsPage() {
         </div>
       ) : filteredConflicts.length ? (
         <Card className="section-card" variant="borderless" title="冲突列表">
-          <List
-            itemLayout="vertical"
-            dataSource={filteredConflicts}
-            pagination={false}
-            renderItem={(conflict) => (
-              <List.Item key={conflict.id}>
-                <Card size="small" variant="borderless" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Space wrap>
-                      <Text strong>{conflict.title}</Text>
-                      <Tag color={getSeverityColor(conflict.severity)}>{conflict.severity}</Tag>
-                      <Tag color={getStatusColor(conflict.status)}>{conflict.status}</Tag>
+          {isMobile ? (
+            mobileCards
+          ) : (
+            <List
+              itemLayout="vertical"
+              dataSource={filteredConflicts}
+              pagination={false}
+              renderItem={(conflict) => (
+                <List.Item key={conflict.id}>
+                  <Card size="small" variant="borderless" style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      <Space wrap>
+                        <Text strong>{conflict.title}</Text>
+                        <Tag color={getSeverityColor(conflict.severity)}>{conflict.severity}</Tag>
+                        <Tag color={getStatusColor(conflict.status)}>{conflict.status}</Tag>
+                      </Space>
+                      <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
+                      {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Tag>检测时间 {formatDateTime(conflict.detected_at, timezone)}</Tag>
+                        {conflict.status === "open" ? (
+                          <Space>
+                            <Button
+                              type="primary"
+                              icon={<ClockCircleOutlined />}
+                              onClick={() => void handleOpenEditModal(conflict)}
+                            >
+                              解决冲突
+                            </Button>
+                            <Button
+                              icon={<CloseOutlined />}
+                              onClick={() => void handleIgnore(conflict.id)}
+                            >
+                              忽略
+                            </Button>
+                          </Space>
+                        ) : null}
+                      </div>
                     </Space>
-                    <ConflictTimeDisplay conflict={conflict} timezone={timezone} accessToken={accessToken ?? ""} />
-                    {conflict.suggestion ? <Text className="muted-text">建议：{conflict.suggestion}</Text> : null}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Tag>检测时间 {formatDateTime(conflict.detected_at, timezone)}</Tag>
-                      {conflict.status === "open" ? (
-                        <Space>
-                          <Button
-                            type="primary"
-                            icon={<ClockCircleOutlined />}
-                            onClick={() => void handleOpenEditModal(conflict)}
-                          >
-                            解决冲突
-                          </Button>
-                          <Button
-                            icon={<CloseOutlined />}
-                            onClick={() => void handleIgnore(conflict.id)}
-                          >
-                            忽略
-                          </Button>
-                        </Space>
-                      ) : null}
-                    </div>
-                  </Space>
-                </Card>
-              </List.Item>
-            )}
-          />
+                  </Card>
+                </List.Item>
+              )}
+            />
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
             <Pagination
               current={page}
@@ -324,7 +377,6 @@ export default function ConflictsPage() {
         open={selectModalOpen}
         onCancel={() => {
           setSelectModalOpen(false);
-          setSelectConflict(null);
           setConflictItemA(null);
           setConflictItemB(null);
         }}
