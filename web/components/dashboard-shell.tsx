@@ -12,6 +12,7 @@ import {
   HomeOutlined,
   InboxOutlined,
   LogoutOutlined,
+  MenuOutlined,
   MessageOutlined,
   PlusOutlined,
   QrcodeOutlined,
@@ -23,7 +24,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { App, Avatar, Button, Dropdown, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
+import { App, Avatar, Button, Drawer, Dropdown, Layout, Menu, Space, Spin, Tag, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -71,24 +72,54 @@ const navigation: NavigationItem[] = [
 
 type MenuItem = NonNullable<MenuProps["items"]>[number];
 
-function menuItemToAntD(item: NavigationItem, role: UserRole): MenuItem {
+type VisibleNavigationItem = {
+  key: string;
+  label: string;
+  href?: string;
+  icon: React.ReactNode;
+  children?: VisibleNavigationItem[];
+};
+
+function filterNavigationItem(item: NavigationItem, role: UserRole): VisibleNavigationItem | null {
   if (item.children) {
     const visibleChildren = item.children
-      .filter((child) => child.roles.includes(role))
-      .map((child) => ({
-        key: child.key,
-        icon: child.icon,
-        label: child.label,
-      }));
+      .map((child) => filterNavigationItem(child, role))
+      .filter((child): child is VisibleNavigationItem => child !== null);
+
     if (visibleChildren.length === 0) return null;
+    return {
+      key: item.key,
+      label: item.label,
+      icon: item.icon,
+      children: visibleChildren,
+    };
+  }
+
+  if (!item.roles.includes(role)) return null;
+  return {
+    key: item.key,
+    label: item.label,
+    href: item.href,
+    icon: item.icon,
+  };
+}
+
+function getVisibleNavigationTree(role: UserRole): VisibleNavigationItem[] {
+  return navigation
+    .map((item) => filterNavigationItem(item, role))
+    .filter((item): item is VisibleNavigationItem => item !== null);
+}
+
+function visibleNavigationToAntD(item: VisibleNavigationItem): MenuItem {
+  if (item.children) {
     return {
       key: item.key,
       icon: item.icon,
       label: item.label,
-      children: visibleChildren,
+      children: item.children.map(visibleNavigationToAntD),
     } as MenuItem;
   }
-  if (!item.roles.includes(role)) return null;
+
   return {
     key: item.key,
     icon: item.icon,
@@ -97,9 +128,7 @@ function menuItemToAntD(item: NavigationItem, role: UserRole): MenuItem {
 }
 
 function getMenuItems(role: UserRole) {
-  return navigation
-    .map((item) => menuItemToAntD(item, role))
-    .filter((item): item is MenuItem => item !== null);
+  return getVisibleNavigationTree(role).map(visibleNavigationToAntD);
 }
 
 function ThemeSwitcher() {
@@ -133,6 +162,131 @@ function getHeaderDateLabel(timeZone: string) {
     day: "numeric",
     weekday: "long",
   }).format(new Date());
+}
+
+function SidebarBody({
+  isDarkTheme,
+  menuItems,
+  pathname,
+  onNavigate,
+}: Readonly<{
+  isDarkTheme: boolean;
+  menuItems: MenuProps["items"];
+  pathname: string;
+  onNavigate: (key: string) => void;
+}>) {
+  return (
+    <>
+      <img src="/big_logo.png" alt="PersonDate" style={{ width: 150, marginBottom: 20, borderRadius: 8 }} />
+      <div className="dashboard-sidebar__meta">
+        <span className="hero-kicker">Dashboard</span>
+        <Text className="muted-text">安排、任务、冲突与提醒统一管理</Text>
+      </div>
+      <Menu
+        theme={isDarkTheme ? "dark" : "light"}
+        mode="inline"
+        selectedKeys={[pathname]}
+        items={menuItems}
+        onClick={({ key }) => onNavigate(String(key))}
+      className="dashboard-nav"
+      />
+    </>
+  );
+}
+
+function MobileDrawerContent({
+  avatarText,
+  displayName,
+  isDarkTheme,
+  menuItems,
+  onClose,
+  onNavigate,
+  pathname,
+  sessionRole,
+  logout,
+}: Readonly<{
+  avatarText: string;
+  displayName: string;
+  isDarkTheme: boolean;
+  menuItems: MenuProps["items"];
+  onClose: () => void;
+  onNavigate: (key: string) => void;
+  pathname: string;
+  sessionRole: UserRole;
+  logout: () => void;
+}>) {
+  return (
+    <div className="dashboard-mobile-drawer">
+      <div className="dashboard-mobile-drawer__profile">
+        <Avatar className="dashboard-mobile-drawer__avatar">{avatarText}</Avatar>
+        <div className="dashboard-mobile-drawer__profile-meta">
+          <div className="dashboard-mobile-drawer__profile-name">{displayName}</div>
+          <Tag color={sessionRole === "owner" ? "gold" : "blue"} className="dashboard-mobile-drawer__profile-role">
+            {sessionRole}
+          </Tag>
+        </div>
+      </div>
+
+      <div className="dashboard-mobile-drawer__section">
+        <div className="dashboard-mobile-drawer__section-title">快捷操作</div>
+        <div className="dashboard-mobile-drawer__actions">
+          <Button
+            type="default"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              onNavigate("/dashboard/calendar");
+              onClose();
+            }}
+          >
+            快速新建
+          </Button>
+          <Button
+            type="default"
+            icon={<BellOutlined />}
+            onClick={() => {
+              onNavigate("/dashboard/reminders");
+              onClose();
+            }}
+          >
+            提醒任务
+          </Button>
+          <Button type="default" icon={<UserOutlined />} onClick={() => {
+            onNavigate("/dashboard/account");
+            onClose();
+          }}>
+            账号设置
+          </Button>
+          <Button
+            danger
+            icon={<LogoutOutlined />}
+            onClick={() => {
+              onClose();
+              logout();
+            }}
+          >
+            退出登录
+          </Button>
+        </div>
+      </div>
+
+      <div className="dashboard-mobile-drawer__section">
+        <div className="dashboard-mobile-drawer__section-title">主题切换</div>
+        <ThemeSwitcher />
+      </div>
+
+      <Menu
+        theme={isDarkTheme ? "dark" : "light"}
+        mode="inline"
+        selectedKeys={[pathname]}
+        items={menuItems}
+        onClick={({ key }) => {
+          onNavigate(String(key));
+          onClose();
+        }}
+        className="dashboard-nav dashboard-mobile-drawer__nav"
+      />
+    </div>
+  );
 }
 
 
@@ -207,6 +361,7 @@ function DashboardShellContent({
   const preferences = useDashboardTimezone();
   const { themeName } = useTheme();
   const isDarkTheme = themeName === "black-gold";
+  const [isMobile, setIsMobile] = useState(false);
   const dateLabel = getHeaderDateLabel(preferences.timezone);
 
   const [weather, setWeather] = useState<{
@@ -220,6 +375,16 @@ function DashboardShellContent({
   const [warmMessage, setWarmMessage] = useState("");
   const [userCity, setUserCity] = useState<string | null>(null);
   const [weatherContextLoaded, setWeatherContextLoaded] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 992px)");
+    const updateIsMobile = () => setIsMobile(mediaQuery.matches);
+
+    updateIsMobile();
+    mediaQuery.addEventListener("change", updateIsMobile);
+    return () => mediaQuery.removeEventListener("change", updateIsMobile);
+  }, []);
 
   const generateWarmMessage = useCallback((weatherData: typeof weather) => {
     const messages = [
@@ -382,106 +547,151 @@ function DashboardShellContent({
     }
   }, [getLocation, weatherContextLoaded]);
 
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  const handleNavigate = useCallback(
+    (key: string) => {
+      router.push(key);
+    },
+    [router],
+  );
+
   return (
     <App>
-    <Layout className="app-shell dashboard-shell">
-      <Sider breakpoint="lg" collapsedWidth={0} width={254} className="dashboard-sidebar">
+      <Layout className="app-shell dashboard-shell">
+        {!isMobile ? (
+          <Sider breakpoint="lg" collapsedWidth={0} width={254} trigger={null} className="dashboard-sidebar">
+            <SidebarBody
+              isDarkTheme={isDarkTheme}
+              menuItems={menuItems}
+              pathname={pathname}
+              onNavigate={handleNavigate}
+            />
+          </Sider>
+        ) : null}
 
-            <img src="/big_logo.png" alt="PersonDate" style={{ width: 150,marginBottom:20,borderRadius: 8 }} />
-
-        <div className="dashboard-sidebar__meta">
-          <span className="hero-kicker">Dashboard</span>
-          <Text className="muted-text">安排、任务、冲突与提醒统一管理</Text>
-        </div>
-
-        <Menu
-          theme={isDarkTheme ? "dark" : "light"}
-          mode="inline"
-          selectedKeys={[pathname]}
-          items={menuItems}
-          onClick={({ key }) => router.push(key)}
-          className="dashboard-nav"
-        />
-
-      </Sider>
-
-      <Layout className="dashboard-main">
-        <Header className="dashboard-topbar">
-          <div className="dashboard-topbar__headline">
-            <div className="dashboard-topbar__greeting">
-              <Title level={4} className="dashboard-topbar__title">
-                {preferences.loading ? "正在同步你的时区..." : dateLabel}
-              </Title>
+        <Layout className="dashboard-main">
+          <Header className="dashboard-topbar">
+            <div className="dashboard-topbar__headline">
+              <div className="dashboard-topbar__headline-row">
+                <div className="dashboard-topbar__greeting">
+                  <Title level={4} className="dashboard-topbar__title">
+                    {preferences.loading ? "正在同步你的时区..." : dateLabel}
+                  </Title>
+                </div>
+                {isMobile ? (
+                  <Button
+                    className="dashboard-topbar__menu-button"
+                    icon={<MenuOutlined />}
+                    onClick={() => setMobileDrawerOpen(true)}
+                    aria-label="打开顶部抽屉菜单"
+                  />
+                ) : null}
+              </div>
+              <div className="dashboard-topbar__weather">
+                {weatherLoading ? (
+                  <Spin size="small" />
+                ) : weather ? (
+                  <>
+                    <span className="dashboard-topbar__weather-item">
+                      <EnvironmentOutlined className="dashboard-topbar__weather-icon" />
+                      <span>{weather.city}</span>
+                    </span>
+                    <span className="dashboard-topbar__weather-divider">|</span>
+                    <span className="dashboard-topbar__weather-item">
+                      <CloudOutlined className="dashboard-topbar__weather-icon" />
+                      <span>
+                        {weather.temperature}°C {weather.description}
+                      </span>
+                    </span>
+                  </>
+                ) : null}
+                {warmMessage && (
+                  <>
+                    <span className="dashboard-topbar__weather-divider">|</span>
+                    <span className="dashboard-topbar__weather-message">
+                      <SmileOutlined className="dashboard-topbar__weather-icon" />
+                      <span>{warmMessage}</span>
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="dashboard-topbar__weather">
-              {weatherLoading ? (
-                <Spin size="small" />
-              ) : weather ? (
-                <>
-                  <span className="dashboard-topbar__weather-item">
-                    <EnvironmentOutlined className="dashboard-topbar__weather-icon" />
-                    <span>{weather.city}</span>
-                  </span>
-                  <span className="dashboard-topbar__weather-divider">|</span>
-                  <span className="dashboard-topbar__weather-item">
-                    <CloudOutlined className="dashboard-topbar__weather-icon" />
-                    <span>{weather.temperature}°C {weather.description}</span>
-                  </span>
-                </>
-              ) : null}
-              {warmMessage && (
-                <>
-                  <span className="dashboard-topbar__weather-divider">|</span>
-                  <span className="dashboard-topbar__weather-message">
-                    <SmileOutlined className="dashboard-topbar__weather-icon" />
-                    <span>{warmMessage}</span>
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-          <Space size={12} wrap className="dashboard-topbar__actions">
-            <Button className="dashboard-topbar__button" type="default" icon={<PlusOutlined />} href="/dashboard/calendar">
-              快速新建
-            </Button>
-            <Button className="dashboard-topbar__icon-button" icon={<BellOutlined />} href="/dashboard/reminders" aria-label="提醒" />
-            <ThemeSwitcher />
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: "profile",
-                    label: (
-                      <Space>
-                        <Tag color={sessionRole === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
-                          {sessionRole}
-                        </Tag>
-                        <span>{displayName}</span>
-                      </Space>
-                    ),
-                    disabled: true,
-                  },
-                  { type: "divider" },
-                  { key: "account", label: "账号设置", icon: <UserOutlined />, onClick: () => router.push("/dashboard/account") },
-                  { key: "reminders", label: "提醒任务", icon: <BellOutlined />, onClick: () => router.push("/dashboard/reminders") },
-                  { type: "divider" },
-                  { key: "logout", label: "退出登录", icon: <LogoutOutlined />, danger: true, onClick: logout },
-                ],
-              }}
-              trigger={["click"]}
-            >
-              <Space className="dashboard-topbar__user-trigger" size={8}>
-                <Avatar className="dashboard-topbar__avatar">{avatarText}</Avatar>
+            {!isMobile ? (
+              <Space size={12} wrap className="dashboard-topbar__actions">
+                <Button className="dashboard-topbar__button" type="default" icon={<PlusOutlined />} href="/dashboard/calendar">
+                  快速新建
+                </Button>
+                <Button className="dashboard-topbar__icon-button" icon={<BellOutlined />} href="/dashboard/reminders" aria-label="提醒" />
+                <ThemeSwitcher />
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: "profile",
+                        label: (
+                          <Space>
+                            <Tag color={sessionRole === "owner" ? "gold" : "blue"} style={{ marginInlineEnd: 0 }}>
+                              {sessionRole}
+                            </Tag>
+                            <span>{displayName}</span>
+                          </Space>
+                        ),
+                        disabled: true,
+                      },
+                      { type: "divider" },
+                      { key: "account", label: "账号设置", icon: <UserOutlined />, onClick: () => router.push("/dashboard/account") },
+                      { key: "reminders", label: "提醒任务", icon: <BellOutlined />, onClick: () => router.push("/dashboard/reminders") },
+                      { type: "divider" },
+                      { key: "logout", label: "退出登录", icon: <LogoutOutlined />, danger: true, onClick: logout },
+                    ],
+                  }}
+                  trigger={["click"]}
+                >
+                  <Space className="dashboard-topbar__user-trigger" size={8}>
+                    <Avatar className="dashboard-topbar__avatar">{avatarText}</Avatar>
+                  </Space>
+                </Dropdown>
               </Space>
-            </Dropdown>
-          </Space>
-        </Header>
+            ) : null}
+          </Header>
 
-        <Content className="dashboard-content">
-          <div className="dashboard-content__inner">{children}</div>
-        </Content>
+          <Drawer
+            open={isMobile && mobileDrawerOpen}
+            onClose={() => setMobileDrawerOpen(false)}
+            placement="right"
+            width={360}
+            closable
+            title={<span className="dashboard-mobile-drawer__header-title">顶部菜单</span>}
+            className="dashboard-mobile-drawer"
+            rootClassName="dashboard-mobile-drawer-root"
+            bodyStyle={{ padding: 0 }}
+            destroyOnHidden
+          >
+            <MobileDrawerContent
+              avatarText={avatarText}
+              displayName={displayName}
+              isDarkTheme={isDarkTheme}
+              menuItems={menuItems}
+              onClose={() => setMobileDrawerOpen(false)}
+              onNavigate={handleNavigate}
+              pathname={pathname}
+              sessionRole={sessionRole}
+              logout={logout}
+            />
+          </Drawer>
+
+          <Content className="dashboard-content">
+            <div className="dashboard-content__inner">{children}</div>
+          </Content>
+        </Layout>
       </Layout>
-    </Layout>
     </App>
   );
 }
