@@ -62,6 +62,7 @@ class WechatChannelService:
     LOGIN_SESSION_TTL_MINUTES = 10
     LOG_LIST_LIMIT = 100
     SEND_TEXT_MAX_ATTEMPTS = 3
+    CONTEXT_TOKEN_MAX_AGE = timedelta(hours=24)
     SEND_TEXT_RETRYABLE_ERROR_CODES = {
         "TIMEOUT",
         "REQUEST_TIMEOUT",
@@ -703,11 +704,13 @@ class WechatChannelService:
         while attempt_count < self.SEND_TEXT_MAX_ATTEMPTS:
             attempt_count += 1
             try:
-                ticket = ilink.get_typing_ticket(
-                    bot_token=account.bot_token,
-                    user_id=to_user_id,
-                    context_token=context_token or "",
-                )
+                ticket = None
+                if context_token:
+                    ticket = ilink.get_typing_ticket(
+                        bot_token=account.bot_token,
+                        user_id=to_user_id,
+                        context_token=context_token,
+                    )
 
                 if ticket:
                     ilink.send_typing(
@@ -721,9 +724,25 @@ class WechatChannelService:
                     bot_token=account.bot_token,
                     to_user_id=to_user_id,
                     text=content,
-                    context_token=context_token or "",
+                    context_token=context_token,
                 )
                 last_ret = send_result.ret
+
+                if send_result.ret == -2 and context_token:
+                    logger.info(
+                        "检测到 context_token 可能已过期，尝试去掉上下文重新发送: "
+                        "account_id=%s, conversation_id=%s, user_id=%s",
+                        account.account_id,
+                        conversation_id,
+                        user_id,
+                    )
+                    send_result = ilink.send_message(
+                        bot_token=account.bot_token,
+                        to_user_id=to_user_id,
+                        text=content,
+                        context_token=None,
+                    )
+                    last_ret = send_result.ret
 
                 if ticket:
                     try:
@@ -737,11 +756,12 @@ class WechatChannelService:
                         pass
 
                 if send_result.success:
-                    status = "sent"
                     if send_result.ret == -2:
+                        status = "queued"
                         error_code = "QUEUED"
                         error_message = "微信通道已受理，等待确认送达"
                     else:
+                        status = "sent"
                         error_code = None
                         error_message = None
                     outbound_retry_count = retry_count + attempt_count - 1
@@ -1218,7 +1238,7 @@ class WechatChannelService:
 
     def _resolve_context_token(self, conversation_id: str) -> str | None:
         stmt = (
-            select(ChannelMessageLog.context_token)
+            select(ChannelMessageLog)
             .where(
                 ChannelMessageLog.channel == "wechat",
                 ChannelMessageLog.conversation_id == conversation_id,
@@ -1228,7 +1248,13 @@ class WechatChannelService:
             .order_by(ChannelMessageLog.created_at.desc())
             .limit(1)
         )
-        return self.db.scalar(stmt)
+        log = self.db.scalar(stmt)
+        if log is None:
+            return None
+        created_at = _as_utc(log.created_at)
+        if datetime.now(UTC) - created_at > self.CONTEXT_TOKEN_MAX_AGE:
+            return None
+        return log.context_token
 
     def _sync_outbound_message_log(
         self,

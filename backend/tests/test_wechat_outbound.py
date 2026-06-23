@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
@@ -136,7 +137,7 @@ def test_wechat_channel_service_send_text_marks_queued_send_as_warning(
         log = service.send_text(conversation_id="wx_user_001", content="提醒：19:00 开会")
     db_session.commit()
 
-    assert log.status == "sent"
+    assert log.status == "queued"
     assert log.error_code == "QUEUED"
     assert "等待确认送达" in (log.error_message or "")
     assert "微信消息已进入通道队列" in caplog.text
@@ -145,7 +146,7 @@ def test_wechat_channel_service_send_text_marks_queued_send_as_warning(
         db_session.query(ChannelMessageLog).filter_by(id=log.id).statement  # type: ignore[attr-defined]
     )
     assert stored_log is not None
-    assert stored_log.status == "sent"
+    assert stored_log.status == "queued"
     assert stored_log.error_code == "QUEUED"
 
 
@@ -335,6 +336,97 @@ def test_wechat_channel_service_send_text_retries_transient_errors(db_session) -
     assert log.status == "sent"
     assert log.retry_count == 2
     assert log.error_message is None
+
+
+def test_wechat_channel_service_send_text_allows_tokenless_proactive_push(db_session) -> None:
+    _user, _account, _identity = _make_owner_account_and_identity(db_session)
+
+    mock_client = _mock_ilink_client()
+    mock_client.send_message.return_value = SendResult(success=True)
+
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：早睡提醒 💤即将开始。")
+    db_session.commit()
+
+    assert log.status == "sent"
+    assert mock_client.send_message.call_args is not None
+    assert mock_client.send_message.call_args.kwargs["context_token"] is None
+
+
+def test_wechat_channel_service_ignores_stale_context_token(db_session) -> None:
+    user, _account, _identity = _make_owner_account_and_identity(db_session)
+
+    db_session.add(
+        ChannelMessageLog(
+            user_id=user.id,
+            channel="wechat",
+            message_id="wx_in_006",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="昨天的消息",
+            context_token="ctx_old",
+            raw_payload={"context_token": "ctx_old"},
+            status="received",
+            created_at=datetime.now(UTC) - timedelta(days=2),
+        )
+    )
+    db_session.commit()
+
+    mock_client = _mock_ilink_client()
+    mock_client.send_message.return_value = SendResult(success=True)
+
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：早睡提醒 💤即将开始。")
+    db_session.commit()
+
+    assert log.status == "sent"
+    assert mock_client.send_message.call_count == 1
+    assert mock_client.send_message.call_args is not None
+    assert mock_client.send_message.call_args.kwargs["context_token"] is None
+
+
+def test_wechat_channel_service_retries_without_context_token_on_ret_minus_two(
+    db_session,
+) -> None:
+    user, _account, _identity = _make_owner_account_and_identity(db_session)
+
+    db_session.add(
+        ChannelMessageLog(
+            user_id=user.id,
+            channel="wechat",
+            message_id="wx_in_007",
+            conversation_id="wx_user_001",
+            channel_user_id="wx_user_001",
+            direction="inbound",
+            content_type="text",
+            content="刚刚的消息",
+            context_token="ctx_fresh",
+            raw_payload={"context_token": "ctx_fresh"},
+            status="received",
+        )
+    )
+    db_session.commit()
+
+    mock_client = _mock_ilink_client()
+    mock_client.send_message.side_effect = [
+        SendResult(success=True, ret=-2, err_msg="queued"),
+        SendResult(success=True, ret=0),
+    ]
+
+    service = WechatChannelService(db_session)
+    service._get_ilink_client = lambda: mock_client  # type: ignore[method-assign]
+    log = service.send_text(conversation_id="wx_user_001", content="提醒：晚饭后散步 20 分钟。")
+    db_session.commit()
+
+    assert log.status == "sent"
+    assert log.error_code is None
+    assert mock_client.send_message.call_count == 2
+    assert mock_client.send_message.call_args_list[0].kwargs["context_token"] == "ctx_fresh"
+    assert mock_client.send_message.call_args_list[1].kwargs["context_token"] is None
 
 
 def test_admin_send_test_route_returns_send_result(monkeypatch, db_session) -> None:

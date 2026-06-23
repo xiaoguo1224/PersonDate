@@ -129,7 +129,7 @@ class DailyNotificationService:
             content=message,
             user_id=user.id,
         )
-        if log.status == "sent":
+        if log.status in {"sent", "queued"}:
             push_timezone = ZoneInfo(settings.default_timezone or "Asia/Shanghai")
             today_str = (
                 datetime.now(UTC).astimezone(push_timezone).strftime("%Y-%m-%d")

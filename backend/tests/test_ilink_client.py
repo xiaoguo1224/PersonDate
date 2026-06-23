@@ -134,6 +134,23 @@ class TestSendMessage:
         )
         assert result.success is True
 
+    def test_omits_context_token_when_missing(self, client, mock_ilink):
+        def check_payload(request):
+            body = json.loads(request.content)
+            msg = body["msg"]
+            assert msg["to_user_id"] == "wx_user_1@im.wechat"
+            assert "context_token" not in msg
+            return Response(200, json={"ret": 0})
+
+        mock_ilink.post("/ilink/bot/sendmessage").mock(side_effect=check_payload)
+        result = client.send_message(
+            bot_token="bt_1",
+            to_user_id="wx_user_1",
+            text="提醒：早睡提醒即将开始",
+            context_token=None,
+        )
+        assert result.success is True
+
     def test_fails_on_error_ret(self, client, mock_ilink):
         mock_ilink.post("/ilink/bot/sendmessage").respond(
             json={"ret": -1, "err_msg": "send failed"}

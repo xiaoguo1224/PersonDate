@@ -115,24 +115,33 @@ class ILinkClient:
         return UpdatesResult(msgs=msgs, new_cursor=new_cursor)
 
     def send_message(
-        self, bot_token: str, to_user_id: str, text: str, context_token: str,
+        self,
+        bot_token: str,
+        to_user_id: str,
+        text: str,
+        context_token: str | None = None,
     ) -> SendResult:
         client_id = f"openclaw-weixin-{secrets.token_hex(4)}"
-        payload = {
+        msg = {
             "msg": {
                 "from_user_id": "",
-                "to_user_id": to_user_id if to_user_id.endswith("@im.wechat") else f"{to_user_id}@im.wechat",
+                "to_user_id": (
+                    to_user_id
+                    if to_user_id.endswith("@im.wechat")
+                    else f"{to_user_id}@im.wechat"
+                ),
                 "client_id": client_id,
                 "message_type": 2,
                 "message_state": 2,
-                "context_token": context_token,
                 "item_list": [{"type": 1, "text_item": {"text": text}}],
             },
             "base_info": self._base_info(),
         }
+        if context_token:
+            msg["msg"]["context_token"] = context_token
         data = self._post(
             "/ilink/bot/sendmessage",
-            json=payload,
+            json=msg,
             extra_headers=self._auth_header(bot_token),
         )
         # ret=0 成功, ret=-2 排队中（iLink 正常行为）, 其他值失败

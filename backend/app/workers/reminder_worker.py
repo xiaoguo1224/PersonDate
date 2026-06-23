@@ -63,7 +63,7 @@ class ReminderWorker:
                 content=self._build_message(job),
                 user_id=job.user_id,
             )
-            if log.status == "sent":
+            if log.status in {"sent", "queued"}:
                 job.status = ReminderStatus.FIRED.value
                 job.fired_at = current_time
                 job.error_message = None
