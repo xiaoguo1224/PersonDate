@@ -1,11 +1,14 @@
 "use client";
 
-import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, RocketOutlined, CalendarOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Segmented, Space, Spin, Tag, TimePicker, Typography } from "antd";
+import { CalendarOutlined, PlusOutlined } from "@ant-design/icons";
+import { App, Button, Card, DatePicker, Empty, Form, Input, InputNumber, List, Modal, Pagination, Select, Space, Spin, Tag, TimePicker, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveListFooter } from "@/components/responsive-list-footer";
+import { ResponsiveListShell } from "@/components/responsive-list-shell";
+import { TaskListScene, type TaskStatus } from "@/components/task-list-scene";
 import {
   formatDateTime,
   loadTaskScheduledItems,
@@ -18,47 +21,8 @@ import {
 } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
-const { Title, Paragraph, Text } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
-
-type TaskStatus = "all" | "pending" | "completed";
-
-function getPriorityColor(priority: string) {
-  if (priority === "high") return "red";
-  if (priority === "medium") return "gold";
-  return "blue";
-}
-
-function getStatusColor(status: string) {
-  if (status === "completed") return "green";
-  if (status === "deleted") return "default";
-  if (status === "in_progress") return "cyan";
-  return "orange";
-}
-
-function formatDateLabel(value: string | null | undefined): string {
-  if (!value) return "";
-  return value;
-}
-
-function getScheduleLabel(task: TaskItem): string {
-  const parts: string[] = [];
-  if (task.schedule_type) {
-    const typeMap: Record<string, string> = {
-      daily: "每天",
-      weekdays: "工作日",
-      duration_days: `持续${task.duration_days ?? "?"}天`,
-      custom_range: `${formatDateLabel(task.start_date)} 至 ${formatDateLabel(task.end_date)}`,
-    };
-    parts.push(typeMap[task.schedule_type] || task.schedule_type);
-  }
-  if (task.time_type === "fixed" && task.scheduled_time) {
-    parts.push(`固定 ${task.scheduled_time}${task.scheduled_end_time ? `-${task.scheduled_end_time}` : ""}`);
-  } else if (task.time_type === "flexible" && task.estimated_minutes) {
-    parts.push(`弹性 ${task.estimated_minutes}分钟`);
-  }
-  return parts.join(" | ");
-}
 
 export default function TasksPage() {
   const { session } = useAuth();
@@ -250,146 +214,60 @@ export default function TasksPage() {
   ];
 
   return (
-    <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      <Card className="section-card dashboard-hero" variant="borderless">
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span className="hero-kicker">
-              <RocketOutlined />
-              待办
-            </span>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateForm}>
-              新建任务
-            </Button>
-          </div>
-          <Title style={{ color: "var(--text-primary)", margin: 0 }}>待办总览</Title>
-          <Paragraph className="muted-text" style={{ marginBottom: 0, maxWidth: 880 }}>
-            管理你的任务：创建、编辑、完成、删除，以及查看任务在日历中的排期。
-          </Paragraph>
-          <Space wrap>
-            <Tag color="cyan">{summary.total} 个任务</Tag>
-            <Tag color="orange">{summary.active} 个待处理</Tag>
-            <Tag color="red">{summary.urgent} 个高优先级</Tag>
-            <Tag color="blue">{summary.dated} 个已设截止时间</Tag>
-          </Space>
-        </Space>
-      </Card>
-
-      <Space wrap>
-        <Segmented<TaskStatus>
-          options={filterOptions}
-          value={filter}
-          onChange={(value) => setFilter(value)}
-        />
-        <Input.Search
-          placeholder="搜索任务标题或描述"
-          allowClear
-          enterButton={<SearchOutlined />}
-          style={{ width: 300 }}
-          onSearch={(value) => setSearchKeyword(value)}
-        />
-      </Space>
-
-      {error ? (
-        <Alert type="error" showIcon message="加载待办失败" description={error} />
-      ) : null}
-
-      {loading ? (
-        <div className="dashboard-empty">
-          <Spin size="large" />
-        </div>
-      ) : tasks.length ? (
-        <Card className="section-card" variant="borderless" title={filter === "completed" ? "已完成任务" : "任务列表"}>
-          <List
-            itemLayout="vertical"
-            dataSource={tasks}
-            pagination={false}
-            renderItem={(task: TaskItem) => (
-              <List.Item key={task.id}>
-                <Card size="small" variant="borderless" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Space wrap>
-                      <Text strong>{task.title}</Text>
-                      <Tag color={getPriorityColor(task.priority)}>{task.priority}</Tag>
-                      <Tag color={getStatusColor(task.status)}>{task.status}</Tag>
-                      {task.completed_days && task.completed_days > 0 ? (
-                        <Tag color="purple">{task.completed_days}天已完成</Tag>
-                      ) : null}
-                    </Space>
-                    {task.description ? <Text className="muted-text">{task.description}</Text> : null}
-                    {getScheduleLabel(task) ? (
-                      <Tag icon={<CalendarOutlined />}>{getScheduleLabel(task)}</Tag>
-                    ) : null}
-                    <Space wrap>
-                      {task.estimated_minutes ? (
-                        <Tag icon={<ClockCircleOutlined />}>{task.estimated_minutes} 分钟</Tag>
-                      ) : null}
-                      {task.deadline ? <Tag color="cyan">截止 {formatDateTime(task.deadline, timezone)}</Tag> : null}
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<CalendarOutlined />}
-                        onClick={() => void handleViewSchedule(task)}
-                      >
-                        查看排期
-                      </Button>
-                    </Space>
-                    <Space>
-                      {task.status !== "completed" && task.status !== "deleted" ? (
-                        <>
-                          <Button
-                            type="primary"
-                            size="small"
-                            icon={<CheckCircleOutlined />}
-                            onClick={() => void handleComplete(task.id)}
-                          >
-                            完成
-                          </Button>
-                          <Button
-                            size="small"
-                            icon={<EditOutlined />}
-                            onClick={() => openEditForm(task)}
-                          >
-                            编辑
-                          </Button>
-                        </>
-                      ) : null}
-                      {task.status !== "deleted" ? (
-                        <Button
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={() => void handleDelete(task.id)}
-                        >
-                          删除
-                        </Button>
-                      ) : null}
-                    </Space>
-                  </Space>
-                </Card>
-              </List.Item>
-            )}
-          />
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              showSizeChanger
-              showTotal={(t) => `共 ${t} 条`}
-              onChange={(p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-                fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, p, ps);
-              }}
+    <>
+      <ResponsiveListShell
+        kicker="待办"
+        title="待办总览"
+        description="管理你的任务：创建、编辑、完成、删除，以及查看任务在日历中的排期。"
+        stats={[
+          <span key="total">{summary.total} 个任务</span>,
+          <span key="active">{summary.active} 个待处理</span>,
+          <span key="urgent">{summary.urgent} 个高优先级</span>,
+          <span key="dated">{summary.dated} 个已设截止时间</span>,
+        ]}
+        primaryAction={
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateForm}>
+            新建任务
+          </Button>
+        }
+        footer={
+          tasks.length ? (
+            <ResponsiveListFooter
+              helperText={`共 ${total} 条`}
+              loading={loading}
+              pagination={
+                <Pagination
+                  current={page}
+                  pageSize={pageSize}
+                  total={total}
+                  showSizeChanger
+                  showTotal={(t) => `共 ${t} 条`}
+                  onChange={(p, ps) => {
+                    setPage(p);
+                    setPageSize(ps);
+                    fetchTasks(filter === "all" ? undefined : filter, searchKeyword || undefined, p, ps);
+                  }}
+                />
+              }
             />
-          </div>
-        </Card>
-      ) : (
-        <div className="dashboard-empty">
-          <Empty description="当前没有任务数据" />
-        </div>
-      )}
+          ) : null
+        }
+      >
+        <TaskListScene
+          tasks={tasks}
+          loading={loading}
+          error={error}
+          filter={filter}
+          filterOptions={filterOptions}
+          onFilterChange={setFilter}
+          onSearch={setSearchKeyword}
+          timezone={timezone}
+          onComplete={handleComplete}
+          onViewSchedule={handleViewSchedule}
+          onEdit={openEditForm}
+          onDelete={handleDelete}
+        />
+      </ResponsiveListShell>
 
       {/* 排期查看弹窗 */}
       <Modal
@@ -540,6 +418,6 @@ export default function TasksPage() {
           </Card>
         </Form>
       </Modal>
-    </Space>
+    </>
   );
 }
