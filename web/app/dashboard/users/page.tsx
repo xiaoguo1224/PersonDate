@@ -1,11 +1,12 @@
 "use client";
 
 import { ClusterOutlined, CheckCircleOutlined, PauseCircleOutlined, TeamOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Col, Modal, Row, Space, Spin, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Grid, Modal, Row, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -71,6 +72,8 @@ export default function UsersPage() {
   const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const isOwner = session?.role === "owner";
   const [users, setUsers] = useState<UserAdminItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +116,54 @@ export default function UsersPage() {
       owners: users.filter((item) => item.role === "owner").length,
     };
   }, [users]);
+
+  const mobileUserCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {users.map((user) => (
+        <ResponsiveListCard
+          key={user.id}
+          compact
+          accent={getStatusColor(user.status) === "green" ? "#22c55e" : getStatusColor(user.status) === "orange" ? "#f59e0b" : "#64748b"}
+          title={user.display_name || user.username}
+          meta={`${user.role} · ${user.status}`}
+          tags={[
+            user.username,
+            user.email || "无邮箱",
+          ]}
+          description={
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                时区：{user.default_timezone || "未设置"}
+              </Typography.Text>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                创建时间：{formatDateTime(user.created_at, timezone)}
+              </Typography.Text>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                最近登录：{user.last_login_at ? formatDateTime(user.last_login_at, timezone) : "未登录"}
+              </Typography.Text>
+            </Space>
+          }
+          actions={[
+            <Button key="bindings" size="middle" onClick={() => void openBindings(user)} icon={<ClusterOutlined />}>
+              微信绑定
+            </Button>,
+            user.role !== "owner" ? (
+              <Button
+                key="toggle"
+                size="middle"
+                type={user.status === "active" ? "default" : "primary"}
+                danger={user.status === "active"}
+                icon={user.status === "active" ? <PauseCircleOutlined /> : <CheckCircleOutlined />}
+                onClick={() => void toggleUserStatus(user)}
+              >
+                {user.status === "active" ? "禁用" : "启用"}
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[]}
+        />
+      ))}
+    </Space>
+  );
 
   const openBindings = useCallback(
     async (user: UserAdminItem) => {
@@ -195,55 +246,59 @@ export default function UsersPage() {
       {loading ? (
         <UsersLoading />
       ) : users.length ? (
-        <Row gutter={[16, 16]}>
-          {users.map((user) => (
-            <Col xs={24} lg={12} key={user.id}>
-              <Card
-                className="section-card"
-                variant="borderless"
-                extra={
-                  <Space wrap>
-                    <Button size="small" onClick={() => void openBindings(user)} icon={<ClusterOutlined />}>
-                      微信绑定
-                    </Button>
-                    {user.role === "owner" ? (
-                      <Tag color="gold">owner</Tag>
-                    ) : (
-                      <Button
-                        size="small"
-                        type={user.status === "active" ? "default" : "primary"}
-                        danger={user.status === "active"}
-                        icon={user.status === "active" ? <PauseCircleOutlined /> : <CheckCircleOutlined />}
-                        onClick={() => void toggleUserStatus(user)}
-                      >
-                        {user.status === "active" ? "禁用" : "启用"}
+        isMobile ? (
+          mobileUserCards
+        ) : (
+          <Row gutter={[16, 16]}>
+            {users.map((user) => (
+              <Col xs={24} lg={12} key={user.id}>
+                <Card
+                  className="section-card"
+                  variant="borderless"
+                  extra={
+                    <Space wrap>
+                      <Button size="small" onClick={() => void openBindings(user)} icon={<ClusterOutlined />}>
+                        微信绑定
                       </Button>
-                    )}
+                      {user.role === "owner" ? (
+                        <Tag color="gold">owner</Tag>
+                      ) : (
+                        <Button
+                          size="small"
+                          type={user.status === "active" ? "default" : "primary"}
+                          danger={user.status === "active"}
+                          icon={user.status === "active" ? <PauseCircleOutlined /> : <CheckCircleOutlined />}
+                          onClick={() => void toggleUserStatus(user)}
+                        >
+                          {user.status === "active" ? "禁用" : "启用"}
+                        </Button>
+                      )}
+                    </Space>
+                  }
+                >
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Space wrap>
+                      <Text strong>{user.display_name || user.username}</Text>
+                      <Tag color={getStatusColor(user.status)}>{user.status}</Tag>
+                      <Tag>{user.role}</Tag>
+                    </Space>
+                    <Text className="muted-text">用户名：{user.username}</Text>
+                    {user.email ? <Text className="muted-text">邮箱：{user.email}</Text> : null}
+                    {user.default_timezone ? (
+                      <Text className="muted-text">时区：{user.default_timezone}</Text>
+                    ) : null}
+                    <Text className="muted-text">
+                      创建时间：{formatDateTime(user.created_at, timezone)}
+                    </Text>
+                    <Text className="muted-text">
+                      最近登录：{user.last_login_at ? formatDateTime(user.last_login_at, timezone) : "未登录"}
+                    </Text>
                   </Space>
-                }
-              >
-                <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                  <Space wrap>
-                    <Text strong>{user.display_name || user.username}</Text>
-                    <Tag color={getStatusColor(user.status)}>{user.status}</Tag>
-                    <Tag>{user.role}</Tag>
-                  </Space>
-                  <Text className="muted-text">用户名：{user.username}</Text>
-                  {user.email ? <Text className="muted-text">邮箱：{user.email}</Text> : null}
-                  {user.default_timezone ? (
-                    <Text className="muted-text">时区：{user.default_timezone}</Text>
-                  ) : null}
-                  <Text className="muted-text">
-                    创建时间：{formatDateTime(user.created_at, timezone)}
-                  </Text>
-                  <Text className="muted-text">
-                    最近登录：{user.last_login_at ? formatDateTime(user.last_login_at, timezone) : "未登录"}
-                  </Text>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )
       ) : (
         <UsersEmpty />
       )}
@@ -253,7 +308,7 @@ export default function UsersPage() {
         title={`微信绑定 - ${selectedUser?.display_name || selectedUser?.username || "用户"}`}
         onCancel={() => setBindingOpen(false)}
         footer={null}
-        width={720}
+        width={isMobile ? "calc(100vw - 32px)" : 720}
       >
         {bindingLoading ? (
           <div className="dashboard-empty">

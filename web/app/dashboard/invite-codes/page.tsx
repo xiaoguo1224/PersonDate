@@ -1,11 +1,12 @@
 "use client";
 
 import { MinusCircleOutlined, PlusOutlined, QrcodeOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Space, Spin, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, DatePicker, Empty, Form, Grid, Input, InputNumber, Row, Space, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 
@@ -58,6 +59,8 @@ export default function InviteCodesPage() {
   const { session } = useAuth();
   const { message } = App.useApp();
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [form] = Form.useForm<InviteCodeCreatePayload>();
   const [codes, setCodes] = useState<InviteCodeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +95,39 @@ export default function InviteCodesPage() {
   }, [isOwner, loadInviteCodes]);
 
   const activeCount = useMemo(() => codes.filter((item) => item.status === "active").length, [codes]);
+
+  const mobileCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {codes.map((item) => (
+        <ResponsiveListCard
+          key={item.id}
+          compact
+          accent={getStatusColor(item.status) === "green" ? "#22c55e" : getStatusColor(item.status) === "red" ? "#ef4444" : "#64748b"}
+          title={item.code}
+          meta={`使用 ${item.used_count}/${item.max_uses} · ${item.status}`}
+          tags={[
+            item.expires_at ? `过期 ${formatDateTime(item.expires_at, timezone)}` : "未设置过期",
+          ]}
+          description={
+            item.remark ? (
+              <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+                备注：{item.remark}
+              </Typography.Paragraph>
+            ) : (
+              <Typography.Text className="muted-text responsive-list-card__description-text">暂无备注</Typography.Text>
+            )
+          }
+          actions={[
+            item.status === "active" ? (
+              <Button key="disable" danger size="middle" onClick={() => void handleDisable(item.id)} icon={<MinusCircleOutlined />}>
+                禁用
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[]}
+        />
+      ))}
+    </Space>
+  );
 
   const handleCreate = async (values: InviteCodeCreatePayload) => {
     if (!accessToken) {
@@ -207,41 +243,45 @@ export default function InviteCodesPage() {
             {loading ? (
               <InviteCodesLoading />
             ) : codes.length ? (
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                {codes.map((item) => (
-                  <Card
-                    key={item.id}
-                    size="small"
-                    variant="borderless"
-                    style={{ background: "rgba(255,255,255,0.04)" }}
-                    extra={
-                      item.status === "active" ? (
-                        <Button danger size="small" onClick={() => void handleDisable(item.id)} icon={<MinusCircleOutlined />}>
-                          禁用
-                        </Button>
-                      ) : (
-                        <Tag color={getStatusColor(item.status)}>{item.status}</Tag>
-                      )
-                    }
-                  >
-                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                      <Space wrap>
-                        <Text strong style={{ letterSpacing: 1 }}>
-                          {item.code}
+              isMobile ? (
+                mobileCards
+              ) : (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  {codes.map((item) => (
+                    <Card
+                      key={item.id}
+                      size="small"
+                      variant="borderless"
+                      style={{ background: "rgba(255,255,255,0.04)" }}
+                      extra={
+                        item.status === "active" ? (
+                          <Button danger size="small" onClick={() => void handleDisable(item.id)} icon={<MinusCircleOutlined />}>
+                            禁用
+                          </Button>
+                        ) : (
+                          <Tag color={getStatusColor(item.status)}>{item.status}</Tag>
+                        )
+                      }
+                    >
+                      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                        <Space wrap>
+                          <Text strong style={{ letterSpacing: 1 }}>
+                            {item.code}
+                          </Text>
+                          <Tag color={getStatusColor(item.status)}>{item.status}</Tag>
+                        </Space>
+                        <Text className="muted-text">
+                          使用次数：{item.used_count}/{item.max_uses}
                         </Text>
-                        <Tag color={getStatusColor(item.status)}>{item.status}</Tag>
+                        <Text className="muted-text">
+                          过期时间：{item.expires_at ? formatDateTime(item.expires_at, timezone) : "未设置"}
+                        </Text>
+                        {item.remark ? <Text className="muted-text">备注：{item.remark}</Text> : null}
                       </Space>
-                      <Text className="muted-text">
-                        使用次数：{item.used_count}/{item.max_uses}
-                      </Text>
-                      <Text className="muted-text">
-                        过期时间：{item.expires_at ? formatDateTime(item.expires_at, timezone) : "未设置"}
-                      </Text>
-                      {item.remark ? <Text className="muted-text">备注：{item.remark}</Text> : null}
-                    </Space>
-                  </Card>
-                ))}
-              </Space>
+                    </Card>
+                  ))}
+                </Space>
+              )
             ) : (
               <InviteCodesEmpty />
             )}
