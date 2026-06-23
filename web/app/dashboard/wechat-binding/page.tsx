@@ -1,12 +1,13 @@
 "use client";
 
 import { LoadingOutlined, QrcodeOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Modal, QRCode, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Grid, Modal, QRCode, Space, Spin, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useDashboardTimezone } from "@/components/dashboard-preferences";
+import { ResponsiveListCard } from "@/components/responsive-list-card";
 import { formatDateTime } from "@/lib/dashboard";
 import { requestJson } from "@/lib/api";
 import type {
@@ -43,6 +44,8 @@ export default function WechatBindingPage() {
   const { message } = App.useApp();
   const accessToken = session?.accessToken;
   const { timezone } = useDashboardTimezone();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const [identities, setIdentities] = useState<ChannelIdentityItem[]>([]);
   const [accounts, setAccounts] = useState<WechatAccountItem[]>([]);
   const [loginSession, setLoginSession] = useState<WechatLoginSessionCreateResponse | null>(null);
@@ -127,6 +130,8 @@ export default function WechatBindingPage() {
     const disabled = identities.filter((item) => item.status === "disabled").length;
     return { total: identities.length, active, disabled };
   }, [identities]);
+
+  const qrSize = isMobile ? 180 : 240;
 
   const handleCreateLoginSession = async () => {
     if (!accessToken) return;
@@ -290,6 +295,68 @@ export default function WechatBindingPage() {
     [timezone],
   );
 
+  const mobileIdentityCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {identities.map((identity) => (
+        <ResponsiveListCard
+          key={identity.id}
+          compact
+          accent={identity.status === "active" ? "#22c55e" : identity.status === "disabled" ? "#64748b" : "#ef4444"}
+          title={identity.display_name || identity.channel_user_id}
+          meta={`${identity.channel} · ${getStatusLabel(identity.status)}`}
+          tags={[
+            identity.channel_user_id,
+            identity.conversation_id,
+          ]}
+          description={
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                绑定时间：{identity.bound_at ? formatDateTime(identity.bound_at, timezone) : "未知"}
+              </Typography.Text>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                创建时间：{formatDateTime(identity.created_at, timezone)}
+              </Typography.Text>
+            </Space>
+          }
+          actions={[
+            identity.status === "active" ? (
+              <Button key="unbind" danger size="middle" icon={<StopOutlined />} onClick={() => void handleUnbind(identity.id)}>
+                解绑
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[]}
+        />
+      ))}
+    </Space>
+  );
+
+  const mobileAccountCards = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {accounts.map((account) => (
+        <ResponsiveListCard
+          key={account.id}
+          compact
+          accent={account.status === "active" ? "#22c55e" : "#64748b"}
+          title={account.account_id}
+          meta={`${account.status} · ${account.wechat_user_id || "未绑定"}`}
+          tags={[
+            account.base_url,
+          ].filter(Boolean) as string[]}
+          description={
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                最近活跃：{account.last_active_time ? formatDateTime(account.last_active_time, timezone) : "-"}
+              </Typography.Text>
+              <Typography.Text className="muted-text responsive-list-card__description-text">
+                绑定时间：{account.bind_time ? formatDateTime(account.bind_time, timezone) : "-"}
+              </Typography.Text>
+            </Space>
+          }
+        />
+      ))}
+    </Space>
+  );
+
   if (loading) {
     return (
       <div className="dashboard-empty">
@@ -366,6 +433,7 @@ export default function WechatBindingPage() {
         onCancel={() => setQrModalOpen(false)}
         footer={null}
         centered
+        width={isMobile ? "calc(100vw - 32px)" : 720}
         destroyOnHidden
       >
         <Space direction="vertical" size={16} style={{ width: "100%", alignItems: "center", textAlign: "center" }}>
@@ -374,10 +442,10 @@ export default function WechatBindingPage() {
             <img
               src={`data:image/png;base64,${loginSession.qr_img_content}`}
               alt="微信扫码"
-              style={{ width: 240, height: 240 }}
+              style={{ width: qrSize, height: qrSize }}
             />
           ) : (
-            <QRCode value={loginSession?.qr_payload ?? ""} size={240} bordered />
+            <QRCode value={loginSession?.qr_payload ?? ""} size={qrSize} bordered />
           )}
           <Space direction="vertical" size={4}>
             <Text strong>请使用微信扫码完成登录</Text>
@@ -404,25 +472,33 @@ export default function WechatBindingPage() {
       ) : null}
 
       <Card className="section-card" variant="borderless" title="绑定记录">
-        <Table
-          rowKey="id"
-          dataSource={identities}
-          columns={identityColumns}
-          loading={loading}
-          pagination={false}
-          size="middle"
-        />
+        {isMobile ? (
+          identities.length ? mobileIdentityCards : <div className="dashboard-empty"><Text className="muted-text">当前没有微信绑定记录</Text></div>
+        ) : (
+          <Table
+            rowKey="id"
+            dataSource={identities}
+            columns={identityColumns}
+            loading={loading}
+            pagination={false}
+            size="middle"
+          />
+        )}
       </Card>
 
       <Card className="section-card" variant="borderless" title="通道账号">
-        <Table
-          rowKey="id"
-          dataSource={accounts}
-          columns={accountColumns}
-          loading={loading}
-          pagination={false}
-          size="middle"
-        />
+        {isMobile ? (
+          accounts.length ? mobileAccountCards : <div className="dashboard-empty"><Text className="muted-text">当前没有通道账号</Text></div>
+        ) : (
+          <Table
+            rowKey="id"
+            dataSource={accounts}
+            columns={accountColumns}
+            loading={loading}
+            pagination={false}
+            size="middle"
+          />
+        )}
       </Card>
     </Space>
   );
