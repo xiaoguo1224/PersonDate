@@ -7,6 +7,16 @@ import blueWhiteWallpaper from "./theme-assets/blue-white-wallpaper.png";
 import blackGoldWallpaper from "./theme-assets/black-gold-wallpaper.png";
 import pinkSakuraWallpaper from "./theme-assets/pink-sakura-wallpaper.png";
 
+type MotionPreferences = {
+  reduceMotion: boolean;
+  isCompact: boolean;
+};
+
+const DEFAULT_MOTION: MotionPreferences = {
+  reduceMotion: true,
+  isCompact: true,
+};
+
 const BACKDROP_MAP: Record<
   ThemeName,
   {
@@ -47,10 +57,7 @@ export default function BackgroundAnimation() {
   const { themeName } = useTheme();
   const [currentTheme, setCurrentTheme] = useState<ThemeName>(themeName);
   const [prevTheme, setPrevTheme] = useState<ThemeName | null>(null);
-  const [motion, setMotion] = useState({
-    reduceMotion: false,
-    isCompact: false,
-  });
+  const [motion, setMotion] = useState<MotionPreferences>(DEFAULT_MOTION);
 
   useEffect(() => {
     if (themeName !== currentTheme) {
