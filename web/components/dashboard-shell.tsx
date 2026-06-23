@@ -671,7 +671,6 @@ function DashboardShellContent({
             title={<span className="dashboard-mobile-drawer__header-title">顶部菜单</span>}
             className="dashboard-mobile-drawer"
             rootClassName="dashboard-mobile-drawer-root"
-            bodyStyle={{ padding: 0 }}
             destroyOnHidden
           >
             <MobileDrawerContent
