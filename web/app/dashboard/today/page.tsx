@@ -316,8 +316,8 @@ function TodayPageView({
     <div ref={containerRef} className="today-page today-page--refined">
       {error ? (
         <div className="today-page__notice today-animate">
-          <Tag color="gold">示意数据</Tag>
-          <Text className="muted-text">当前网络不可用，已切换为本地示意内容。</Text>
+          <Tag color="gold">网络异常</Tag>
+          <Text className="muted-text">当前网络请求失败，部分数据可能未完整加载。</Text>
         </div>
       ) : null}
       {loading ? <TodayLoading /> : null}
@@ -461,8 +461,8 @@ function TodayPageView({
                 baseDate={planDate}
                 timezone={timezone}
                 maxHeight={280}
-              compact={isCompactViewport}
-            />
+                compact={isCompactViewport}
+              />
             </Modal>
           </Card>
         </div>
@@ -691,10 +691,15 @@ export default function TodayPage() {
   const [pendingConflicts, setPendingConflicts] = useState<ConflictItem[]>([]);
   const [conflictCurrentItemId, setConflictCurrentItemId] = useState<string>("");
 
-  const { items: events, isLoading: eventsLoading, refresh: refreshEvents } = useScheduledItems({ date: planDate });
-  const { items: tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks();
-  const { items: conflicts, isLoading: conflictsLoading, refresh: refreshConflicts } = useConflicts("open");
-  const { items: reminders, isLoading: remindersLoading, refresh: refreshReminders } = useReminders("pending");
+  const {
+    items: events,
+    isLoading: eventsLoading,
+    refresh: refreshEvents,
+    error: eventsError,
+  } = useScheduledItems({ date: planDate });
+  const { items: tasks, isLoading: tasksLoading, refresh: refreshTasks, error: tasksError } = useTasks();
+  const { items: conflicts, isLoading: conflictsLoading, refresh: refreshConflicts, error: conflictsError } = useConflicts("open");
+  const { items: reminders, isLoading: remindersLoading, refresh: refreshReminders, error: remindersError } = useReminders("pending");
 
   const loading = eventsLoading || tasksLoading || conflictsLoading || remindersLoading;
   const todayEvents = useMemo(
@@ -739,6 +744,13 @@ export default function TodayPage() {
     (left, right) => dayjs(left.trigger_time).valueOf() - dayjs(right.trigger_time).valueOf(),
   );
   const nextReminder = sortedReminders.find((reminder) => !isPastTime(reminder.trigger_time)) ?? null;
+  const dashboardError = eventsError ?? tasksError ?? conflictsError ?? remindersError;
+  const errorMessage =
+    dashboardError instanceof Error
+      ? dashboardError.message
+      : dashboardError
+        ? String(dashboardError)
+        : null;
 
   const refreshData = useCallback(() => {
     refreshEvents();
@@ -1005,7 +1017,7 @@ export default function TodayPage() {
     <>
       <TodayPageView
         containerRef={containerRef}
-        error={null}
+        error={errorMessage}
         loading={loading}
         timezone={timezone}
         summary={summary}

@@ -3,7 +3,7 @@
 import { useGSAP } from "@gsap/react";
 import dayjs from "dayjs";
 import gsap from "gsap";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type CSSProperties } from "react";
 
 import { formatClock, parseDateOnlyInTimeZone } from "@/lib/dashboard";
 
@@ -54,11 +54,11 @@ function buildRows(
   return items
     .filter((item) => item.status !== "deleted")
     .map((item) => {
-      const start = dayjs(item.start_time);
-      const rawEnd = dayjs(item.end_time ?? item.start_time);
+      const start = dayjs(item.start_time).tz(timezone);
+      const rawEnd = dayjs(item.end_time ?? item.start_time).tz(timezone);
       const end = rawEnd.isAfter(start) ? rawEnd : start.add(60, "minute");
 
-      if (end.isBefore(dayStart) || start.isAfter(nextDayStart)) {
+      if (!end.isAfter(dayStart) || !start.isBefore(nextDayStart)) {
         return null;
       }
 
@@ -92,12 +92,14 @@ export default function GanttChart({
   baseDate,
   timezone,
   maxHeight,
+  compact = false,
   onEventClick,
 }: Readonly<{
   items: GanttItem[];
   baseDate: string;
   timezone: string;
   maxHeight?: number;
+  compact?: boolean;
   onEventClick?: (item: GanttItem) => void;
 }>) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -121,11 +123,17 @@ export default function GanttChart({
     { scope: rootRef, dependencies: [rows.length] },
   );
 
+  const chartStyle = {
+    ...(maxHeight ? { maxHeight } : {}),
+    ["--gantt-label-width" as const]: compact ? "160px" : "220px",
+    ["--gantt-chart-min-width" as const]: compact ? "640px" : "800px",
+  } as CSSProperties;
+
   return (
     <div
       ref={rootRef}
-      className="gantt-chart"
-      style={maxHeight ? { maxHeight } : undefined}
+      className={["gantt-chart", compact ? "gantt-chart--compact" : ""].filter(Boolean).join(" ")}
+      style={chartStyle}
     >
       <div className="gantt-chart__header">
         <div className="gantt-chart__label-col">
@@ -178,7 +186,7 @@ export default function GanttChart({
                 <span className="gantt-row__time">
                   {row.startLabel} - {row.endLabel}
                 </span>
-                <span className="gantt-row__tag">{TYPE_LABELS[row.type] ?? "日程"}</span>
+                {compact ? null : <span className="gantt-row__tag">{TYPE_LABELS[row.type] ?? "日程"}</span>}
               </div>
               <div className="gantt-row__bar-track">
                 <div

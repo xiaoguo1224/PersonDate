@@ -5434,11 +5434,6 @@ body {
   --gantt-chart-min-width: 800px;
 }
 
-.gantt-chart--compact {
-  --gantt-label-width: 176px;
-  --gantt-chart-min-width: 720px;
-}
-
 .gantt-chart__header,
 .gantt-chart__body {
   min-width: var(--gantt-chart-min-width);
@@ -5657,6 +5652,10 @@ body {
   .calendar-day-view-toolbar .ant-segmented,
   .calendar-day-view-toolbar .ant-segmented-group {
     width: 100%;
+  }
+
+  .calendar-day-view-toolbar .ant-segmented-item {
+    flex: 1;
   }
 
   .calendar-month-shell__meta {

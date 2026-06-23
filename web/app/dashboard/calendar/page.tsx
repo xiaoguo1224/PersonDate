@@ -6,7 +6,6 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import {
-  App,
   Alert,
   Button,
   Card,
@@ -15,6 +14,7 @@ import {
   DatePicker,
   Empty,
   Form,
+  Grid,
   Input,
   InputNumber,
   Modal,
@@ -31,7 +31,7 @@ import zhCN from "antd/locale/zh_CN";
 import dayjs, { type Dayjs } from "dayjs";
 import "dayjs/locale/zh-cn";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -521,15 +521,17 @@ export default function CalendarPage() {
   const { session } = useAuth();
   const accessToken = session?.accessToken;
   const { timezone, loading: timezoneLoading } = useDashboardTimezone();
-  const { modal } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isCompactViewport = screens.lg === false;
   const [form] = Form.useForm<ScheduledItemFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [viewModeLocked, setViewModeLocked] = useState(false);
   const [dayViewMode, setDayViewMode] = useState<"timeline" | "gantt">("timeline");
   const [focusDate, setFocusDate] = useState(() =>
-    parseDateOnlyInTimeZone(getTodayDateKey("Asia/Shanghai"), "Asia/Shanghai"),
+    parseDateOnlyInTimeZone(getTodayDateKey(timezone), timezone),
   );
   const demoEvents = useMemo(() => buildDemoCalendarEvents(focusDate), [focusDate]);
   const [events, setEvents] = useState<ScheduledItem[]>([]);
@@ -548,6 +550,14 @@ export default function CalendarPage() {
   useEffect(() => {
     setFocusDate(parseDateOnlyInTimeZone(getTodayDateKey(timezone), timezone));
   }, [timezone]);
+
+  useLayoutEffect(() => {
+    if (viewModeLocked) {
+      return;
+    }
+
+    setViewMode(isCompactViewport ? "day" : "month");
+  }, [isCompactViewport, viewModeLocked]);
 
   const fetchEvents = useCallback(async () => {
     if (!accessToken) {
@@ -608,6 +618,8 @@ export default function CalendarPage() {
   }, [accessToken, timezoneLoading, fetchDayConflicts]);
 
   const viewRange = useMemo(() => getViewRange(viewMode, focusDate), [focusDate, viewMode]);
+  const weekTimelineGutterWidth = isCompactViewport ? 56 : WEEK_TIMELINE_GUTTER_WIDTH;
+  const weekTimelineMinColumnWidth = isCompactViewport ? 128 : WEEK_TIMELINE_MIN_COLUMN_WIDTH;
   const visibleEvents = useMemo(
     () => sortEvents(events.filter((event) => isEventInRange(event, viewRange.start, viewRange.end, timezone))),
     [events, timezone, viewRange.end, viewRange.start],
@@ -881,7 +893,10 @@ export default function CalendarPage() {
                     { label: "周视图", value: "week" },
                     { label: "日视图", value: "day" },
                   ]}
-                  onChange={(value) => setViewMode(value as CalendarViewMode)}
+                  onChange={(value) => {
+                    setViewMode(value as CalendarViewMode);
+                    setViewModeLocked(true);
+                  }}
                 />
                 <DatePicker
                   value={focusDate}
@@ -1067,11 +1082,16 @@ export default function CalendarPage() {
                   </div>
                 </div>
               ) : viewMode === "week" ? (
-                <Space direction="vertical" size={16} style={{ width: "100%" }} className="calendar-week-shell">
+                <Space
+                  direction="vertical"
+                  size={16}
+                  style={{ width: "100%" }}
+                  className={["calendar-week-shell", isCompactViewport ? "calendar-week-shell--compact" : ""].filter(Boolean).join(" ")}
+                >
                   <div className="calendar-week-scroll">
                     <div
                       className="calendar-week-scroll__inner"
-                      style={{ minWidth: WEEK_TIMELINE_GUTTER_WIDTH + weekDays.length * WEEK_TIMELINE_MIN_COLUMN_WIDTH }}
+                      style={{ minWidth: weekTimelineGutterWidth + weekDays.length * weekTimelineMinColumnWidth }}
                     >
                       <div className="calendar-week-header-grid">
                         <div className="calendar-week-gutter calendar-week-gutter--header">
@@ -1169,7 +1189,7 @@ export default function CalendarPage() {
                 </Space>
               ) : selectedDayTimelineEntries.length ? (
                 <div>
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                  <div className="calendar-day-view-toolbar">
                     <Segmented
                       size="small"
                       value={dayViewMode}
@@ -1224,6 +1244,7 @@ export default function CalendarPage() {
                       baseDate={focusDate.format("YYYY-MM-DD")}
                       timezone={timezone}
                       maxHeight={520}
+                      compact={isCompactViewport}
                       onEventClick={(item) => {
                         const event = selectedDayTimelineEntries.find((e) => e.id === item.id);
                         if (event) openEditModal(event);

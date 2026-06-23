@@ -76,8 +76,14 @@ export default function ConflictResolutionModal({
       }
       open={open}
       onCancel={onClose}
+      wrapClassName="conflict-resolution-modal"
       footer={
-        <Button onClick={onIgnore}>忽略冲突</Button>
+        <div className="conflict-resolution-modal__footer">
+          <Button onClick={onClose}>关闭</Button>
+          <Button type="primary" onClick={onIgnore}>
+            忽略冲突
+          </Button>
+        </div>
       }
       width={560}
       destroyOnHidden
@@ -95,6 +101,7 @@ export default function ConflictResolutionModal({
             <Card
               key={conflict.id}
               size="small"
+              className="conflict-resolution-modal__card"
               style={{ background: "rgba(255,255,255,0.04)" }}
             >
               <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -105,8 +112,8 @@ export default function ConflictResolutionModal({
                   </Tag>
                 </Space>
                 {current ? (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
+                  <div className="conflict-resolution-modal__item">
+                    <div className="conflict-resolution-modal__item-info">
                       <Text strong>{current.title}</Text>
                       <br />
                       <Text className="muted-text" style={{ fontSize: 12 }}>
@@ -119,8 +126,8 @@ export default function ConflictResolutionModal({
                   </div>
                 ) : null}
                 {other ? (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
+                  <div className="conflict-resolution-modal__item">
+                    <div className="conflict-resolution-modal__item-info">
                       <Text strong>{other.title}</Text>
                       <br />
                       <Text className="muted-text" style={{ fontSize: 12 }}>
@@ -137,7 +144,7 @@ export default function ConflictResolutionModal({
                     </Button>
                   </div>
                 ) : null}
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="conflict-resolution-modal__actions">
                   {current ? (
                     <Button
                       size="small"
