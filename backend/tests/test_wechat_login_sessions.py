@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from sqlalchemy import select
+
+from app.models import ChannelIdentity
+from app.models.user import User
+
 
 class _FakeChannelClient:
     def __init__(self) -> None:
@@ -135,3 +140,61 @@ def test_confirm_wechat_login_session_binds_channel_identity(monkeypatch, client
     assert identity["channel_user_id"] == "wx_user_002"
     assert identity["conversation_id"] == "wx_user_002"
     assert identity["status"] == "active"
+
+
+def test_confirm_wechat_login_session_preserves_existing_identity_when_qr_only_returns_temp_account(
+    monkeypatch,
+    client,
+    member_token,
+    db_session,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.wechat.build_wechat_channel_client",
+        lambda: _FakeChannelClient(),
+    )
+    member = db_session.scalar(select(User).where(User.username == "member1"))
+    assert member is not None
+
+    db_session.add(
+        ChannelIdentity(
+            user_id=member.id,
+            channel="wechat",
+            channel_user_id="o9cq80-stable@im.wechat",
+            conversation_id="o9cq80-stable@im.wechat",
+            display_name="旧微信会话",
+            status="active",
+        )
+    )
+    db_session.commit()
+
+    create_response = client.post(
+        "/api/me/wechat-login-sessions",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    session_id = create_response.json()["data"]["login_session_id"]
+
+    confirm_response = client.post(
+        f"/api/me/wechat-login-sessions/{session_id}/confirm",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={
+            "account_id": "qr_temp_account_001",
+            "wechat_user_id": "qr_temp_account_001",
+            "bot_token": "token_003",
+            "base_url": "https://wechat.example.com",
+            "remark": "重新绑定账号",
+        },
+    )
+
+    assert confirm_response.status_code == 200
+
+    identity_response = client.get(
+        "/api/me/channel-identities",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    assert identity_response.status_code == 200
+    items = identity_response.json()["data"]["items"]
+    active_items = [item for item in items if item["status"] == "active"]
+
+    assert len(active_items) == 1
+    assert active_items[0]["channel_user_id"] == "o9cq80-stable@im.wechat"
+    assert active_items[0]["conversation_id"] == "o9cq80-stable@im.wechat"

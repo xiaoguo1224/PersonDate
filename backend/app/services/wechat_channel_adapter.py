@@ -108,17 +108,13 @@ class WechatChannelAdapter:
                 select(WechatAccount).where(WechatAccount.account_id == payload.account_id)
             )
             if account is not None:
-                identity = self.db.scalar(
-                    select(ChannelIdentity).where(
-                        ChannelIdentity.channel == "wechat",
-                        ChannelIdentity.user_id == account.owner_user_id,
-                        ChannelIdentity.status == "active",
-                    )
+                identity = identity_service.upsert_wechat_identity(
+                    user_id=account.owner_user_id,
+                    channel_user_id=payload.channel_user_id,
+                    conversation_id=payload.conversation_id,
+                    display_name=payload.display_name,
                 )
-                if identity is not None:
-                    identity.channel_user_id = payload.channel_user_id
-                    identity.conversation_id = payload.conversation_id
-                    self.db.flush()
+                self.db.flush()
         if identity is None:
             inbound_log.status = "unbound"
             inbound_log.error_message = "用户未绑定"

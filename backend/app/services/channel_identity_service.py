@@ -12,6 +12,13 @@ class ChannelIdentityService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def get_latest_wechat_identity(self, user_id: str) -> ChannelIdentity | None:
+        stmt = select(ChannelIdentity).where(
+            ChannelIdentity.user_id == user_id,
+            ChannelIdentity.channel == "wechat",
+        ).order_by(ChannelIdentity.bound_at.desc().nullslast(), ChannelIdentity.created_at.desc())
+        return self.db.scalar(stmt)
+
     def get_active_wechat_identity(self, user_id: str) -> ChannelIdentity | None:
         stmt = select(ChannelIdentity).where(
             ChannelIdentity.user_id == user_id,
@@ -58,6 +65,22 @@ class ChannelIdentityService:
         )
         return self.db.scalar(stmt)
 
+    def disable_other_active_identities(
+        self,
+        *,
+        user_id: str,
+        keep_identity_id: str | None = None,
+    ) -> None:
+        stmt = select(ChannelIdentity).where(
+            ChannelIdentity.user_id == user_id,
+            ChannelIdentity.channel == "wechat",
+            ChannelIdentity.status == "active",
+        )
+        if keep_identity_id is not None:
+            stmt = stmt.where(ChannelIdentity.id != keep_identity_id)
+        for identity in self.db.scalars(stmt):
+            identity.status = "disabled"
+
     def upsert_wechat_identity(
         self,
         *,
@@ -70,6 +93,9 @@ class ChannelIdentityService:
         identity = self.get_by_channel_user_id(channel_user_id) or self.get_by_conversation_id(
             conversation_id
         )
+        if identity is not None and identity.user_id != user_id:
+            raise ValueError("该微信身份已绑定到其他用户")
+
         if identity is None:
             identity = ChannelIdentity(
                 user_id=user_id,
@@ -83,6 +109,7 @@ class ChannelIdentityService:
             self.db.add(identity)
             logger.info("新建微信绑定 user_id=%s channel_user_id=%s conversation_id=%s", user_id, channel_user_id, conversation_id)
         else:
+            self.disable_other_active_identities(user_id=user_id, keep_identity_id=identity.id)
             identity.user_id = user_id
             identity.channel = "wechat"
             identity.channel_user_id = channel_user_id
@@ -91,4 +118,7 @@ class ChannelIdentityService:
             identity.avatar_url = avatar_url
             identity.status = "active"
             logger.info("更新微信绑定 user_id=%s channel_user_id=%s identity_id=%s", user_id, channel_user_id, identity.id)
+            return identity
+
+        self.disable_other_active_identities(user_id=user_id, keep_identity_id=identity.id)
         return identity

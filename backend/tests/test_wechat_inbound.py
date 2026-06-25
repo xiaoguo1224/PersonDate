@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from sqlalchemy import select
+
 from app.core.config import get_settings
 from app.models import ChannelIdentity, User
 from app.services.user_service import UserService
@@ -45,6 +47,33 @@ class FakeGraph:
         assert channel == "wechat"
         assert current_user.username == "member1"
         assert conversation_id == "wx_user_member"
+        assert message == "明天下午 3 点开会"
+        return SimpleNamespace(
+            success=True,
+            final_response="已为你创建安排：开会。",
+            intent="create_scheduled_item",
+            tool_calls=[{"tool_name": "create_scheduled_item"}],
+            tool_results=[{"tool_name": "create_scheduled_item"}],
+            graph_trace=["agent_loop"],
+            error=None,
+        )
+
+
+class RebindGraph:
+    def __init__(self, db) -> None:  # noqa: ANN001
+        self.db = db
+
+    def invoke(  # noqa: ANN001
+        self,
+        *,
+        current_user: User,
+        message: str,
+        conversation_id: str = "debug",
+        channel: str = "wechat",
+    ):
+        assert channel == "wechat"
+        assert current_user.username == "member1"
+        assert conversation_id == "o9cq80-stable@im.wechat"
         assert message == "明天下午 3 点开会"
         return SimpleNamespace(
             success=True,
@@ -188,3 +217,80 @@ def test_wechat_inbound_routes_to_agent_graph(monkeypatch, client, db_session) -
     body = response.json()
     assert body["success"] is True
     assert body["data"]["reply"] == "已为你创建安排：开会。"
+
+
+def test_wechat_inbound_rebind_reactivates_existing_identity_without_unique_conflict(
+    monkeypatch,
+    client,
+    db_session,
+) -> None:
+    member = _seed_member(db_session)
+    db_session.add_all(
+        [
+            ChannelIdentity(
+                user_id=member.id,
+                channel="wechat",
+                channel_user_id="o9cq80-stable@im.wechat",
+                conversation_id="o9cq80-stable@im.wechat",
+                display_name="旧真实会话",
+                status="disabled",
+            ),
+            ChannelIdentity(
+                user_id=member.id,
+                channel="wechat",
+                channel_user_id="qr_temp_account_001",
+                conversation_id="qr_temp_account_001",
+                display_name="二维码临时会话",
+                status="active",
+            ),
+        ]
+    )
+
+    from app.models import WechatAccount
+
+    db_session.add(
+        WechatAccount(
+            owner_user_id=member.id,
+            account_id="qr_temp_account_001",
+            wechat_user_id="qr_temp_account_001",
+            bot_token="token_new",
+            base_url="https://wechat.example.com",
+            status="active",
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr("app.api.routes.wechat.SchedulePlanningGraph", RebindGraph)
+
+    response = client.post(
+        "/api/wechat/inbound",
+        headers=_auth_headers(),
+        json={
+            "message_id": "wx_msg_rebind_1",
+            "account_id": "qr_temp_account_001",
+            "conversation_id": "o9cq80-stable@im.wechat",
+            "channel_user_id": "o9cq80-stable@im.wechat",
+            "display_name": "成员一号",
+            "content_type": "text",
+            "content": "明天下午 3 点开会",
+            "raw_payload": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["reply"] == "已为你创建安排：开会。"
+
+    identities = list(
+        db_session.scalars(
+            select(ChannelIdentity)
+            .where(ChannelIdentity.user_id == member.id)
+            .order_by(ChannelIdentity.created_at.asc())
+        )
+    )
+    assert len(identities) == 2
+    stable_identity = next(item for item in identities if item.channel_user_id == "o9cq80-stable@im.wechat")
+    temp_identity = next(item for item in identities if item.channel_user_id == "qr_temp_account_001")
+    assert stable_identity.status == "active"
+    assert temp_identity.status == "disabled"

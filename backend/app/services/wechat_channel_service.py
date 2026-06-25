@@ -31,6 +31,7 @@ from app.schemas.wechat_channel import (
     WechatIngestMessageRequest,
     WechatSendTypingResponse,
 )
+from app.services.channel_identity_service import ChannelIdentityService
 from wechat_channel.ilink_client import ILinkClient, ILinkSessionExpired
 
 logger = logging.getLogger(__name__)
@@ -211,6 +212,7 @@ class WechatChannelService:
         base_url: str,
         remark: str | None = None,
     ) -> tuple[WechatLoginSession, WechatAccount]:
+        identity_service = ChannelIdentityService(self.db)
         session = self.get_login_session(
             owner_user_id=owner_user_id,
             login_session_id=login_session_id,
@@ -249,45 +251,28 @@ class WechatChannelService:
             account.last_active_time = datetime.now(UTC)
 
         channel_user_id = wechat_user_id or account_id
-
-        # 禁用该用户其他活跃的微信绑定，保证同时只有一个活跃通道
-        other_active = self.db.scalars(
-            select(ChannelIdentity).where(
-                ChannelIdentity.user_id == owner_user_id,
-                ChannelIdentity.channel == "wechat",
-                ChannelIdentity.status == "active",
-                ChannelIdentity.channel_user_id != channel_user_id,
-            )
+        should_preserve_existing_identity = (
+            channel_user_id == account_id and identity_service.get_latest_wechat_identity(owner_user_id) is not None
         )
-        for old in other_active:
-            old.status = "disabled"
-
-        identity = self.db.scalar(
-            select(ChannelIdentity).where(
-                ChannelIdentity.channel == "wechat",
-                ChannelIdentity.channel_user_id == channel_user_id,
-            )
-        )
-        if identity is not None and identity.user_id != owner_user_id:
-            raise ValueError("该微信身份已绑定到其他用户")
-        if identity is None:
-            identity = ChannelIdentity(
+        if should_preserve_existing_identity:
+            identity = identity_service.get_latest_wechat_identity(owner_user_id)
+            if identity is None:
+                raise ValueError("微信绑定记录不存在")
+            identity_service.disable_other_active_identities(
                 user_id=owner_user_id,
-                channel="wechat",
-                channel_user_id=channel_user_id,
-                conversation_id=channel_user_id,
-                display_name=remark,
-                status="active",
-                bound_at=datetime.now(UTC),
+                keep_identity_id=identity.id,
             )
-            self.db.add(identity)
-        else:
-            identity.user_id = owner_user_id
-            identity.channel = "wechat"
-            identity.conversation_id = channel_user_id
             if remark is not None:
                 identity.display_name = remark
             identity.status = "active"
+            identity.bound_at = datetime.now(UTC)
+        else:
+            identity = identity_service.upsert_wechat_identity(
+                user_id=owner_user_id,
+                channel_user_id=channel_user_id,
+                conversation_id=channel_user_id,
+                display_name=remark,
+            )
             identity.bound_at = datetime.now(UTC)
 
         session.status = "confirmed"

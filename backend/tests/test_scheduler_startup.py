@@ -216,3 +216,24 @@ def test_run_daily_notification_scan_handles_notify_errors(monkeypatch) -> None:
     assert processed == 0
     assert fake_session.committed is True
     assert fake_session.closed is True
+
+
+def test_configure_logging_suppresses_noisy_dependency_info_logs() -> None:
+    import logging
+
+    from app import main as main_module
+
+    for logger_name in (
+        "httpx",
+        "httpcore",
+        "apscheduler.executors.default",
+        "apscheduler.scheduler",
+    ):
+        logging.getLogger(logger_name).setLevel(logging.NOTSET)
+
+    main_module.configure_logging()
+
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING
+    assert logging.getLogger("apscheduler.executors.default").level == logging.WARNING
+    assert logging.getLogger("apscheduler.scheduler").level == logging.WARNING
