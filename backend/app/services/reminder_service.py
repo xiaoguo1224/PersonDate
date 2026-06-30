@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.cache import cache_get, cache_set
 from app.core.cache_invalidator import invalidate_user_reminders
 from app.models import ReminderJob, ReminderStatus
-from app.models.enums import ReminderTargetType
+from app.models.enums import ReminderTargetType, ScheduledItemStatus
+from app.models.scheduled_item import ScheduledItem
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +65,51 @@ class ReminderService:
         logger.info("创建日程提醒 user_id=%s item_id=%s trigger=%s", user_id, scheduled_item_id, actual_trigger.isoformat())
         return reminder
 
-    def cancel_by_target(self, *, user_id: str, target_id: str) -> None:
+    def cancel_by_target(
+        self,
+        *,
+        user_id: str,
+        target_id: str,
+        target_type: str | None = None,
+    ) -> None:
         logger.info("取消目标提醒 user_id=%s target_id=%s", user_id, target_id)
         stmt = select(ReminderJob).where(
             ReminderJob.user_id == user_id,
             ReminderJob.target_id == target_id,
             ReminderJob.status == ReminderStatus.PENDING.value,
         )
+        if target_type is not None:
+            stmt = stmt.where(ReminderJob.target_type == target_type)
         for job in self.db.scalars(stmt):
             job.status = ReminderStatus.CANCELED.value
         invalidate_user_reminders(user_id)
+
+    def sync_pending_for_scheduled_item(
+        self,
+        item: ScheduledItem,
+        now: datetime | None = None,
+    ) -> ReminderJob | None:
+        now = now or datetime.now(UTC)
+        self.cancel_by_target(
+            user_id=item.user_id,
+            target_id=item.id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+        )
+        if item.status != ScheduledItemStatus.ACTIVE.value:
+            return None
+        remind_before = item.remind_before_minutes
+        if remind_before is None:
+            return None
+        trigger_time = item.start_time - timedelta(minutes=remind_before)
+        if trigger_time <= now:
+            return None
+        return self.create_for_target(
+            user_id=item.user_id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+            target_id=item.id,
+            title=item.title,
+            trigger_time=trigger_time,
+        )
 
     def list_jobs(
         self,
