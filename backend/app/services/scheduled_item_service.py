@@ -192,7 +192,7 @@ class ScheduledItemService:
         stmt = select(ScheduledItem).where(*conditions).order_by(ScheduledItem.start_time)
         return list(self.db.scalars(stmt))
 
-    def confirm_drafts_for_date(self, user_id: str, plan_date: date) -> int:
+    def confirm_drafts_for_date(self, user_id: str, plan_date: date) -> list[ScheduledItem]:
         timezone_name = _get_user_timezone_name(self.db, user_id)
         _, _, start_utc, end_utc = _get_day_bounds(plan_date, timezone_name)
         stmt = select(ScheduledItem).where(
@@ -212,7 +212,7 @@ class ScheduledItemService:
             plan_date.isoformat(),
             len(items),
         )
-        return len(items)
+        return items
 
     def list_pending_tasks(self, user_id: str) -> list:
         from app.models.schedule import TaskItem

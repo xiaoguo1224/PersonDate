@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from app.models import ReminderJob, User
+from app.models import ReminderJob, ScheduledItem, TaskItem, User
+from app.models.enums import ReminderTargetType, TaskStatus
 
 
 def test_create_scheduled_item_creates_reminder(client, admin_token, db_session) -> None:
@@ -38,7 +39,9 @@ def test_create_scheduled_item_creates_reminder(client, admin_token, db_session)
 
     assert reminder is not None
     assert reminder.title == "手动创建会议"
-    assert reminder.trigger_time == datetime.fromisoformat("2026-06-06T15:00:00+08:00").astimezone(UTC)
+    assert reminder.trigger_time == datetime.fromisoformat(
+        "2026-06-06T15:00:00+08:00"
+    ).astimezone(UTC)
 
 
 def test_list_reminders_supports_trigger_time_sort_order(client, admin_token) -> None:
@@ -80,5 +83,151 @@ def test_list_reminders_supports_trigger_time_sort_order(client, admin_token) ->
 
     assert asc_response.status_code == 200
     assert desc_response.status_code == 200
-    assert [item["title"] for item in asc_response.json()["data"]["items"]] == ["较早提醒", "较晚提醒"]
-    assert [item["title"] for item in desc_response.json()["data"]["items"]] == ["较晚提醒", "较早提醒"]
+    assert [item["title"] for item in asc_response.json()["data"]["items"]] == [
+        "较早提醒",
+        "较晚提醒",
+    ]
+    assert [item["title"] for item in desc_response.json()["data"]["items"]] == [
+        "较晚提醒",
+        "较早提醒",
+    ]
+
+
+def test_update_scheduled_item_resyncs_reminder(client, admin_token, db_session) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    create_response = client.post(
+        "/api/scheduled-items",
+        headers=headers,
+        json={
+            "title": "手动创建会议",
+            "start_time": "2026-08-06T15:00:00+08:00",
+            "end_time": "2026-08-06T16:00:00+08:00",
+            "timezone": "Asia/Shanghai",
+            "remind_before_minutes": 0,
+            "source": "manual",
+        },
+    )
+    assert create_response.status_code == 200
+    item_id = create_response.json()["data"]["item"]["id"]
+
+    update_response = client.patch(
+        f"/api/scheduled-items/{item_id}",
+        headers=headers,
+        json={
+            "title": "更新后的会议",
+            "start_time": "2026-08-06T16:00:00+08:00",
+            "end_time": "2026-08-06T17:00:00+08:00",
+            "remind_before_minutes": 0,
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    reminders = list(
+        db_session.scalars(
+            select(ReminderJob)
+            .where(
+                ReminderJob.target_id == item_id,
+                ReminderJob.target_type == ReminderTargetType.SCHEDULED_ITEM.value,
+            )
+            .order_by(ReminderJob.created_at.asc())
+        )
+    )
+
+    assert len(reminders) == 2
+    assert reminders[0].status == "canceled"
+    assert reminders[1].status == "pending"
+    assert reminders[1].title == "更新后的会议"
+    assert reminders[1].trigger_time == datetime.fromisoformat(
+        "2026-08-06T16:00:00+08:00"
+    ).astimezone(UTC)
+
+
+def test_delete_scheduled_item_cancels_reminder(client, admin_token, db_session) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    create_response = client.post(
+        "/api/scheduled-items",
+        headers=headers,
+        json={
+            "title": "待删除会议",
+            "start_time": "2026-08-07T15:00:00+08:00",
+            "end_time": "2026-08-07T16:00:00+08:00",
+            "timezone": "Asia/Shanghai",
+            "remind_before_minutes": 0,
+            "source": "manual",
+        },
+    )
+    assert create_response.status_code == 200
+    item_id = create_response.json()["data"]["item"]["id"]
+
+    delete_response = client.delete(
+        f"/api/scheduled-items/{item_id}",
+        headers=headers,
+    )
+    assert delete_response.status_code == 200
+
+    reminder = db_session.scalar(
+        select(ReminderJob).where(
+            ReminderJob.target_id == item_id,
+            ReminderJob.target_type == ReminderTargetType.SCHEDULED_ITEM.value,
+        )
+    )
+    item = db_session.scalar(select(ScheduledItem).where(ScheduledItem.id == item_id))
+
+    assert reminder is not None
+    assert reminder.status == "canceled"
+    assert item is not None
+    assert item.status == "deleted"
+
+
+def test_confirm_day_drafts_creates_reminders(
+    client,
+    admin_token,
+    owner,
+    db_session,
+) -> None:
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    task = TaskItem(
+        user_id=owner.id,
+        title="写论文",
+        estimated_minutes=120,
+        status=TaskStatus.PENDING.value,
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    generate_response = client.post(
+        "/api/scheduled-items/generate/2026-08-08",
+        headers=headers,
+        json={},
+    )
+    assert generate_response.status_code == 200
+    item_id = generate_response.json()["data"]["items"][0]["id"]
+
+    draft_item = db_session.scalar(select(ScheduledItem).where(ScheduledItem.id == item_id))
+    assert draft_item is not None
+    draft_item.remind_before_minutes = 0
+    db_session.commit()
+
+    confirm_response = client.post(
+        "/api/scheduled-items/confirm",
+        headers=headers,
+        json={"plan_date": "2026-08-08"},
+    )
+    assert confirm_response.status_code == 200
+
+    reminder = db_session.scalar(
+        select(ReminderJob).where(
+            ReminderJob.target_id == item_id,
+            ReminderJob.target_type == ReminderTargetType.SCHEDULED_ITEM.value,
+            ReminderJob.status == "pending",
+        )
+    )
+    confirmed_item = db_session.scalar(select(ScheduledItem).where(ScheduledItem.id == item_id))
+
+    assert reminder is not None
+    assert confirmed_item is not None
+    assert confirmed_item.status == "active"

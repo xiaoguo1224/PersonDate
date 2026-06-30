@@ -220,21 +220,7 @@ def update_scheduled_item(
             location=location,
             remind_before_minutes=remind_before_minutes,
         )
-        if start is not None or remind_before_minutes is not None:
-            effective_start = start or item.start_time
-            effective_remind_before = (
-                remind_before_minutes
-                if remind_before_minutes is not None
-                else (item.remind_before_minutes or 0)
-            )
-            ReminderService(db).cancel_by_target(user_id=user_id, target_id=item.id)
-            ReminderService(db).create_for_target(
-                user_id=user_id,
-                target_type=ReminderTargetType.SCHEDULED_ITEM.value,
-                target_id=item.id,
-                title=item.title,
-                trigger_time=effective_start - timedelta(minutes=effective_remind_before),
-            )
+        ReminderService(db).sync_pending_for_scheduled_item(item)
         db.commit()
         return {"success": True, "data": _item_to_dict(item), "message": "安排已更新"}
     except Exception as e:
@@ -258,6 +244,11 @@ def delete_scheduled_item(item_id: str) -> dict:
         item = service.get(user_id, item_id)
         if item is None:
             return {"success": False, "error": "安排不存在"}
+        ReminderService(db).cancel_by_target(
+            user_id=user_id,
+            target_id=item.id,
+            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+        )
         service.soft_delete(item)
         db.commit()
         return {"success": True, "data": {"id": item.id}, "message": "安排已删除"}
@@ -525,12 +516,15 @@ def confirm_plan(plan_date: str) -> dict:
     db = SessionLocal()
     try:
         d = date.fromisoformat(plan_date)
-        count = ScheduledItemService(db).confirm_drafts_for_date(user_id, d)
+        items = ScheduledItemService(db).confirm_drafts_for_date(user_id, d)
+        reminder_service = ReminderService(db)
+        for item in items:
+            reminder_service.sync_pending_for_scheduled_item(item)
         db.commit()
         return {
             "success": True,
-            "data": {"confirmed_count": count},
-            "message": f"已确认 {count} 个安排",
+            "data": {"confirmed_count": len(items)},
+            "message": f"已确认 {len(items)} 个安排",
         }
     except Exception as e:
         db.rollback()

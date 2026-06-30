@@ -5,10 +5,11 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.enums import ReminderTargetType
 from app.schemas.common import ApiResponse
 from app.schemas.scheduled_item import (
-    ConflictInfo,
     ConfirmDayDraftsRequest,
+    ConflictInfo,
     GenerateDayDraftsRequest,
     ScheduledItemConflictResult,
     ScheduledItemCreateRequest,
@@ -17,6 +18,7 @@ from app.schemas.scheduled_item import (
     ScheduledItemUpdateRequest,
 )
 from app.services.conflict_service import ConflictService
+from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService
 
@@ -81,9 +83,6 @@ def create_scheduled_item(
     conflicts = conflict_service.detect_item_conflicts(current_user.id, item)
 
     if item.remind_before_minutes is not None:
-        from app.models.enums import ReminderTargetType
-        from app.services.reminder_service import ReminderService
-
         ReminderService(db).create_for_target(
             user_id=current_user.id,
             target_type=ReminderTargetType.SCHEDULED_ITEM.value,
@@ -99,7 +98,10 @@ def create_scheduled_item(
             related_ids = conflict.related_item_ids
             if not related_ids:
                 continue
-            other_id = related_ids.get("other") if related_ids.get("current") == item.id else related_ids.get("current")
+            if related_ids.get("current") == item.id:
+                other_id = related_ids.get("other")
+            else:
+                other_id = related_ids.get("current")
             if other_id:
                 other_item = service.get(current_user.id, other_id)
                 if other_item and other_item.source_task_id:
@@ -180,22 +182,7 @@ def update_scheduled_item(
         status=payload.status,
     )
 
-    # 同步更新提醒（时间或提前提醒分钟数变动时重建提醒）
-    if payload.start_time is not None or payload.remind_before_minutes is not None:
-        from datetime import timedelta
-        from app.models.enums import ReminderTargetType
-        from app.services.reminder_service import ReminderService
-
-        effective_start = payload.start_time or item.start_time
-        effective_remind_before = payload.remind_before_minutes if payload.remind_before_minutes is not None else (item.remind_before_minutes or 0)
-        ReminderService(db).cancel_by_target(user_id=current_user.id, target_id=item.id)
-        ReminderService(db).create_for_target(
-            user_id=current_user.id,
-            target_type=ReminderTargetType.SCHEDULED_ITEM.value,
-            target_id=item.id,
-            title=item.title,
-            trigger_time=effective_start - timedelta(minutes=effective_remind_before),
-        )
+    ReminderService(db).sync_pending_for_scheduled_item(item)
 
     # 更新后检测冲突
     conflict_service = ConflictService(db)
@@ -221,6 +208,11 @@ def delete_scheduled_item(
     item = service.get(current_user.id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排不存在")
+    ReminderService(db).cancel_by_target(
+        user_id=current_user.id,
+        target_id=item.id,
+        target_type=ReminderTargetType.SCHEDULED_ITEM.value,
+    )
     service.soft_delete(item)
     db.commit()
     return ApiResponse(message="安排已删除")
@@ -267,6 +259,9 @@ def confirm_day_drafts(
     current_user: CurrentUser,
 ) -> ApiResponse:
     service = ScheduledItemService(db)
-    count = service.confirm_drafts_for_date(current_user.id, payload.plan_date)
+    items = service.confirm_drafts_for_date(current_user.id, payload.plan_date)
+    reminder_service = ReminderService(db)
+    for item in items:
+        reminder_service.sync_pending_for_scheduled_item(item)
     db.commit()
-    return ApiResponse(message=f"已确认 {count} 项安排")
+    return ApiResponse(message=f"已确认 {len(items)} 项安排")
