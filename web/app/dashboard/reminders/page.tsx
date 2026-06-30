@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Alert, Button, Card, Col, DatePicker, Empty, Grid, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Col, Collapse, DatePicker, Empty, Grid, Input, InputNumber, Modal, Pagination, Row, Select, Space, Spin, Tabs, Tag, Typography } from "antd";
 import { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -22,11 +22,46 @@ type ReminderListResponse = {
   page_size: number;
 };
 
+type ReminderDisplayEntry =
+  | {
+      kind: "single";
+      key: string;
+      reminder: ReminderItem;
+    }
+  | {
+      kind: "group";
+      key: string;
+      title: string;
+      triggerClock: string;
+      dateSummary: string;
+      status: string;
+      items: ReminderItem[];
+    };
+
 function getStatusColor(status: string) {
   if (status === "fired") return "green";
   if (status === "failed") return "red";
   if (status === "canceled") return "default";
   return "orange";
+}
+
+function formatMonthDay(value: string, timezone: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: timezone,
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function buildReminderGroupKey(reminder: ReminderItem, timezone: string) {
+  if (reminder.target_type !== "scheduled_item" || !reminder.source_task_id) {
+    return null;
+  }
+  return [
+    reminder.source_task_id,
+    reminder.status,
+    formatClock(reminder.trigger_time, timezone),
+  ].join("::");
 }
 
 export default function RemindersPage() {
@@ -215,65 +250,214 @@ export default function RemindersPage() {
     return { total: reminders.length, pending, fired, failed };
   }, [reminders]);
 
+  const displayEntries = useMemo<ReminderDisplayEntry[]>(() => {
+    const buckets: Array<{ key: string; items: ReminderItem[]; groupable: boolean }> = [];
+    const groupIndex = new Map<string, number>();
+
+    for (const reminder of filteredReminders) {
+      const groupKey = buildReminderGroupKey(reminder, timezone);
+      if (!groupKey) {
+        buckets.push({
+          key: reminder.id,
+          items: [reminder],
+          groupable: false,
+        });
+        continue;
+      }
+
+      const existingIndex = groupIndex.get(groupKey);
+      if (existingIndex === undefined) {
+        groupIndex.set(groupKey, buckets.length);
+        buckets.push({
+          key: groupKey,
+          items: [reminder],
+          groupable: true,
+        });
+        continue;
+      }
+      buckets[existingIndex].items.push(reminder);
+    }
+
+    return buckets.map((bucket) => {
+      if (!bucket.groupable || bucket.items.length === 1) {
+        return {
+          kind: "single",
+          key: bucket.items[0].id,
+          reminder: bucket.items[0],
+        };
+      }
+
+      const [firstItem] = bucket.items;
+      return {
+        kind: "group",
+        key: bucket.key,
+        title: firstItem.title,
+        triggerClock: formatClock(firstItem.trigger_time, timezone),
+        dateSummary: bucket.items
+          .map((item) => formatMonthDay(item.trigger_time, timezone))
+          .join("、"),
+        status: firstItem.status,
+        items: bucket.items,
+      };
+    });
+  }, [filteredReminders, timezone]);
+
+  const renderReminderActions = (reminder: ReminderItem, size: "small" | "middle" = "small") => {
+    return [
+      reminder.status === "pending" ? (
+        <Button key="adjust" size={size} onClick={() => handleAdjustOpen(reminder)}>
+          调整提醒时间
+        </Button>
+      ) : null,
+      reminder.status === "pending" ? (
+        <Button key="cancel" danger size={size} onClick={() => void handleCancel(reminder)}>
+          取消提醒
+        </Button>
+      ) : null,
+      reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
+        <Button key="reactivate" type="primary" size={size} onClick={() => void handleReactivate(reminder)}>
+          重新激活
+        </Button>
+      ) : null,
+    ].filter(Boolean) as React.ReactNode[];
+  };
+
+  const renderGroupReminderDetail = (reminder: ReminderItem) => {
+    return (
+      <Card key={reminder.id} size="small" bordered={false} style={{ background: "rgba(15, 23, 42, 0.03)" }}>
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Space wrap>
+            <Text strong>{formatDateTime(reminder.trigger_time, timezone)}</Text>
+            <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
+            <Tag color="cyan">{reminder.target_type}</Tag>
+          </Space>
+          {reminder.original_time ? (
+            <Text className="muted-text">
+              原定时间：{formatDateTime(reminder.original_time, timezone)}
+              {" "}({formatClock(reminder.original_time, timezone)})
+            </Text>
+          ) : null}
+          <Text className="muted-text">
+            提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
+          </Text>
+          {reminder.fired_at ? (
+            <Text className="muted-text">
+              触发于：{formatDateTime(reminder.fired_at, timezone)}
+            </Text>
+          ) : null}
+          {reminder.error_message ? (
+            <Text type="danger" className="muted-text">
+              错误：{reminder.error_message}
+            </Text>
+          ) : null}
+          <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
+          <Space wrap>
+            <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
+            <Tag>目标 {reminder.target_id}</Tag>
+            {renderReminderActions(reminder)}
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
+  const renderGroupedReminder = (entry: Extract<ReminderDisplayEntry, { kind: "group" }>, mobile: boolean) => {
+    const summaryLabel = (
+      <Space direction="vertical" size={4} style={{ width: "100%" }}>
+        <Space wrap>
+          <Text strong>{entry.title}</Text>
+          <Tag color={getStatusColor(entry.status)}>{entry.status}</Tag>
+          <Tag color="blue">{entry.items.length} 条同时间提醒</Tag>
+        </Space>
+        <Text className="muted-text">
+          触发时间：{entry.triggerClock} · 日期：{entry.dateSummary}
+        </Text>
+      </Space>
+    );
+
+    const collapse = (
+      <Collapse
+        ghost
+        items={[
+          {
+            key: entry.key,
+            label: summaryLabel,
+            children: (
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                {entry.items.map((item) => renderGroupReminderDetail(item))}
+              </Space>
+            ),
+          },
+        ]}
+      />
+    );
+
+    if (mobile) {
+      return (
+        <Card key={entry.key} className="section-card" variant="borderless">
+          {collapse}
+        </Card>
+      );
+    }
+
+    return (
+      <Col xs={24} lg={12} key={entry.key}>
+        <Card className="section-card" variant="borderless">
+          {collapse}
+        </Card>
+      </Col>
+    );
+  };
+
   const mobileCards = (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      {filteredReminders.map((reminder) => (
-        <ResponsiveListCard
-          key={reminder.id}
-          compact
-          accent={getStatusColor(reminder.status) === "green" ? "#22c55e" : getStatusColor(reminder.status) === "red" ? "#ef4444" : "#f59e0b"}
-          title={reminder.title}
-          meta={`${formatDateTime(reminder.trigger_time, timezone)} · ${reminder.status}`}
-          tags={[
-            reminder.target_type,
-            `重试 ${reminder.retry_count}/${reminder.max_retries}`,
-          ]}
-          description={
-            <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
-              {reminder.original_time ? `原定时间：${formatDateTime(reminder.original_time, timezone)} · ` : ""}
-              提前提醒 {reminder.remind_before_minutes ?? 0} 分钟
-            </Typography.Paragraph>
-          }
-          details={
-            <Space direction="vertical" size={6} style={{ width: "100%" }}>
-              {reminder.fired_at ? (
-                <Text className="muted-text responsive-list-card__description-text">
-                  触发于：{formatDateTime(reminder.fired_at, timezone)}
-                </Text>
-              ) : null}
-              {reminder.conversation_id ? (
-                <Text className="muted-text responsive-list-card__description-text">
-                  会话：{reminder.conversation_id}
-                </Text>
-              ) : (
-                <Text className="muted-text responsive-list-card__description-text">会话：无</Text>
-              )}
-              {reminder.error_message ? (
-                <Text type="danger" className="muted-text responsive-list-card__description-text">
-                  错误：{reminder.error_message}
-                </Text>
-              ) : null}
-            </Space>
-          }
-          actions={[
-            reminder.status === "pending" ? (
-              <Button key="adjust" size="middle" onClick={() => handleAdjustOpen(reminder)}>
-                调整提醒时间
-              </Button>
-            ) : null,
-            reminder.status === "pending" ? (
-              <Button key="cancel" danger size="middle" onClick={() => void handleCancel(reminder)}>
-                取消提醒
-              </Button>
-            ) : null,
-            reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
-              <Button key="reactivate" type="primary" size="middle" onClick={() => void handleReactivate(reminder)}>
-                重新激活
-              </Button>
-            ) : null,
-          ].filter(Boolean) as React.ReactNode[]}
-        />
-      ))}
+      {displayEntries.map((entry) => {
+        if (entry.kind === "group") {
+          return renderGroupedReminder(entry, true);
+        }
+        const reminder = entry.reminder;
+        return (
+          <ResponsiveListCard
+            key={reminder.id}
+            compact
+            accent={getStatusColor(reminder.status) === "green" ? "#22c55e" : getStatusColor(reminder.status) === "red" ? "#ef4444" : "#f59e0b"}
+            title={reminder.title}
+            meta={`${formatDateTime(reminder.trigger_time, timezone)} · ${reminder.status}`}
+            tags={[
+              reminder.target_type,
+              `重试 ${reminder.retry_count}/${reminder.max_retries}`,
+            ]}
+            description={
+              <Typography.Paragraph className="muted-text responsive-list-card__description-text" ellipsis={{ rows: 2, expandable: false }}>
+                {reminder.original_time ? `原定时间：${formatDateTime(reminder.original_time, timezone)} · ` : ""}
+                提前提醒 {reminder.remind_before_minutes ?? 0} 分钟
+              </Typography.Paragraph>
+            }
+            details={
+              <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                {reminder.fired_at ? (
+                  <Text className="muted-text responsive-list-card__description-text">
+                    触发于：{formatDateTime(reminder.fired_at, timezone)}
+                  </Text>
+                ) : null}
+                {reminder.conversation_id ? (
+                  <Text className="muted-text responsive-list-card__description-text">
+                    会话：{reminder.conversation_id}
+                  </Text>
+                ) : (
+                  <Text className="muted-text responsive-list-card__description-text">会话：无</Text>
+                )}
+                {reminder.error_message ? (
+                  <Text type="danger" className="muted-text responsive-list-card__description-text">
+                    错误：{reminder.error_message}
+                  </Text>
+                ) : null}
+              </Space>
+            }
+            actions={renderReminderActions(reminder, "middle")}
+          />
+        );
+      })}
     </Space>
   );
 
@@ -398,73 +582,54 @@ export default function RemindersPage() {
           mobileCards
         ) : (
           <Row gutter={[16, 16]}>
-            {filteredReminders.map((reminder) => (
-              <Col xs={24} lg={12} key={reminder.id}>
-                <Card className="section-card" variant="borderless">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Space wrap>
-                      <Text strong>{reminder.title}</Text>
-                      <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
-                      <Tag color="cyan">{reminder.target_type}</Tag>
-                    </Space>
-                    {reminder.original_time ? (
-                      <Text className="muted-text">
-                        原定时间：{formatDateTime(reminder.original_time, timezone)}
-                        {" "}({formatClock(reminder.original_time, timezone)})
-                      </Text>
-                    ) : null}
-                    <Text className="muted-text">
-                      触发时间：{formatDateTime(reminder.trigger_time, timezone)}
-                      {" "}({formatClock(reminder.trigger_time, timezone)})
-                    </Text>
-                    <Text className="muted-text">
-                      提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
-                    </Text>
-                    {reminder.fired_at ? (
-                      <Text className="muted-text">
-                        触发于：{formatDateTime(reminder.fired_at, timezone)}
-                      </Text>
-                    ) : null}
-                    {reminder.error_message ? (
-                      <Text type="danger" className="muted-text">
-                        错误：{reminder.error_message}
-                      </Text>
-                    ) : null}
-                    <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
-                    <Space wrap>
-                      <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
-                      <Tag>目标 {reminder.target_id}</Tag>
-                      {reminder.status === "pending" ? (
-                        <>
-                          <Button
-                            size="small"
-                            onClick={() => handleAdjustOpen(reminder)}
-                          >
-                            调整提醒时间
-                          </Button>
-                          <Button
-                            danger
-                            size="small"
-                            onClick={() => void handleCancel(reminder)}
-                          >
-                            取消提醒
-                          </Button>
-                        </>
+            {displayEntries.map((entry) => {
+              if (entry.kind === "group") {
+                return renderGroupedReminder(entry, false);
+              }
+              const reminder = entry.reminder;
+              return (
+                <Col xs={24} lg={12} key={reminder.id}>
+                  <Card className="section-card" variant="borderless">
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      <Space wrap>
+                        <Text strong>{reminder.title}</Text>
+                        <Tag color={getStatusColor(reminder.status)}>{reminder.status}</Tag>
+                        <Tag color="cyan">{reminder.target_type}</Tag>
+                      </Space>
+                      {reminder.original_time ? (
+                        <Text className="muted-text">
+                          原定时间：{formatDateTime(reminder.original_time, timezone)}
+                          {" "}({formatClock(reminder.original_time, timezone)})
+                        </Text>
                       ) : null}
-                      {reminder.status === "canceled" && new Date(reminder.trigger_time) > new Date() ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => void handleReactivate(reminder)}
-                        >
-                          重新激活
-                        </Button>
+                      <Text className="muted-text">
+                        触发时间：{formatDateTime(reminder.trigger_time, timezone)}
+                        {" "}({formatClock(reminder.trigger_time, timezone)})
+                      </Text>
+                      <Text className="muted-text">
+                        提前提醒：{reminder.remind_before_minutes ?? 0} 分钟
+                      </Text>
+                      {reminder.fired_at ? (
+                        <Text className="muted-text">
+                          触发于：{formatDateTime(reminder.fired_at, timezone)}
+                        </Text>
                       ) : null}
+                      {reminder.error_message ? (
+                        <Text type="danger" className="muted-text">
+                          错误：{reminder.error_message}
+                        </Text>
+                      ) : null}
+                      <Text className="muted-text">会话：{reminder.conversation_id ?? "无"}</Text>
+                      <Space wrap>
+                        <Tag>重试 {reminder.retry_count}/{reminder.max_retries}</Tag>
+                        <Tag>目标 {reminder.target_id}</Tag>
+                        {renderReminderActions(reminder)}
+                      </Space>
                     </Space>
-                  </Space>
-                </Card>
-              </Col>
-            ))}
+                  </Card>
+                </Col>
+              );
+            })}
           </Row>
         )
       ) : (

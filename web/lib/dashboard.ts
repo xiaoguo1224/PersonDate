@@ -322,6 +322,7 @@ export type ReminderItem = {
   id: string;
   target_type: string;
   target_id: string;
+  source_task_id?: string | null;
   title: string;
   original_time?: string | null;
   trigger_time: string;
