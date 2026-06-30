@@ -28,13 +28,16 @@ router = APIRouter(prefix="/reminders", tags=["reminders"])
 def _to_item(job: ReminderJob, scheduled_item: ScheduledItem | None = None) -> ReminderDTO:
     original_time = None
     remind_before = 0
+    source_task_id = None
     if scheduled_item is not None:
         original_time = scheduled_item.start_time
         remind_before = scheduled_item.remind_before_minutes or 0
+        source_task_id = scheduled_item.source_task_id
     return ReminderDTO(
         id=job.id,
         target_type=job.target_type,
         target_id=job.target_id,
+        source_task_id=source_task_id,
         title=job.title,
         conversation_id=job.conversation_id,
         original_time=original_time,

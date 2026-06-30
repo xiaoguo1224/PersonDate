@@ -7,6 +7,7 @@ class ReminderDTO(BaseModel):
     id: str
     target_type: str
     target_id: str
+    source_task_id: str | None = None
     title: str
     conversation_id: str | None = None
     original_time: datetime | None = None

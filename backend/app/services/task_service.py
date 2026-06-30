@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get, cache_set
 from app.core.cache_invalidator import invalidate_user_tasks
-from app.models import ScheduleSource, TaskItem, TaskStatus
+from app.models import ScheduleSource, TaskItem, TaskStatus, UserSettings
 from app.models.enums import (
     ScheduledItemSource,
     ScheduledItemStatus,
@@ -232,13 +232,21 @@ class TaskService:
         user_id: str,
         timezone: str = "Asia/Shanghai",
     ) -> list[ScheduledItem]:
+        from app.services.reminder_service import ReminderService
         from app.services.scheduled_item_service import ScheduledItemService
 
         si_service = ScheduledItemService(self.db)
+        reminder_service = ReminderService(self.db)
+        default_remind_before_minutes = self._get_default_remind_before_minutes(user_id)
 
         existing = si_service.list_by_task_id(user_id, task.id)
         for item in existing:
             if item.source != ScheduledItemSource.MANUAL.value:
+                reminder_service.cancel_by_target(
+                    user_id=user_id,
+                    target_id=item.id,
+                    target_type="scheduled_item",
+                )
                 si_service.soft_delete(item)
 
         dates = self.get_dates_for_task(task, timezone=timezone)
@@ -264,8 +272,10 @@ class TaskService:
                     timezone=timezone,
                     source=ScheduledItemSource.TASK.value,
                     source_task_id=task.id,
+                    remind_before_minutes=default_remind_before_minutes,
                     status=ScheduledItemStatus.ACTIVE.value,
                 )
+                reminder_service.sync_pending_for_scheduled_item(item)
                 created.append(item)
             else:
                 # time_type 为 flexible 或 None 时，自动排到空闲时段
@@ -279,11 +289,19 @@ class TaskService:
                         timezone=timezone,
                         source=ScheduledItemSource.TASK.value,
                         source_task_id=task.id,
+                        remind_before_minutes=default_remind_before_minutes,
                         status=ScheduledItemStatus.ACTIVE.value,
                     )
+                    reminder_service.sync_pending_for_scheduled_item(item)
                     created.append(item)
 
         return created
+
+    def _get_default_remind_before_minutes(self, user_id: str) -> int:
+        settings = self.db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
+        if settings is None or settings.default_remind_before_minutes is None:
+            return 0
+        return settings.default_remind_before_minutes
 
     def reschedule_conflicted_item(
         self,

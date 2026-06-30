@@ -8,6 +8,7 @@ from app.models import TaskItem, User
 from app.schemas.common import ApiResponse
 from app.schemas.scheduled_item import ScheduledItemDTO, ScheduledItemListResponse
 from app.schemas.task import TaskCreateRequest, TaskItemDTO, TaskListResponse, TaskUpdateRequest
+from app.services.reminder_service import ReminderService
 from app.services.scheduled_item_service import ScheduledItemService
 from app.services.task_service import TaskService, _UNSET
 
@@ -147,7 +148,15 @@ def update_task(
         else:
             # schedule_type 被清除，删除所有关联排期
             si_service = ScheduledItemService(db)
+            reminder_service = ReminderService(db)
             for item in si_service.list_by_task_id(current_user.id, task.id):
+                if item.source == "manual":
+                    continue
+                reminder_service.cancel_by_target(
+                    user_id=current_user.id,
+                    target_id=item.id,
+                    target_type="scheduled_item",
+                )
                 si_service.soft_delete(item)
     elif title_changed:
         si_service = ScheduledItemService(db)
